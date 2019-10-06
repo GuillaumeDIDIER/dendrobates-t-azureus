@@ -1,6 +1,29 @@
 [workspace]
 
 members = [
-    "kernel",
+    "vga_buffer",
 ]
 
+[package]
+name = "dendrobates_tinctoreus_azureus"
+version = "0.1.0"
+authors = ["Guillaume DIDIER <guillaume.didier.2014@polytechnique.org>"]
+edition = "2018"
+
+[package.metadata.bootimage]
+run-command = ["./scripts/bochs.sh", "{}"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+x86_64 = "0.7.5"
+vga_buffer = { path = "vga_buffer" }
+
+[dependencies.bootloader]
+version = "^0.8.1"
+features = ["sse"]
+
+
+[profile.dev]
+opt-level = 0
+debug = 2

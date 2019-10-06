@@ -10,17 +10,23 @@
   </component>
   <component name="CargoProjects">
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
+    <cargoProject FILE="$PROJECT_DIR$/vga_buffer/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7ddf063a-3554-4ac7-a5a5-6e243077d67d" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.cargo/config" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/rust-toolchain" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/x86_64-D.TinctoriusAzureaus.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/vga_buffer/Cargo.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/vga_buffer/src/lib.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/x86_64-D.TinctoriusAzureus.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.cargo/config" beforeDir="false" afterPath="$PROJECT_DIR$/.cargo/config" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/DendrobatesTinctoriusAzureus.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/DendrobatesTinctoriusAzureus.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kernel/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kernel/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kernel/Cargo.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/kernel/src/main.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/x86_64-D.TinctoriusAzureaus.json" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -30,6 +36,13 @@
   </component>
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Rust File" />
+      </list>
+    </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -47,8 +60,16 @@
     <property name="node.js.path.for.package.tslint" value="project" />
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
     <property name="node.js.selected.package.tslint" value="(autodetect)" />
+    <property name="nodejs_package_manager_path" value="npm" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
-    <property name="settings.editor.selected.configurable" value="language.rust.rustfmt" />
+    <property name="org.rust.hideDetachedFileNotifications/Volumes/Pepins/Users/guillaumedidier/Documents/Etudes/PhD/CPUDissector/DendrobatesTinctoriusAzureus/vga_buffer/src/lib.rs" value="true" />
+    <property name="settings.editor.selected.configurable" value="language.rust.cargo" />
+  </component>
+  <component name="RunAnythingCache">
+    <option name="myCommands">
+      <command value="cargo clippy" />
+      <command value="cargo xclippy" />
+    </option>
   </component>
   <component name="RunDashboard">
     <option name="ruleStates">
@@ -64,26 +85,65 @@
   </component>
   <component name="RunManager" selected="Cargo Command.Build kernel">
     <configuration name="Build kernel" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="channel" value="NIGHTLY" />
+      <option name="channel" value="DEFAULT" />
       <option name="command" value="xbuild" />
       <option name="allFeatures" value="false" />
       <option name="nocapture" value="false" />
       <option name="emulateTerminal" value="true" />
       <option name="backtrace" value="SHORT" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$/kernel" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Clean" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="clean" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="true" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Clippy" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="xclippy" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Expand dendrobates_tinctoreus_azureus" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="expand --bin dendrobates_tinctoreus_azureus --color=always --theme=GitHub --tests" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <method v="2">
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
     <configuration name="Run kernel" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="channel" value="NIGHTLY" />
+      <option name="channel" value="DEFAULT" />
       <option name="command" value="xrun" />
       <option name="allFeatures" value="false" />
       <option name="nocapture" value="false" />
       <option name="emulateTerminal" value="true" />
       <option name="backtrace" value="SHORT" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$/kernel" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <method v="2">
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
@@ -96,17 +156,22 @@
       <option name="nocapture" value="false" />
       <option name="emulateTerminal" value="true" />
       <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <method v="2">
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
     <list>
+      <item itemvalue="Cargo Command.Clippy" />
       <item itemvalue="Cargo Command.Build kernel" />
+      <item itemvalue="Cargo Command.Clean" />
       <item itemvalue="Cargo Command.Run kernel" />
+      <item itemvalue="Cargo Command.Expand dendrobates_tinctoreus_azureus" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo Command.Expand dendrobates_tinctoreus_azureus" />
         <item itemvalue="Cargo Command.Run kernel" />
       </list>
     </recent_temporary>
@@ -116,6 +181,7 @@
     <option name="runExternalLinterOnTheFly" value="true" />
     <option name="runRustfmtOnSave" value="true" />
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+    <option name="version" value="2" />
   </component>
   <component name="SvnConfiguration">
     <configuration />
@@ -128,6 +194,10 @@
       <option name="presentableId" value="Default" />
       <updated>1569934487744</updated>
       <workItem from="1569934492535" duration="5355000" />
+      <workItem from="1570003006617" duration="2487000" />
+      <workItem from="1570093731306" duration="4682000" />
+      <workItem from="1570347619224" duration="2476000" />
+      <workItem from="1570370780740" duration="3966000" />
     </task>
     <task id="LOCAL-00001" summary="Add CLion config files">
       <created>1569934966982</created>
@@ -147,7 +217,9 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="COLUMN_ORDER" />
+            </State>
           </value>
         </entry>
       </map>
