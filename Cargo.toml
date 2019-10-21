@@ -2,6 +2,7 @@
 
 members = [
     "vga_buffer",
+    "polling_serial",
 ]
 
 [package]
@@ -11,19 +12,33 @@ authors = ["Guillaume DIDIER <guillaume.didier.2014@polytechnique.org>"]
 edition = "2018"
 
 [package.metadata.bootimage]
-run-command = ["./scripts/bochs.sh", "{}"]
+#run-command = ["./scripts/bochs.sh", "{}"]
+run-command = ["./scripts/run.sh", "{}"]
+test-args = ["qemu"]
+run-args = ["bochs"]
+#run-command = ["qemu-system-x86_64", "-drive", "format=raw,file={}"]
+#test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"]
+test-success-exit-code = 33         # (0x10 << 1) | 1
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 x86_64 = "0.7.5"
 vga_buffer = { path = "vga_buffer" }
+polling_serial = { path = "polling_serial" }
+volatile = "0.2.6"
 
 [dependencies.bootloader]
 version = "^0.8.1"
 features = ["sse"]
 
+[patch.crates-io]
+bootloader = { path = "../bootloader" }
 
 [profile.dev]
 opt-level = 0
 debug = 2
+
+[[test]]
+name = "panic_test"
+harness = false

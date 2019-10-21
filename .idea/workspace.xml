@@ -11,22 +11,23 @@
   <component name="CargoProjects">
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
     <cargoProject FILE="$PROJECT_DIR$/vga_buffer/Cargo.toml" />
+    <cargoProject FILE="$PROJECT_DIR$/polling_serial/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7ddf063a-3554-4ac7-a5a5-6e243077d67d" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/vga_buffer/Cargo.toml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/vga_buffer/src/lib.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/x86_64-D.TinctoriusAzureus.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.cargo/config" beforeDir="false" afterPath="$PROJECT_DIR$/.cargo/config" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/qemu.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/run.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/basic_boot.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/panic_test.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/DendrobatesTinctoriusAzureus.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/DendrobatesTinctoriusAzureus.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kernel/Cargo.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/kernel/src/main.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/x86_64-D.TinctoriusAzureaus.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/bochsrc" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/bochsrc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/gdb.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/gdb.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vga_buffer/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/vga_buffer/src/lib.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -63,7 +64,7 @@
     <property name="nodejs_package_manager_path" value="npm" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
     <property name="org.rust.hideDetachedFileNotifications/Volumes/Pepins/Users/guillaumedidier/Documents/Etudes/PhD/CPUDissector/DendrobatesTinctoriusAzureus/vga_buffer/src/lib.rs" value="true" />
-    <property name="settings.editor.selected.configurable" value="language.rust.cargo" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RunAnythingCache">
     <option name="myCommands">
@@ -197,7 +198,12 @@
       <workItem from="1570003006617" duration="2487000" />
       <workItem from="1570093731306" duration="4682000" />
       <workItem from="1570347619224" duration="2476000" />
-      <workItem from="1570370780740" duration="3966000" />
+      <workItem from="1570370780740" duration="4210000" />
+      <workItem from="1570375267802" duration="92000" />
+      <workItem from="1570433057328" duration="6409000" />
+      <workItem from="1570608718907" duration="7852000" />
+      <workItem from="1571642236432" duration="2984000" />
+      <workItem from="1571649030007" duration="1556000" />
     </task>
     <task id="LOCAL-00001" summary="Add CLion config files">
       <created>1569934966982</created>

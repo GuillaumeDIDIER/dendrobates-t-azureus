@@ -14,7 +14,12 @@
       <sourceFolder url="file://$MODULE_DIR$/vga_buffer/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vga_buffer/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/vga_buffer/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/polling_serial/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/polling_serial/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/polling_serial/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/polling_serial/benches" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
+      <excludeFolder url="file://$MODULE_DIR$/polling_serial/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/vga_buffer/target" />
     </content>

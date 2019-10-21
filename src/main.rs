@@ -3,30 +3,30 @@
 
 #![no_std] // This is a free standing program
 #![no_main] // This has no crt0
+#![feature(custom_test_frameworks)]
+#![test_runner(dendrobates_tinctoreus_azureus::test_runner)]
+#![reexport_test_harness_main = "test_main"]
+
+use polling_serial::{serial_print, serial_println};
+use vga_buffer::{print, println};
 
 use core::fmt::Write;
-use core::panic::PanicInfo; // required for custom panic handler
+use core::panic::PanicInfo;
+use vga_buffer; // required for custom panic handler
 
 use x86_64;
 
-use vga_buffer;
-
 // Custom panic handler, required for freestanding program
+#[cfg(not(test))]
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    serial_println!("{}", info);
+    println!("{}", info);
     loop {}
+    loop {
+        println!("{}", info);
+    }
 }
-
-// static greeting string, for hello world kernel
-static HELLO: &[u8] = b"Hello Blue Frog!";
-
-static YES: &[u8] = b"yes";
-static NO: &[u8] = b"no";
-
-static a: f64 = 420.0;
-static b: f64 = 42.0;
-
-static d: f64 = 0.1;
 
 // Kernel entry point
 #[no_mangle]
@@ -34,53 +34,73 @@ pub extern "C" fn _start() -> ! {
     // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
     // TODO: We may also need to enable debug registers ?
 
-    let vga_buffer = 0xb8000 as *mut u8;
+    println!("Hello Blue Frog");
+    #[cfg(test)]
+    test_main();
 
-    for (i, &byte) in HELLO.iter().enumerate() {
-        unsafe {
-            *vga_buffer.offset(i as isize * 2) = byte;
-            *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
-        }
-    }
     // magic break ?
-    x86_64::instructions::bochs_breakpoint();
-    let c = a * d;
-    x86_64::instructions::bochs_breakpoint();
-    if b == c {
-        for (i, &byte) in YES.iter().enumerate() {
-            unsafe {
-                *vga_buffer.offset(i as isize * 2) = byte;
-                *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
-            }
-        }
-    } else {
-        for (i, &byte) in NO.iter().enumerate() {
-            unsafe {
-                *vga_buffer.offset(i as isize * 2) = byte;
-                *vga_buffer.offset(i as isize * 2 + 1) = 0xb;
-            }
-        }
-    }
-
-    x86_64::instructions::bochs_breakpoint();
-
-    writeln!(
-        vga_buffer::WRITER.lock(),
-        "The numbers are {} and {}",
-        42,
-        1.0 / 3.0
-    )
-    .unwrap();
-
-    writeln!(
-        vga_buffer::WRITER.lock(),
-        "a is {}, b is {}, c is {}, d is {}",
-        a,
-        b,
-        c,
-        d
-    )
-    .unwrap();
-
-    loop {}
+    // x86_64::instructions::bochs_breakpoint();
+    panic!("Ooops Sorry");
 }
+
+#[cfg(test)]
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    use dendrobates_tinctoreus_azureus::test_panic_handler;
+    test_panic_handler(info);
+}
+
+#[test_case]
+fn float_test() {
+    serial_println!("Testing float computations...");
+    use volatile::Volatile;
+    // Make a few floating points test;
+    let vf: f32 = 84798.0;
+    let vd: f64 = 0.828494623655914;
+
+    let a: Volatile<f32> = Volatile::new(42.0);
+    let b: Volatile<f32> = Volatile::new(2019.);
+    let rf = a.read() * b.read();
+
+    let c: Volatile<f64> = Volatile::new(15.410);
+    let d: Volatile<f64> = Volatile::new(18.600);
+
+    let rd = c.read() / d.read();
+
+    serial_print!(
+        "  {:?} * {:?} = {:?} expected {:?}...",
+        a.read(),
+        b.read(),
+        rf,
+        vf
+    );
+    if (rf == vf) {
+        serial_println!("[ok]");
+    } else {
+        serial_println!("[fail]");
+    }
+    serial_print!(
+        "  {:?} / {:?} = {:?} expected {:?}...",
+        c.read(),
+        d.read(),
+        rd,
+        vd
+    );
+    if (rd == vd) {
+        serial_println!("[ok]");
+    } else {
+        serial_println!("[fail]");
+    }
+    assert_eq!(rf, vf);
+    assert_eq!(rd, vd);
+    serial_println!("Testing float computations... [ok]");
+}
+
+//#[test_case]
+//fn failing_assertion() {
+//    print!("trivial assertion... ");
+//    serial_print!("trivial assertion... ");
+//    assert_eq!(1, 1);
+//    println!("[ok]");
+//    serial_println!("[ok]");
+//}

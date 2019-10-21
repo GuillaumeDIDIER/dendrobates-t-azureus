@@ -26,7 +26,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "bootloader"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bit_field 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -40,8 +39,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "dendrobates_tinctoreus_azureus"
 version = "0.1.0"
 dependencies = [
- "bootloader 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bootloader 0.8.1",
+ "polling_serial 0.1.0",
  "vga_buffer 0.1.0",
+ "volatile 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "x86_64 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -57,6 +58,15 @@ dependencies = [
 name = "nodrop"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "polling_serial"
+version = "0.1.0"
+dependencies = [
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spin 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "x86_64 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "spin"
@@ -99,7 +109,6 @@ dependencies = [
 "checksum bit_field 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a165d606cf084741d4ac3a28fb6e9b1eb0bd31f6cd999098cfddb0b2ab381dc0"
 "checksum bit_field 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ed8765909f9009617974ab6b7d332625b320b33c326b1e9321382ef1999b5d56"
 "checksum bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8a606a02debe2813760609f57a64a2ffd27d9fdf5b2f133eaca0b248dd92cdd2"
-"checksum bootloader 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "45dd858bd74a742ec0fe887722952c263abd0825aa8d33a3704917a97d7bd41e"
 "checksum cast 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "926013f2860c46252efceabb19f4a6b308197505082c609025aa6706c011d427"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 "checksum nodrop 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "2f9667ddcc6cc8a43afc9b7917599d7216aa09c463919ea32c59ed6cac8bc945"
