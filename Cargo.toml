@@ -28,6 +28,10 @@ vga_buffer = { path = "vga_buffer" }
 polling_serial = { path = "polling_serial" }
 volatile = "0.2.6"
 
+[dependencies.lazy_static]
+version = "1.0"
+features = ["spin_no_std"]
+
 [dependencies.bootloader]
 version = "^0.8.2"
 features = ["sse"]
@@ -36,9 +40,17 @@ features = ["sse"]
 #bootloader = { path = "../bootloader" }
 
 [profile.dev]
-opt-level = 0
+opt-level = 1
+debug = 2
+
+[profile.test]
+opt-level = 1
 debug = 2
 
 [[test]]
 name = "panic_test"
+harness = false
+
+[[test]]
+name = "stack_overflow"
 harness = false

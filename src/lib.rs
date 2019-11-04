@@ -3,11 +3,17 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![feature(abi_x86_interrupt)]
+#![feature(asm)]
 
 use core::panic::PanicInfo;
 
 use polling_serial::{serial_print, serial_println};
 use vga_buffer::{print, println};
+use x86_64::instructions::bochs_breakpoint;
+
+pub mod gdt;
+pub mod interrupts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -43,6 +49,18 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
     }
 
     exit_qemu(QemuExitCode::Success);
+}
+
+pub fn init() {
+    gdt::init();
+    interrupts::init_idt();
+}
+
+pub fn hlt_loop() -> ! {
+    loop {
+        bochs_breakpoint();
+        x86_64::instructions::hlt();
+    }
 }
 
 #[cfg(test)]

@@ -8,12 +8,13 @@
 #![reexport_test_harness_main = "test_main"]
 
 use polling_serial::{serial_print, serial_println};
-use vga_buffer::{print, println};
+use vga_buffer::{print, println, set_colors, Color, ForegroundColor};
 
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use vga_buffer; // required for custom panic handler
 
+use dendrobates_tinctoreus_azureus::hlt_loop;
 use x86_64;
 
 // Custom panic handler, required for freestanding program
@@ -21,11 +22,10 @@ use x86_64;
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     serial_println!("{}", info);
+    set_colors(ForegroundColor::LightRed, Color::Blue);
     println!("{}", info);
-    loop {}
-    loop {
-        println!("{}", info);
-    }
+    x86_64::instructions::bochs_breakpoint();
+    hlt_loop();
 }
 
 // Kernel entry point
@@ -35,8 +35,20 @@ pub extern "C" fn _start() -> ! {
     // TODO: We may also need to enable debug registers ?
 
     println!("Hello Blue Frog");
+    dendrobates_tinctoreus_azureus::init();
+    x86_64::instructions::interrupts::int3(); // new
     #[cfg(test)]
     test_main();
+
+    println!("Preparing nasty fault...");
+
+    x86_64::instructions::interrupts::int3();
+
+    unsafe {
+        *(0xdeadbeef as *mut u64) = 42;
+    }
+
+    println!("Survived ? oO");
 
     // magic break ?
     // x86_64::instructions::bochs_breakpoint();
