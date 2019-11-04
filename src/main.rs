@@ -17,6 +17,8 @@ use vga_buffer; // required for custom panic handler
 use dendrobates_tinctoreus_azureus::hlt_loop;
 use x86_64;
 
+use bootloader::BootInfo;
+
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
 #[panic_handler]
@@ -28,9 +30,10 @@ fn panic(info: &PanicInfo) -> ! {
     hlt_loop();
 }
 
+entry_point!(kernel_main);
+
 // Kernel entry point
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn kernal_main(boot_info: &'static BootInfo) -> ! {
     // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
     // TODO: We may also need to enable debug registers ?
 
@@ -43,6 +46,15 @@ pub extern "C" fn _start() -> ! {
     println!("Preparing nasty fault...");
 
     x86_64::instructions::interrupts::int3();
+
+    use x86_64::registers::control::Cr3;
+
+    let (level_4_page_table, flags) = Cr3::read();
+    println!(
+        "Level 4 page table at: {:?}, flags {:?}",
+        level_4_page_table.start_address(),
+        flags
+    );
 
     unsafe {
         *(0xdeadbeef as *mut u64) = 42;
