@@ -283,6 +283,10 @@ pub fn _print(args: fmt::Arguments) {
     WRITER.lock().write_fmt(args).unwrap();
 }
 
+pub fn set_colors(fg: ForegroundColor, bg: Color) {
+    WRITER.lock().color_code = ColorCode::new(fg, bg);
+}
+
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::new(
         ColorCode::new(ForegroundColor::Yellow, Color::Blue),
