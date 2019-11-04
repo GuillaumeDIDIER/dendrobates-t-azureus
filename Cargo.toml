@@ -34,7 +34,7 @@ features = ["spin_no_std"]
 
 [dependencies.bootloader]
 version = "^0.8.2"
-features = ["sse"]
+features = ["sse", "map_physical_memory"]
 
 #[patch.crates-io]
 #bootloader = { path = "../bootloader" }
