@@ -17,7 +17,7 @@ use vga_buffer; // required for custom panic handler
 use dendrobates_tinctoreus_azureus::hlt_loop;
 use x86_64;
 
-use bootloader::BootInfo;
+use bootloader::{entry_point, BootInfo};
 
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
@@ -33,7 +33,7 @@ fn panic(info: &PanicInfo) -> ! {
 entry_point!(kernel_main);
 
 // Kernel entry point
-pub extern "C" fn kernal_main(boot_info: &'static BootInfo) -> ! {
+fn kernel_main(boot_info: &'static BootInfo) -> ! {
     // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
     // TODO: We may also need to enable debug registers ?
 
