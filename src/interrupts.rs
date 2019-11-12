@@ -60,6 +60,7 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
 }
 
 use x86_64::structures::idt::PageFaultErrorCode;
+use x86_64::instructions::bochs_breakpoint;
 
 extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: PageFaultErrorCode) {
     // LLVM bug causing misaligned stacks when error codes are present.
@@ -76,9 +77,13 @@ extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: Pa
         error_code = *(&e as *const PageFaultErrorCode).offset(1) as PageFaultErrorCode;
     }
 
-    println!("EXCEPTION: PAGE FAULT");
-    println!("Accessed Address: {:?}", Cr2::read());
-    println!("Error Code: {:?}", error_code);
-    println!("{:#?}", stack_frame);
+    serial_println!("EXCEPTION: PAGE FAULT");
+    serial_println!("Accessed Address: {:?}", Cr2::read());
+    serial_println!("Error Code: {:?}", error_code);
+    serial_println!("{:#?}", stack_frame);
+
+    serial_println!("Halting...");
+    bochs_breakpoint();
+
     hlt_loop();
 }

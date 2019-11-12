@@ -43,7 +43,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-    println!("Preparing nasty fault...");
+
 
     x86_64::instructions::interrupts::int3();
 
@@ -55,12 +55,18 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         level_4_page_table.start_address(),
         flags
     );
+    serial_println!(
+        "Level 4 page table at: {:?}, flags {:?}",
+        level_4_page_table.start_address(),
+        flags
+    );
 
+    serial_println!("Preparing nasty fault...");
     unsafe {
         *(0xdeadbeef as *mut u64) = 42;
     }
 
-    println!("Survived ? oO");
+    serial_println!("Survived ? oO");
 
     // magic break ?
     // x86_64::instructions::bochs_breakpoint();
