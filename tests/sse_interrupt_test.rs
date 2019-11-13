@@ -16,7 +16,7 @@
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use polling_serial::{serial_print, serial_println};
-use vga_buffer::{print, println};
+use vga_buffer::{println};
 use volatile::Volatile;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
@@ -87,7 +87,7 @@ fn test_intr() {
         rf,
         vf
     );
-    if (rf == vf) {
+    if rf == vf {
         serial_println!("[ok]");
     } else {
         serial_println!("[fail]");
@@ -99,7 +99,7 @@ fn test_intr() {
         rd,
         vd
     );
-    if (rd == vd) {
+    if rd == vd {
         serial_println!("[ok]");
     } else {
         serial_println!("[fail]");

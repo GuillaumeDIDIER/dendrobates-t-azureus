@@ -6,7 +6,7 @@
 
 use core::panic::PanicInfo;
 use polling_serial::{serial_print, serial_println};
-use vga_buffer::{print, println};
+use vga_buffer::println;
 
 
 use bootloader::{entry_point, BootInfo};

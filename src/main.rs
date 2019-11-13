@@ -8,15 +8,24 @@
 #![reexport_test_harness_main = "test_main"]
 
 use polling_serial::serial_println;
-use vga_buffer::{println, set_colors, Color, ForegroundColor};
+
+#[cfg(test)]
+use polling_serial::serial_print;
+
+use vga_buffer::println;
 
 use core::panic::PanicInfo;
 use vga_buffer; // required for custom panic handler
 
-use dendrobates_tinctoreus_azureus::hlt_loop;
 use x86_64;
 
 use bootloader::{entry_point, BootInfo};
+
+#[cfg(not(test))]
+use dendrobates_tinctoreus_azureus::hlt_loop;
+
+#[cfg(not(test))]
+use vga_buffer::{set_colors, Color, ForegroundColor};
 
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
@@ -32,7 +41,7 @@ fn panic(info: &PanicInfo) -> ! {
 entry_point!(kernel_main);
 
 // Kernel entry point
-fn kernel_main(boot_info: &'static BootInfo) -> ! {
+fn kernel_main(_boot_info: &'static BootInfo) -> ! {
     // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
     // TODO: We may also need to enable debug registers ?
 
@@ -103,7 +112,7 @@ fn float_test() {
         rf,
         vf
     );
-    if (rf == vf) {
+    if rf == vf {
         serial_println!("[ok]");
     } else {
         serial_println!("[fail]");
@@ -115,7 +124,7 @@ fn float_test() {
         rd,
         vd
     );
-    if (rd == vd) {
+    if rd == vd {
         serial_println!("[ok]");
     } else {
         serial_println!("[fail]");
@@ -124,12 +133,3 @@ fn float_test() {
     assert_eq!(rd, vd);
     serial_println!("Testing float computations... [ok]");
 }
-
-//#[test_case]
-//fn failing_assertion() {
-//    print!("trivial assertion... ");
-//    serial_print!("trivial assertion... ");
-//    assert_eq!(1, 1);
-//    println!("[ok]");
-//    serial_println!("[ok]");
-//}

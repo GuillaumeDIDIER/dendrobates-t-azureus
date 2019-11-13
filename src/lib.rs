@@ -8,7 +8,17 @@
 
 use core::panic::PanicInfo;
 
+
+
+#[cfg(test)]
+use vga_buffer::print;
+
+#[cfg(test)]
+use polling_serial::serial_print;
+
 use polling_serial::serial_println;
+
+
 use vga_buffer::println;
 use x86_64::instructions::bochs_breakpoint;
 
