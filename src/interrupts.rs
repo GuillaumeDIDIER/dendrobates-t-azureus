@@ -59,8 +59,8 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
     panic!("Unrecoverable exception");
 }
 
-use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::instructions::bochs_breakpoint;
+use x86_64::structures::idt::PageFaultErrorCode;
 
 extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: PageFaultErrorCode) {
     // LLVM bug causing misaligned stacks when error codes are present.

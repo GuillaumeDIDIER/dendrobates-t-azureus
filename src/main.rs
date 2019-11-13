@@ -51,18 +51,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     #[cfg(test)]
     test_main();
 
-
-
     x86_64::instructions::interrupts::int3();
 
     use dendrobates_tinctoreus_azureus::memory;
-    use x86_64::VirtAddr;
-    use x86_64::structures::paging::{PageTable,MapperAllSizes};
-
+    use x86_64::structures::paging::{MapperAllSizes, PageTable};
+    use x86_64::{structures::paging::Page, VirtAddr};
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // new: initialize a mapper
-    let mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
 
     let addresses = [
         // the identity-mapped vga buffer page
@@ -75,13 +72,23 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         boot_info.physical_memory_offset,
     ];
 
-
     for &address in &addresses {
         let virt = VirtAddr::new(address);
         // new: use the `mapper.translate_addr` method
         let phys = mapper.translate_addr(virt);
         serial_println!("{:?} -> {:?}", virt, phys);
     }
+
+    let mut frame_allocator =
+        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
+
+    // map an unused page
+    let page = Page::containing_address(VirtAddr::new(0));
+    memory::create_example_mapping(page, &mut mapper, &mut frame_allocator);
+
+    // write the string `New!` to the screen through the new mapping
+    let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
+    unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
 
     serial_println!("Preparing nasty fault...");
     unsafe {

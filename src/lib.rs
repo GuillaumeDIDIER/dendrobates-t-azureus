@@ -8,8 +8,6 @@
 
 use core::panic::PanicInfo;
 
-
-
 #[cfg(test)]
 use vga_buffer::print;
 
@@ -17,7 +15,6 @@ use vga_buffer::print;
 use polling_serial::serial_print;
 
 use polling_serial::serial_println;
-
 
 use vga_buffer::println;
 use x86_64::instructions::bochs_breakpoint;
@@ -75,7 +72,6 @@ pub fn hlt_loop() -> ! {
         x86_64::instructions::hlt();
     }
 }
-
 
 #[cfg(test)]
 use bootloader::{entry_point, BootInfo};
