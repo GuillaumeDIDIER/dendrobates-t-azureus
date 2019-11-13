@@ -41,7 +41,7 @@ fn panic(info: &PanicInfo) -> ! {
 entry_point!(kernel_main);
 
 // Kernel entry point
-fn kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn kernel_main(boot_info: &'static BootInfo) -> ! {
     // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
     // TODO: We may also need to enable debug registers ?
 
@@ -55,19 +55,33 @@ fn kernel_main(_boot_info: &'static BootInfo) -> ! {
 
     x86_64::instructions::interrupts::int3();
 
-    use x86_64::registers::control::Cr3;
+    use dendrobates_tinctoreus_azureus::memory;
+    use x86_64::VirtAddr;
+    use x86_64::structures::paging::{PageTable,MapperAllSizes};
 
-    let (level_4_page_table, flags) = Cr3::read();
-    println!(
-        "Level 4 page table at: {:?}, flags {:?}",
-        level_4_page_table.start_address(),
-        flags
-    );
-    serial_println!(
-        "Level 4 page table at: {:?}, flags {:?}",
-        level_4_page_table.start_address(),
-        flags
-    );
+
+    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    // new: initialize a mapper
+    let mapper = unsafe { memory::init(phys_mem_offset) };
+
+    let addresses = [
+        // the identity-mapped vga buffer page
+        0xb8000,
+        // some code page
+        0x201008,
+        // some stack page
+        0x0100_0020_1a10,
+        // virtual address mapped to physical address 0
+        boot_info.physical_memory_offset,
+    ];
+
+
+    for &address in &addresses {
+        let virt = VirtAddr::new(address);
+        // new: use the `mapper.translate_addr` method
+        let phys = mapper.translate_addr(virt);
+        serial_println!("{:?} -> {:?}", virt, phys);
+    }
 
     serial_println!("Preparing nasty fault...");
     unsafe {

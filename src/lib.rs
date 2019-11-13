@@ -24,6 +24,7 @@ use x86_64::instructions::bochs_breakpoint;
 
 pub mod gdt;
 pub mod interrupts;
+pub mod memory;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
