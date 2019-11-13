@@ -65,9 +65,17 @@ pub fn hlt_loop() -> ! {
     }
 }
 
+
 #[cfg(test)]
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+use bootloader::{entry_point, BootInfo};
+
+#[cfg(test)]
+entry_point!(test_kernel_main);
+
+/// Entry point for `cargo xtest`
+#[cfg(test)]
+fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+    init();
     test_main();
     loop {}
 }

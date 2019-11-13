@@ -9,8 +9,13 @@ use core::panic::PanicInfo;
 use dendrobates_tinctoreus_azureus::{exit_qemu, QemuExitCode};
 use polling_serial::{serial_print, serial_println};
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+use bootloader::{entry_point, BootInfo};
+
+entry_point!(test_kernel_main);
+
+/// Entry point for `cargo xtest`
+
+fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
     serial_print!("stack_overflow... ");
 
     dendrobates_tinctoreus_azureus::gdt::init();

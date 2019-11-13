@@ -20,8 +20,14 @@ use vga_buffer::{print, println};
 use volatile::Volatile;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
-#[no_mangle] // don't mangle the name of this function
-pub extern "C" fn _start() -> ! {
+use bootloader::{entry_point, BootInfo};
+
+entry_point!(test_kernel_main);
+
+/// Entry point for `cargo xtest`
+
+fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+    dendrobates_tinctoreus_azureus::init();
     test_main();
 
     loop {}
