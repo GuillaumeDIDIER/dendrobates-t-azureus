@@ -8,8 +8,8 @@
 
 use core::panic::PanicInfo;
 
-use polling_serial::{serial_print, serial_println};
-use vga_buffer::{print, println};
+use polling_serial::serial_println;
+use vga_buffer::println;
 use x86_64::instructions::bochs_breakpoint;
 
 pub mod gdt;
@@ -38,7 +38,9 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
         let mut port = Port::new(0xf4);
         port.write(exit_code as u32);
     }
-    loop {}
+    loop {
+        bochs_breakpoint();
+    }
 }
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
@@ -89,6 +91,6 @@ fn trivial_assertion() {
 fn printf_test() {
     serial_print!("Testing VGA print/println... ");
     println!("Are frogs blue?");
-    print!("Yes\n");
+    println!("Yes");
     serial_println!("[ok]");
 }

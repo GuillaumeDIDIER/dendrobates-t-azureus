@@ -57,17 +57,16 @@ use x86_64::structures::idt::InterruptStackFrame;
 extern "x86-interrupt" fn test_double_fault_handler(sf: &mut InterruptStackFrame, e: u64) {
     // LLVM bug causing misaligned stacks when error codes are present.
     // This code realigns the stack and then grabs the correct values by doing some pointer arithmetic
-    let stack_frame: &mut InterruptStackFrame;
-    let error_code: u64;
+    let _stack_frame: &mut InterruptStackFrame;
+    let _error_code: u64;
 
     unsafe {
         asm!("push rax" :::: "intel");
-        let s = (sf as *mut InterruptStackFrame);
-        stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
-        error_code = *(&e as *const u64).offset(1);
+        let s = sf as *mut InterruptStackFrame;
+        _stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
+        _error_code = *(&e as *const u64).offset(1);
     }
     // End Hack
     serial_println!("[ok]");
     exit_qemu(QemuExitCode::Success);
-    loop {}
 }

@@ -4,7 +4,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use crate::gdt;
 use crate::hlt_loop;
 use polling_serial::serial_println;
-use vga_buffer::{print, println, set_colors, Color, ForegroundColor};
+use vga_buffer::println;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -40,7 +40,7 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
 
     unsafe {
         asm!("push rax" :::: "intel");
-        let s = (sf as *mut InterruptStackFrame);
+        let s = sf as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const u64).offset(1);
     }
@@ -72,7 +72,7 @@ extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: Pa
 
     unsafe {
         asm!("push rax" :::: "intel");
-        let s = (sf as *mut InterruptStackFrame);
+        let s = sf as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const PageFaultErrorCode).offset(1) as PageFaultErrorCode;
     }

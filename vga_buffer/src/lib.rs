@@ -116,8 +116,8 @@ impl Writer {
         let mut w = Writer {
             column_position: 0,
             row_position: 0,
-            color_code: color_code,
-            buffer: buffer,
+            color_code,
+            buffer,
         };
         w.clear_screen();
         w

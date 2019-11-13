@@ -7,10 +7,9 @@
 #![test_runner(dendrobates_tinctoreus_azureus::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use polling_serial::{serial_print, serial_println};
-use vga_buffer::{print, println, set_colors, Color, ForegroundColor};
+use polling_serial::serial_println;
+use vga_buffer::{println, set_colors, Color, ForegroundColor};
 
-use core::fmt::Write;
 use core::panic::PanicInfo;
 use vga_buffer; // required for custom panic handler
 
@@ -63,7 +62,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     serial_println!("Preparing nasty fault...");
     unsafe {
-        *(0xdeadbeef as *mut u64) = 42;
+        *(0xdead_beef as *mut u64) = 42;
     }
 
     serial_println!("Survived ? oO");

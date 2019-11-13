@@ -34,7 +34,7 @@ pub struct SerialPort {
     line_status: Port<u8>, // 5
 
     /// Modem Status Register.
-    modem_status: Port<u8>, // 6
+    //modem_status: Port<u8>, // 6
 
     /// Scratch Register.
     scratch: Port<u8>, // 7
@@ -70,7 +70,7 @@ impl SerialPort {
             line_ctrl: Port::new(base + 3),
             modem_ctrl: Port::new(base + 4),
             line_status: Port::new(base + 5),
-            modem_status: Port::new(base + 6),
+            //modem_status: Port::new(base + 6),
             scratch: Port::new(base + 7),
         };
 
@@ -139,7 +139,7 @@ impl fmt::Write for SerialPort {
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<SerialPort> = {
-        let mut serial_port = unsafe { SerialPort::init_new(0x3F8).unwrap() };
+        let serial_port = unsafe { SerialPort::init_new(0x3F8).unwrap() };
         Mutex::new(serial_port)
     };
 }
