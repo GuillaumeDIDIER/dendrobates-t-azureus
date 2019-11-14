@@ -6,24 +6,24 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(dendrobates_tinctoreus_azureus::test_runner)]
 #![reexport_test_harness_main = "test_main"]
-
-use polling_serial::serial_println;
+extern crate alloc;
 
 #[cfg(test)]
 use polling_serial::serial_print;
 
-use vga_buffer::println;
-
-use core::panic::PanicInfo;
-use vga_buffer; // required for custom panic handler
-
-use x86_64;
-
+use alloc::boxed::Box;
 use bootloader::{entry_point, BootInfo};
+use core::panic::PanicInfo;
+use dendrobates_tinctoreus_azureus::allocator;
+use polling_serial::serial_println;
+use vga_buffer; // required for custom panic handler
+use vga_buffer::println;
+use x86_64;
 
 #[cfg(not(test))]
 use dendrobates_tinctoreus_azureus::hlt_loop;
 
+use dendrobates_tinctoreus_azureus::memory::create_example_mapping;
 #[cfg(not(test))]
 use vga_buffer::{set_colors, Color, ForegroundColor};
 
@@ -59,6 +59,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // new: initialize a mapper
+    let mut frame_allocator =
+        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
+
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
 
     let addresses = [
@@ -79,16 +82,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         serial_println!("{:?} -> {:?}", virt, phys);
     }
 
-    let mut frame_allocator =
-        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    // map an unused page
-    let page = Page::containing_address(VirtAddr::new(0));
-    memory::create_example_mapping(page, &mut mapper, &mut frame_allocator);
-
-    // write the string `New!` to the screen through the new mapping
-    let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
-    unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
+    let x = Box::new(41);
 
     serial_println!("Preparing nasty fault...");
     unsafe {

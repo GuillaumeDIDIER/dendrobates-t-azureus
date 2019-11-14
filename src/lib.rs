@@ -5,23 +5,19 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 #![feature(asm)]
+#![feature(alloc_error_handler)]
+extern crate alloc;
 
-use core::panic::PanicInfo;
-
-#[cfg(test)]
-use vga_buffer::print;
-
-#[cfg(test)]
-use polling_serial::serial_print;
-
-use polling_serial::serial_println;
-
-use vga_buffer::println;
-use x86_64::instructions::bochs_breakpoint;
-
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+
+use core::panic::PanicInfo;
+use linked_list_allocator::LockedHeap;
+use polling_serial::serial_println;
+use vga_buffer::println;
+use x86_64::instructions::bochs_breakpoint;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -30,8 +26,15 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
-// Custom panic handler, required for freestanding program
+#[global_allocator]
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
+#[alloc_error_handler]
+fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
+    panic!("allocation error: {:?}", layout)
+}
+
+// Custom panic handler, required for freestanding program
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
     serial_println!("[failed]\n");
     serial_println!("Error: {}\n", info);
@@ -72,6 +75,12 @@ pub fn hlt_loop() -> ! {
         x86_64::instructions::hlt();
     }
 }
+
+#[cfg(test)]
+use vga_buffer::print;
+
+#[cfg(test)]
+use polling_serial::serial_print;
 
 #[cfg(test)]
 use bootloader::{entry_point, BootInfo};

@@ -27,6 +27,7 @@ x86_64 = "0.7.5"
 vga_buffer = { path = "vga_buffer" }
 polling_serial = { path = "polling_serial" }
 volatile = "0.2.6"
+linked_list_allocator = "0.6.4"
 
 [dependencies.lazy_static]
 version = "1.0"
