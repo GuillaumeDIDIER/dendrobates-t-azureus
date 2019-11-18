@@ -8,13 +8,11 @@
 #![reexport_test_harness_main = "test_main"]
 extern crate alloc;
 
-#[cfg(test)]
-use polling_serial::serial_print;
-
 use alloc::boxed::Box;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use dendrobates_tinctoreus_azureus::allocator;
+use polling_serial::serial_print;
 use polling_serial::serial_println;
 use vga_buffer; // required for custom panic handler
 use vga_buffer::println;
@@ -85,6 +83,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     let x = Box::new(41);
+
+    serial_print!("Input a character: ");
+
+    let c = { polling_serial::SERIAL1.lock().read() };
+
+    serial_println!("\nYoutyped '{:x}'", c);
 
     serial_println!("Preparing nasty fault...");
     unsafe {
