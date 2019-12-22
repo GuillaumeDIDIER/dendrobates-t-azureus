@@ -32,6 +32,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache_info"
+version = "0.1.0"
+dependencies = [
+ "polling_serial 0.1.0",
+]
+
+[[package]]
 name = "cast"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -41,6 +48,7 @@ name = "dendrobates_tinctoreus_azureus"
 version = "0.1.0"
 dependencies = [
  "bootloader 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cache_info 0.1.0",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked_list_allocator 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "polling_serial 0.1.0",

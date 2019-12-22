@@ -10,6 +10,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use bootloader::{entry_point, BootInfo};
+use cache_info;
 use core::panic::PanicInfo;
 use dendrobates_tinctoreus_azureus::allocator;
 use polling_serial::serial_print;
@@ -83,6 +84,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     let x = Box::new(41);
+
+    cache_info::test();
 
     serial_print!("Input a character: ");
 
