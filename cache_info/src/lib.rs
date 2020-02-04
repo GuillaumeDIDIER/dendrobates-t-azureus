@@ -11,24 +11,6 @@ use core::arch::x86_64 as arch_x86;
 use polling_serial::serial_println;
 use vga_buffer::println;
 
-pub fn test() {
-    let cr = unsafe { arch_x86::__cpuid_count(0x04, 0) };
-    serial_println!(
-        "EAX {:x}, EBX {:x}, ECX {:x}, EDX {:x}",
-        cr.eax,
-        cr.ebx,
-        cr.ecx,
-        cr.edx
-    );
-    println!(
-        "EAX {:x}, EBX {:x}, ECX {:x}, EDX {:x}",
-        cr.eax, cr.ebx, cr.ecx, cr.edx
-    );
-    let cache_type = cr.eax & 0x1f;
-    let cache_level = cr.eax >> 5 & 0x7;
-    println!("type {}, level {}", cache_type, cache_level);
-}
-
 pub fn get_cache_info() -> Vec<CacheInfo> {
     let mut ret = Vec::new();
     let mut i = 0;
@@ -55,17 +37,17 @@ pub enum CacheType {
 pub struct CacheInfo {
     cache_type: CacheType,
     level: u8,
-    //self_init: bool,
-    //fully_assoc: bool,
-    //core_for_cache: u16,
-    //core_in_package: u16,
-    //cache_line_size: u16,
-    //physical_line_partition: u16,
-    //associativity: u16,
-    //sets: u32,
-    //wbinvd_no_guarantee: bool,
-    //inclusive: bool,
-    //complex_cache_indexing: bool,
+    self_init: bool,
+    fully_assoc: bool,
+    core_for_cache: u16,
+    core_in_package: u16,
+    cache_line_size: u16,
+    physical_line_partition: u16,
+    associativity: u16,
+    sets: u32,
+    wbinvd_no_guarantee: bool,
+    inclusive: bool,
+    complex_cache_indexing: bool,
 }
 
 impl CacheInfo {
@@ -83,6 +65,37 @@ impl CacheInfo {
             }
         };
         let level: u8 = (cr.eax >> 5 & 0x7) as u8;
-        Some(CacheInfo { cache_type, level })
+        let self_init = (cr.eax >> 8 & 0x1) != 0;
+        let fully_assoc = (cr.eax >> 9 & 0x1) != 0;
+        let core_for_cache = (cr.eax >> 14 & 0xfff) as u16 + 1;
+        let core_in_package = (cr.eax >> 26 & 0x3f) as u16 + 1;
+        let cache_line_size = (cr.ebx & 0xfff) as u16 + 1;
+        let physical_line_partition = (cr.ebx >> 12 & 0x3ff) as u16 + 1;
+        let associativity = (cr.ebx >> 22 & 0x3ff) as u16 + 1;
+        let sets = cr.ecx + 1;
+        let wbinvd_no_guarantee = (cr.edx & 0x1) != 0;
+        let inclusive = (cr.edx & 0x2) != 0;
+        let complex_cache_indexing = (cr.edx & 0x4) != 0;
+
+        println!(
+            "CR(eax{:x},ebx{:x},ecx{:x},edx{:x})",
+            cr.eax, cr.ebx, cr.ecx, cr.edx
+        );
+
+        Some(CacheInfo {
+            cache_type,
+            level,
+            self_init,
+            fully_assoc,
+            core_for_cache,
+            core_in_package,
+            cache_line_size,
+            physical_line_partition,
+            associativity,
+            sets,
+            wbinvd_no_guarantee,
+            inclusive,
+            complex_cache_indexing,
+        })
     }
 }

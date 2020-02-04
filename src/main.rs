@@ -87,7 +87,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let caches = cache_info::get_cache_info();
     serial_println!("Caches:");
-    serial_println!("{:?}", caches);
+    serial_println!("{:#?}", caches);
+
+    println!("Caches: {:?}", caches);
 
     serial_print!("Input a character: ");
 
