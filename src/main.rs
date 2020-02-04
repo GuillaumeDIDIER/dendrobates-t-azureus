@@ -85,7 +85,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let x = Box::new(41);
 
-    cache_info::test();
+    let caches = cache_info::get_cache_info();
+    serial_println!("Caches:");
+    serial_println!("{:?}", caches);
 
     serial_print!("Input a character: ");
 

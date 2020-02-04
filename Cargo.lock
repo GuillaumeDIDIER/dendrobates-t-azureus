@@ -36,6 +36,7 @@ name = "cache_info"
 version = "0.1.0"
 dependencies = [
  "polling_serial 0.1.0",
+ "vga_buffer 0.1.0",
 ]
 
 [[package]]

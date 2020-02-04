@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 polling_serial = { path = "../polling_serial" }
+vga_buffer = { path = "../vga_buffer" }
