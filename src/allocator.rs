@@ -1,8 +1,6 @@
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 use polling_serial::serial_println;
-use x86_64::instructions::bochs_breakpoint;
-use x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
@@ -37,8 +35,7 @@ pub fn init_heap(
         Page::range_inclusive(heap_start_page, heap_end_page)
     };
 
-    let mut i = 0;
-    for page in page_range {
+    for (i, page) in page_range.enumerate() {
         let frame = frame_allocator
             .allocate_frame()
             .ok_or(MapToError::FrameAllocationFailed)?;
@@ -47,7 +44,6 @@ pub fn init_heap(
         if i == 0 {
             serial_println!("Mapped {:?} at {:?}", page, frame);
         }
-        i = i + 1;
     }
 
     unsafe {

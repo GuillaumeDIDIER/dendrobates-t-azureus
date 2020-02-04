@@ -8,7 +8,6 @@
 #![reexport_test_harness_main = "test_main"]
 extern crate alloc;
 
-use alloc::boxed::Box;
 use bootloader::{entry_point, BootInfo};
 use cache_info;
 use core::panic::PanicInfo;
@@ -22,7 +21,6 @@ use x86_64;
 #[cfg(not(test))]
 use dendrobates_tinctoreus_azureus::hlt_loop;
 
-use dendrobates_tinctoreus_azureus::memory::create_example_mapping;
 #[cfg(not(test))]
 use vga_buffer::{set_colors, Color, ForegroundColor};
 
@@ -53,8 +51,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     x86_64::instructions::interrupts::int3();
 
     use dendrobates_tinctoreus_azureus::memory;
-    use x86_64::structures::paging::{MapperAllSizes, PageTable};
-    use x86_64::{structures::paging::Page, VirtAddr};
+    use x86_64::structures::paging::MapperAllSizes;
+    use x86_64::VirtAddr;
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // new: initialize a mapper
@@ -67,7 +65,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         // the identity-mapped vga buffer page
         0xb8000,
         // some code page
-        0x201008,
+        0x20_1008,
         // some stack page
         0x0100_0020_1a10,
         // virtual address mapped to physical address 0
@@ -82,8 +80,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
-
-    let x = Box::new(41);
 
     let caches = cache_info::get_cache_info();
     serial_println!("Caches:");

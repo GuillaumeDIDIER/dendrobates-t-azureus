@@ -8,15 +8,17 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use core::arch::x86_64 as arch_x86;
-use polling_serial::serial_println;
-use vga_buffer::println;
+
+pub mod prefetcher;
+
+const CACHE_INFO_CPUID_LEAF: u32 = 0x4;
 
 pub fn get_cache_info() -> Vec<CacheInfo> {
     let mut ret = Vec::new();
     let mut i = 0;
 
     while let Some(cache_info) =
-        CacheInfo::fromCpuidResult(&unsafe { arch_x86::__cpuid_count(0x04, i) })
+        CacheInfo::from_cpuid_result(&unsafe { arch_x86::__cpuid_count(CACHE_INFO_CPUID_LEAF, i) })
     {
         ret.push(cache_info);
         i += 1;
@@ -51,7 +53,7 @@ pub struct CacheInfo {
 }
 
 impl CacheInfo {
-    pub fn fromCpuidResult(cr: &arch_x86::CpuidResult) -> Option<CacheInfo> {
+    pub fn from_cpuid_result(cr: &arch_x86::CpuidResult) -> Option<CacheInfo> {
         let ctype = cr.eax & 0x1f;
         let cache_type = match ctype {
             0 => {
@@ -76,11 +78,6 @@ impl CacheInfo {
         let wbinvd_no_guarantee = (cr.edx & 0x1) != 0;
         let inclusive = (cr.edx & 0x2) != 0;
         let complex_cache_indexing = (cr.edx & 0x4) != 0;
-
-        println!(
-            "CR(eax{:x},ebx{:x},ecx{:x},edx{:x})",
-            cr.eax, cr.ebx, cr.ecx, cr.edx
-        );
 
         Some(CacheInfo {
             cache_type,
