@@ -1,5 +1,5 @@
 [package]
-name = "cache_info"
+name = "cache_utils"
 version = "0.1.0"
 authors = ["guillaume didier <guillaume.didier@inria.fr>"]
 edition = "2018"
@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 polling_serial = { path = "../polling_serial" }
 vga_buffer = { path = "../vga_buffer" }
+x86_64 = "0.7.5"

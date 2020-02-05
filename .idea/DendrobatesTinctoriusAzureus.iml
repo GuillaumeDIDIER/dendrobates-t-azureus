@@ -18,11 +18,15 @@
       <sourceFolder url="file://$MODULE_DIR$/polling_serial/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/polling_serial/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/polling_serial/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/cache_info/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_utils/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/cache_info/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/cache_info/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/cache_info/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_utils/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_utils/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_utils/benches" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
+      <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
       <excludeFolder url="file://$MODULE_DIR$/polling_serial/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

@@ -3,7 +3,7 @@
 members = [
     "vga_buffer",
     "polling_serial",
-    "cache_info",
+    "cache_utils",
 ]
 
 [package]
@@ -29,7 +29,7 @@ vga_buffer = { path = "vga_buffer" }
 polling_serial = { path = "polling_serial" }
 volatile = "0.2.6"
 linked_list_allocator = "0.6.4"
-cache_info = { path = "cache_info" }
+cache_utils = { path = "cache_utils" }
 
 [dependencies.lazy_static]
 version = "1.0"
