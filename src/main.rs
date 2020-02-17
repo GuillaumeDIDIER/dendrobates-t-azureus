@@ -81,24 +81,31 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    let caches = cache_utils::get_cache_info();
+    let caches = cache_utils::cache_info::get_cache_info();
     serial_println!("Caches:");
     serial_println!("{:#?}", caches);
 
     println!("Caches: {:?}", caches);
 
-    serial_print!("Input a character: ");
+    println!(
+        "prefetcher status: {}",
+        cache_utils::prefetcher::prefetcher_status()
+    );
 
-    let c = { polling_serial::SERIAL1.lock().read() };
+    // serial_print!("Input a character: ");
 
-    serial_println!("\nYoutyped '{:x}'", c);
+    // let c = { polling_serial::SERIAL1.lock().read() };
 
+    // serial_println!("\nYoutyped '{:x}'", c);
+
+    /*
     serial_println!("Preparing nasty fault...");
     unsafe {
         *(0xdead_beef as *mut u64) = 42;
     }
 
     serial_println!("Survived ? oO");
+    */
 
     // magic break ?
     // x86_64::instructions::bochs_breakpoint();
