@@ -39,7 +39,7 @@ entry_point!(kernel_main);
 
 // Kernel entry point
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    // TODO: Take care of cpuid stuff and set-up all floating point exetnsions
+    // TODO: Take care of cpuid stuff and set-up all floating point extensions
     // TODO: We may also need to enable debug registers ?
 
     println!("Hello Blue Frog");
@@ -92,13 +92,34 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         cache_utils::prefetcher::prefetcher_status()
     );
 
-    // serial_print!("Input a character: ");
+    // Calibration
+    // disable pretechers
+    // Calibrate hit / miss rdtsc threshold
+    // evaluate cflush hit / miss threshold ?
+    // enable prefetcher
+    // do the same
 
-    // let c = { polling_serial::SERIAL1.lock().read() };
+    // access the page
+    // for i from 1 to 10
+    // with prefetcher disabled and then enabled
+    // repeat a few time
+    // access i consectutive cache line with timing
+    // average / plot the times
 
-    // serial_println!("\nYoutyped '{:x}'", c);
+    // plot any difference
 
-    /*
+    // Calibration probably deserves some kind of helper function in cache_util
+    // This may be tricky to do in a generic way without adding some fixed noise ?
+
+    // Old stuff below
+
+    /* serial_print!("Input a character: ");
+
+    let c = { polling_serial::SERIAL1.lock().read() };
+
+    serial_println!("\nYoutyped '{:x}'", c);
+
+
     serial_println!("Preparing nasty fault...");
     unsafe {
         *(0xdead_beef as *mut u64) = 42;
