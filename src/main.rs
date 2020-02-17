@@ -92,6 +92,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         cache_utils::prefetcher::prefetcher_status()
     );
 
+    cache_utils::calibration::calibrate_access();
+
     // Calibration
     // disable pretechers
     // Calibrate hit / miss rdtsc threshold
