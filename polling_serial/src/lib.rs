@@ -40,13 +40,15 @@ pub struct SerialPort {
     scratch: Port<u8>, // 7
 }
 
-const SCRATCH_VALUE: u8 = 0x42;
+const SCRATCH_VALUE: u8 = 0x42; // An arbitrary value used to test serial ports
 
-const DISBALE_INTERRUPTS: u8 = 0x00;
+const DISABLE_INTERRUPTS: u8 = 0x00; //
 
 const DLAB: u8 = 0x80;
 
-const DIVISOR: u16 = 0x03;
+const BASE_RATE: u32 = 115200;
+
+const DIVISOR: u16 = 0x03; // The baud rate is 38400
 
 const PARITY_MODE: u8 = 0x03;
 
@@ -81,7 +83,7 @@ impl SerialPort {
         }
 
         // disable all interrupts
-        p.int_en.write(DISBALE_INTERRUPTS);
+        p.int_en.write(DISABLE_INTERRUPTS);
 
         // enable DLAB to set the divisor
         p.line_ctrl.write(DLAB);
@@ -125,6 +127,10 @@ impl SerialPort {
             while self.line_status.read() & READY_TO_READ == 0 {}
             self.data.read()
         }
+    }
+
+    pub fn rate() -> u32 {
+        BASE_RATE / (DIVISOR as u32)
     }
 }
 
