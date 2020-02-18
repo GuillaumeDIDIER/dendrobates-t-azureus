@@ -163,6 +163,9 @@ pub fn calibrate_flush() -> u64 {
         miss_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
     }
 
+    let mut hit_max: (usize, u32) = (0, 0);
+    let mut miss_max: (usize, u32) = (0, 0);
+
     for i in 0..hit_histogram.len() {
         serial_println!(
             "{:3}: {:10} {:10}",
@@ -170,7 +173,23 @@ pub fn calibrate_flush() -> u64 {
             hit_histogram[i],
             miss_histogram[i]
         );
+        if hit_max.1 < hit_histogram[i] {
+            hit_max = (i, hit_histogram[i]);
+        }
+        if miss_max.1 < miss_histogram[i] {
+            miss_max = (i, miss_histogram[i]);
+        }
+    }
+    serial_println!("Miss max {}", miss_max.0 * CFLUSH_BUCKET_SIZE);
+    serial_println!("Max hit {}", hit_max.0 * CFLUSH_BUCKET_SIZE);
+    let mut threshold: (usize, u32) = (0, u32::max_value());
+    for i in miss_max.0..hit_max.0 {
+        if hit_histogram[i] + miss_histogram[i] < threshold.1 {
+            threshold = (i, hit_histogram[i] + miss_histogram[i]);
+        }
     }
 
-    (-1_i64) as u64
+    serial_println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
+    serial_println!("Calibration done.");
+    (threshold.0 * CFLUSH_BUCKET_SIZE) as u64
 }

@@ -15,7 +15,7 @@ use dendrobates_tinctoreus_azureus::allocator;
 use polling_serial::serial_print;
 use polling_serial::serial_println;
 use vga_buffer; // required for custom panic handler
-use vga_buffer::println;
+use vga_buffer::{print, println};
 use x86_64;
 
 #[cfg(not(test))]
@@ -91,6 +91,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         "prefetcher status: {}",
         cache_utils::prefetcher::prefetcher_status()
     );
+
+    print!("Testing reverse range:");
+    for i in (0..2).rev() {
+        print!(" {}", i);
+    }
+    println!();
 
     cache_utils::calibration::calibrate_access();
     cache_utils::calibration::calibrate_flush();
