@@ -93,6 +93,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     );
 
     cache_utils::calibration::calibrate_access();
+    cache_utils::calibration::calibrate_flush();
+    cache_utils::prefetcher::enable_prefetchers(false);
+    serial_println!("Prefetcher disabled");
+    cache_utils::calibration::calibrate_access();
+    cache_utils::calibration::calibrate_flush();
+    serial_println!("Please compare histograms for sanity");
 
     // Calibration
     // disable pretechers

@@ -25,19 +25,44 @@ unsafe fn flush_and_reload(p: *const u8) -> u64 {
     d
 }
 
+unsafe fn load_and_flush(p: *const u8) -> u64 {
+    maccess(p);
+    let t = rdtsc_fence();
+    flush(p);
+    let d = rdtsc_fence() - t;
+    d
+}
+
+unsafe fn flush_and_flush(p: *const u8) -> u64 {
+    flush(p);
+    let t = rdtsc_fence();
+    flush(p);
+    let d = rdtsc_fence() - t;
+    d
+}
+
+const BUCKET_SIZE: usize = 5;
+const BUCKET_NUMBER: usize = 250;
+
 pub fn calibrate_access() -> u64 {
     serial_println!("Calibrating...");
 
+    // Allocate a target array
+    // TBD why size, why the position in the array, why the type (usize)
     let mut array = Vec::<usize>::with_capacity(5 << 10);
     array.resize(5 << 10, 1);
 
     let array = array.into_boxed_slice();
 
-    let mut hit_histogram = Vec::<u32>::with_capacity(80);
-    hit_histogram.resize(80, 0);
+    // Histograms bucket of 5 and max at 400 cycles
+    // Magic numbers to be justified
+    // 80 is a size of screen
+    let mut hit_histogram = Vec::<u32>::with_capacity(BUCKET_NUMBER);
+    hit_histogram.resize(BUCKET_NUMBER, 0);
 
     let mut miss_histogram = hit_histogram.clone();
 
+    // the address in memory we are going to target
     let pointer = (&array[2048] as *const usize) as *const u8;
     // sanity check
     println!(
@@ -46,25 +71,106 @@ pub fn calibrate_access() -> u64 {
         (&array[2048] as *const usize) as *const u8
     );
 
+    // do a large sample of accesses to a cached line
     unsafe { maccess(pointer) };
     for _ in 0..(4 << 20) {
-        let d = unsafe { only_reload(pointer) };
-        hit_histogram[min(79, d / 5) as usize] += 1;
+        let d = unsafe { only_reload(pointer) } as usize;
+        hit_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE) as usize] += 1;
     }
 
+    // do a large numer of accesses to uncached line
     unsafe { flush(pointer) };
     for _ in 0..(4 << 20) {
-        let d = unsafe { flush_and_reload(pointer) };
-        miss_histogram[min(79, d / 5) as usize] += 1;
+        let d = unsafe { flush_and_reload(pointer) } as usize;
+        miss_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE) as usize] += 1;
     }
 
-    // Todo plot and analyze histogram
+    let mut hit_max = 0;
+    let mut hit_max_i = 0;
+    let mut miss_min_i = 0;
+    for i in 0..hit_histogram.len() {
+        serial_println!(
+            "{:3}: {:10} {:10}",
+            i * BUCKET_SIZE,
+            hit_histogram[i],
+            miss_histogram[i]
+        );
+        if hit_max < hit_histogram[i] {
+            hit_max = hit_histogram[i];
+            hit_max_i = i;
+        }
+        if miss_histogram[i] > 3 /* Magic */ && miss_min_i == 0 {
+            miss_min_i = i
+        }
+    }
+    serial_println!("Miss min {}", miss_min_i * BUCKET_SIZE);
+    serial_println!("Max hit {}", hit_max_i * BUCKET_SIZE);
 
-    serial_println!("Threshold {}", -1);
+    let mut min = u32::max_value();
+    let mut min_i = 0;
+    for i in hit_max_i..miss_min_i {
+        if min > hit_histogram[i] + miss_histogram[i] {
+            min = hit_histogram[i] + miss_histogram[i];
+            min_i = i;
+        }
+    }
+
+    serial_println!("Threshold {}", min_i * BUCKET_SIZE);
     serial_println!("Calibration done.");
-    (-1_i64) as u64
+    (min_i * BUCKET_SIZE) as u64
 }
 
+const CFLUSH_BUCKET_SIZE: usize = 1;
+const CFLUSH_BUCKET_NUMBER: usize = 250;
+
 pub fn calibrate_flush() -> u64 {
+    serial_println!("Calibrating cflush...");
+
+    // Allocate a target array
+    // TBD why size, why the position in the array, why the type (usize)
+    let mut array = Vec::<usize>::with_capacity(5 << 10);
+    array.resize(5 << 10, 1);
+
+    let array = array.into_boxed_slice();
+
+    // Histograms bucket of 5 and max at 400 cycles
+    // Magic numbers to be justified
+    // 80 is a size of screen
+    let mut hit_histogram = Vec::<u32>::with_capacity(CFLUSH_BUCKET_NUMBER);
+    hit_histogram.resize(CFLUSH_BUCKET_NUMBER, 0);
+
+    let mut miss_histogram = hit_histogram.clone();
+
+    // the address in memory we are going to target
+    let pointer = (&array[2048] as *const usize) as *const u8;
+    // sanity check
+    println!(
+        "&array[0]: {:p}, array[2048]{:p}",
+        (&array[0] as *const usize) as *const u8,
+        (&array[2048] as *const usize) as *const u8
+    );
+
+    // do a large sample of accesses to a cached line
+    for _ in 0..(4 << 20) {
+        let d = unsafe { load_and_flush(pointer) } as usize;
+        hit_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
+    }
+
+    // do a large numer of accesses to uncached line
+    unsafe { flush(pointer) };
+    for _ in 0..(4 << 20) {
+        let d = unsafe { flush_and_flush(pointer) } as usize;
+        miss_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
+    }
+
+    for i in 0..hit_histogram.len() {
+        serial_println!(
+            "{:3}: {:10} {:10}",
+            i * CFLUSH_BUCKET_SIZE,
+            hit_histogram[i],
+            miss_histogram[i]
+        );
+    }
+
     (-1_i64) as u64
 }

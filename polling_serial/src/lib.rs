@@ -72,7 +72,7 @@ impl SerialPort {
             line_ctrl: Port::new(base + 3),
             modem_ctrl: Port::new(base + 4),
             line_status: Port::new(base + 5),
-            //modem_status: Port::new(base + 6),
+            //modem_status: Port::new(base + 6), // Unused
             scratch: Port::new(base + 7),
         };
 
