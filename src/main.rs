@@ -18,6 +18,9 @@ use vga_buffer; // required for custom panic handler
 use vga_buffer::{print, println};
 use x86_64;
 
+use core::cmp::Ord;
+use core::ops::Sub;
+
 #[cfg(not(test))]
 use dendrobates_tinctoreus_azureus::hlt_loop;
 
@@ -33,6 +36,14 @@ fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
     x86_64::instructions::bochs_breakpoint();
     hlt_loop();
+}
+
+fn distance<T: Sub<Output = T> + Ord>(a: T, b: T) -> T {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
 }
 
 entry_point!(kernel_main);
@@ -98,13 +109,19 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
     println!();
 
-    cache_utils::calibration::calibrate_access();
-    cache_utils::calibration::calibrate_flush();
+    let threshold_access_p = cache_utils::calibration::calibrate_access();
+    let threshold_flush_p = cache_utils::calibration::calibrate_flush();
     cache_utils::prefetcher::enable_prefetchers(false);
     serial_println!("Prefetcher disabled");
-    cache_utils::calibration::calibrate_access();
-    cache_utils::calibration::calibrate_flush();
+    let threshold_access = cache_utils::calibration::calibrate_access();
+    let threshold_flush = cache_utils::calibration::calibrate_flush();
     serial_println!("Please compare histograms for sanity");
+
+    if distance(threshold_access_p, threshold_access) > 10
+        || distance(threshold_flush_p, threshold_flush) > 2
+    {
+        panic!("Inconsistent thresholds");
+    }
 
     // Calibration
     // disable pretechers
