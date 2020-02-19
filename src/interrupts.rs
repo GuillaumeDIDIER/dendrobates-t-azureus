@@ -32,7 +32,7 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut InterruptStackFra
     x86_64::instructions::bochs_breakpoint();
 }
 
-extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: u64) {
+extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: u64) -> ! {
     // LLVM bug causing misaligned stacks when error codes are present.
     // This code realigns the stack and then grabs the correct values by doing some pointer arithmetic
     let stack_frame: &mut InterruptStackFrame;
