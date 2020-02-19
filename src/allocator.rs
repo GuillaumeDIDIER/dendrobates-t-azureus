@@ -1,4 +1,3 @@
-use polling_serial::serial_println;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
@@ -21,7 +20,7 @@ pub fn init_heap(
         Page::range_inclusive(heap_start_page, heap_end_page)
     };
 
-    for (i, page) in page_range.enumerate() {
+    for page in page_range {
         let frame = frame_allocator
             .allocate_frame()
             .ok_or(MapToError::FrameAllocationFailed)?;

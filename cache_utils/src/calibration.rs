@@ -1,5 +1,5 @@
-use crate::{flush, maccess, rdtsc_fence, rdtsc_nofence};
-use polling_serial::{serial_print, serial_println};
+use crate::{flush, maccess, rdtsc_fence};
+use polling_serial::serial_println;
 use vga_buffer::println;
 
 extern crate alloc;

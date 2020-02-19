@@ -12,7 +12,6 @@ use bootloader::{entry_point, BootInfo};
 use cache_utils;
 use core::panic::PanicInfo;
 use dendrobates_tinctoreus_azureus::allocator;
-use polling_serial::serial_print;
 use polling_serial::serial_println;
 use vga_buffer; // required for custom panic handler
 use vga_buffer::{print, println};

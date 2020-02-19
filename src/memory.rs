@@ -49,8 +49,7 @@ pub fn create_example_mapping(
     let not_really_unused_frame = unsafe { UnusedPhysFrame::new(frame) };
     let flags = Flags::PRESENT | Flags::WRITABLE;
 
-    let map_to_result =
-        unsafe { mapper.map_to(page, not_really_unused_frame, flags, frame_allocator) };
+    let map_to_result = mapper.map_to(page, not_really_unused_frame, flags, frame_allocator);
     map_to_result.expect("map_to failed").flush();
 }
 
