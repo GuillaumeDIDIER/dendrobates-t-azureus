@@ -64,6 +64,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use x86_64::structures::paging::MapperAllSizes;
     use x86_64::VirtAddr;
 
+    serial_println!("Memory map: {:#?}", boot_info.memory_map);
+
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // new: initialize a mapper
     let mut frame_allocator =

@@ -79,12 +79,14 @@ impl BootInfoFrameAllocator {
         // map each region to its address range
         let addr_ranges = usable_regions.map(|r| r.range.start_addr()..r.range.end_addr());
         // transform to an iterator of frame start addresses
-        let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-        // create `PhysFrame` types from the start addresses
+        let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096)); // TODO Magic number, this is where 4k pages are enforced
+                                                                         // create `PhysFrame` types from the start addresses
         let frames = frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)));
         frames
     }
 }
+
+// We only allocate 4k pages
 unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<UnusedPhysFrame> {
         let frame = self.usable_frames().nth(self.next);
