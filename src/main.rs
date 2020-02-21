@@ -60,25 +60,85 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     println!("Hello Blue Frog");
     dendrobates_tinctoreus_azureus::init();
-    x86_64::instructions::interrupts::int3(); // new
     #[cfg(test)]
     test_main();
 
-    x86_64::instructions::interrupts::int3();
-
-    use dendrobates_tinctoreus_azureus::memory;
-    use x86_64::structures::paging::MapperAllSizes;
-    use x86_64::VirtAddr;
-
-    serial_println!("Memory map: {:#?}", boot_info.memory_map);
+    //serial_println!("Memory map: {:#?}", boot_info.memory_map);
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+
+    // Let's reserve some memory for evil purposes
+
+    // create our memoryMap carving out one 2MiB region for us
+    let mut memory_map = MemoryMap::new();
+
+    let mut victim = None;
+
+    for region in boot_info.memory_map.iter() {
+        let new_region = {
+            if victim.is_none()
+                && region.region_type == Usable
+                && region.range.end_addr() - region.range.start_addr() >= (1 << 21)
+            {
+                if region.range.start_addr() & ((1 << 21) - 1) == 0 {
+                    victim = Some(MemoryRegion {
+                        range: FrameRange::new(
+                            region.range.start_addr(),
+                            region.range.start_addr() + (1 << 21),
+                        ),
+                        region_type: InUse,
+                    });
+                    MemoryRegion {
+                        range: FrameRange::new(
+                            region.range.start_addr() + (1 << 21),
+                            region.range.end_addr(),
+                        ),
+                        region_type: Usable,
+                    }
+                } else if region.range.end_addr() & ((1 << 21) - 1) == 0 {
+                    victim = Some(MemoryRegion {
+                        range: FrameRange::new(
+                            region.range.end_addr() - (1 << 21),
+                            region.range.end_addr(),
+                        ),
+                        region_type: InUse,
+                    });
+                    MemoryRegion {
+                        range: FrameRange::new(
+                            region.range.start_addr(),
+                            region.range.end_addr() - (1 << 21),
+                        ),
+                        region_type: Usable,
+                    }
+                } else {
+                    *region
+                }
+            } else {
+                *region
+            }
+        };
+        memory_map.add_region(new_region);
+    }
+
+    // Save the physical addresses, and map 4k pages at a well chosen virtual address range to it.
+    // Also grab the virtual addresses for the offset mapping.
+    let victim = if let Some(victim) = victim {
+        memory_map.add_region(victim);
+        victim
+    } else {
+        unimplemented!();
+    };
+
+    // Cast all this to proper references
+
     // new: initialize a mapper
-    let mut frame_allocator =
-        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
+    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(memory_map) };
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
 
+    serial_println!("Physical memory offset: {:?}", phys_mem_offset);
+
+    /*
     let addresses = [
         // the identity-mapped vga buffer page
         0xb8000,
@@ -95,6 +155,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         // new: use the `mapper.translate_addr` method
         let phys = mapper.translate_addr(virt);
         serial_println!("{:?} -> {:?}", virt, phys);
+    }
+    */
+    for (page, frame) in (0xcccc_0000_0000_u64..0xcccc_0020_0000)
+        .step_by(Size4KiB::SIZE as usize)
+        .zip(PhysFrameRange {
+            start: PhysFrame::containing_address(PhysAddr::new(victim.range.start_addr())),
+            end: PhysFrame::containing_address(PhysAddr::new(victim.range.end_addr())),
+        })
+    {
+        mapper
+            .map_to(
+                Page::<Size4KiB>::containing_address(VirtAddr::new(page)),
+                unsafe { UnusedPhysFrame::new(frame) },
+                PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                &mut frame_allocator,
+            )
+            .expect("Failed to map the experiment buffer")
+            .flush();
     }
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
