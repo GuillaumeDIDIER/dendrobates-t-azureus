@@ -19,12 +19,12 @@ pub unsafe fn rdtsc_fence() -> u64 {
     tsc
 }
 
-pub unsafe fn maccess<T>(p: *const T) -> () {
+pub unsafe fn maccess<T>(p: *const T) {
     ptr::read_volatile(p);
 }
 
 // flush (cflush)
-pub unsafe fn flush(p: *const u8) -> () {
+pub unsafe fn flush(p: *const u8) {
     arch_x86::_mm_clflush(p);
 }
 

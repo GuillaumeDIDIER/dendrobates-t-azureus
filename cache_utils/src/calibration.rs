@@ -1,8 +1,8 @@
 use crate::{flush, maccess, rdtsc_fence};
 use polling_serial::serial_println;
-use vga_buffer::println;
 
 extern crate alloc;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
 
@@ -13,32 +13,28 @@ use core::cmp::min;
 unsafe fn only_reload(p: *const u8) -> u64 {
     let t = rdtsc_fence();
     maccess(p);
-    let d = rdtsc_fence() - t;
-    d
+    rdtsc_fence() - t
 }
 
 unsafe fn flush_and_reload(p: *const u8) -> u64 {
     flush(p);
     let t = rdtsc_fence();
     maccess(p);
-    let d = rdtsc_fence() - t;
-    d
+    rdtsc_fence() - t
 }
 
 unsafe fn load_and_flush(p: *const u8) -> u64 {
     maccess(p);
     let t = rdtsc_fence();
     flush(p);
-    let d = rdtsc_fence() - t;
-    d
+    rdtsc_fence() - t
 }
 
 unsafe fn flush_and_flush(p: *const u8) -> u64 {
     flush(p);
     let t = rdtsc_fence();
     flush(p);
-    let d = rdtsc_fence() - t;
-    d
+    rdtsc_fence() - t
 }
 
 const BUCKET_SIZE: usize = 5;
@@ -57,19 +53,13 @@ pub fn calibrate_access() -> u64 {
     // Histograms bucket of 5 and max at 400 cycles
     // Magic numbers to be justified
     // 80 is a size of screen
-    let mut hit_histogram = Vec::<u32>::with_capacity(BUCKET_NUMBER);
-    hit_histogram.resize(BUCKET_NUMBER, 0);
+    let mut hit_histogram = vec![0; BUCKET_NUMBER]; //Vec::<u32>::with_capacity(BUCKET_NUMBER);
+                                                    //hit_histogram.resize(BUCKET_NUMBER, 0);
 
     let mut miss_histogram = hit_histogram.clone();
 
     // the address in memory we are going to target
     let pointer = (&array[2048] as *const usize) as *const u8;
-    // sanity check
-    println!(
-        "&array[0]: {:p}, array[2048]{:p}",
-        (&array[0] as *const usize) as *const u8,
-        (&array[2048] as *const usize) as *const u8
-    );
 
     // do a large sample of accesses to a cached line
     unsafe { maccess(pointer) };
@@ -136,19 +126,12 @@ pub fn calibrate_flush() -> u64 {
     // Histograms bucket of 5 and max at 400 cycles
     // Magic numbers to be justified
     // 80 is a size of screen
-    let mut hit_histogram = Vec::<u32>::with_capacity(CFLUSH_BUCKET_NUMBER);
-    hit_histogram.resize(CFLUSH_BUCKET_NUMBER, 0);
+    let mut hit_histogram = vec![0; CFLUSH_BUCKET_NUMBER];
 
     let mut miss_histogram = hit_histogram.clone();
 
     // the address in memory we are going to target
     let pointer = (&array[2048] as *const usize) as *const u8;
-    // sanity check
-    println!(
-        "&array[0]: {:p}, array[2048]{:p}",
-        (&array[0] as *const usize) as *const u8,
-        (&array[2048] as *const usize) as *const u8
-    );
 
     // do a large sample of accesses to a cached line
     for _ in 0..(4 << 20) {

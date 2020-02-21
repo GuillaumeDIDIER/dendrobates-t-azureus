@@ -46,7 +46,7 @@ const DISABLE_INTERRUPTS: u8 = 0x00; //
 
 const DLAB: u8 = 0x80;
 
-const BASE_RATE: u32 = 115200;
+const BASE_RATE: u32 = 115_200;
 
 const DIVISOR: u16 = 0x03; // The baud rate is 38400
 

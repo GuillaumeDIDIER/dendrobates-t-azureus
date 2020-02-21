@@ -9,13 +9,10 @@
 extern crate alloc;
 
 use bootloader::{entry_point, BootInfo};
-use cache_utils;
 use core::panic::PanicInfo;
 use dendrobates_tinctoreus_azureus::allocator;
 use polling_serial::serial_println;
-use vga_buffer; // required for custom panic handler
-use vga_buffer::{print, println};
-use x86_64;
+use vga_buffer::println;
 
 use core::cmp::Ord;
 use core::ops::Sub;
@@ -23,8 +20,17 @@ use core::ops::Sub;
 #[cfg(not(test))]
 use dendrobates_tinctoreus_azureus::hlt_loop;
 
+use bootloader::bootinfo::MemoryRegionType::{InUse, Usable};
+use bootloader::bootinfo::{FrameRange, MemoryMap, MemoryRegion};
+use dendrobates_tinctoreus_azureus::memory;
 #[cfg(not(test))]
 use vga_buffer::{set_colors, Color, ForegroundColor};
+use x86_64::structures::paging::frame::PhysFrameRange;
+use x86_64::structures::paging::{
+    Mapper, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB, UnusedPhysFrame,
+};
+use x86_64::PhysAddr;
+use x86_64::VirtAddr;
 
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
@@ -103,12 +109,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         "prefetcher status: {}",
         cache_utils::prefetcher::prefetcher_status()
     );
-
-    print!("Testing reverse range:");
-    for i in (0..2).rev() {
-        print!(" {}", i);
-    }
-    println!();
 
     let threshold_access_p = cache_utils::calibration::calibrate_access();
     let threshold_flush_p = cache_utils::calibration::calibrate_flush();
