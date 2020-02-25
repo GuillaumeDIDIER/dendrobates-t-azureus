@@ -22,12 +22,14 @@ use dendrobates_tinctoreus_azureus::hlt_loop;
 
 use bootloader::bootinfo::MemoryRegionType::{InUse, Usable};
 use bootloader::bootinfo::{FrameRange, MemoryMap, MemoryRegion};
+use cache_utils::maccess;
+use cache_utils::prefetcher::{enable_prefetchers, prefetcher_fun};
 use dendrobates_tinctoreus_azureus::memory;
 #[cfg(not(test))]
 use vga_buffer::{set_colors, Color, ForegroundColor};
 use x86_64::structures::paging::frame::PhysFrameRange;
 use x86_64::structures::paging::{
-    Mapper, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB, UnusedPhysFrame,
+    Mapper, MapperAllSizes, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB, UnusedPhysFrame,
 };
 use x86_64::PhysAddr;
 use x86_64::VirtAddr;
@@ -51,6 +53,8 @@ fn distance<T: Sub<Output = T> + Ord>(a: T, b: T) -> T {
     }
 }
 
+const victim4k_start: u64 = 0x0ccc_0000_0000_u64;
+const victim4k_end: u64 = victim4k_start + (1 << 21);
 entry_point!(kernel_main);
 
 // Kernel entry point
@@ -75,6 +79,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut victim = None;
 
     for region in boot_info.memory_map.iter() {
+        if region.region_type == Usable {
+            serial_println!("Usable Region: {:?}", region);
+        }
         let new_region = {
             if victim.is_none()
                 && region.region_type == Usable
@@ -157,13 +164,14 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         serial_println!("{:?} -> {:?}", virt, phys);
     }
     */
-    for (page, frame) in (0xcccc_0000_0000_u64..0xcccc_0020_0000)
+    for (page, frame) in (victim4k_start..victim4k_end)
         .step_by(Size4KiB::SIZE as usize)
         .zip(PhysFrameRange {
             start: PhysFrame::containing_address(PhysAddr::new(victim.range.start_addr())),
             end: PhysFrame::containing_address(PhysAddr::new(victim.range.end_addr())),
         })
     {
+        serial_println!("Mapping page {:x} on frame {:?}", page, frame);
         mapper
             .map_to(
                 Page::<Size4KiB>::containing_address(VirtAddr::new(page)),
@@ -173,6 +181,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             )
             .expect("Failed to map the experiment buffer")
             .flush();
+        let phys = mapper.translate_addr(VirtAddr::new(page));
+        serial_println!(
+            "Mapped page {:p}({:?}) on frame {:?}",
+            page as *mut u8,
+            VirtAddr::new(page),
+            phys
+        );
+
+        unsafe { maccess(page as *mut u8) };
     }
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
@@ -200,6 +217,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         || distance(threshold_flush_p, threshold_flush) > 2
     {
         panic!("Inconsistent thresholds");
+    }
+
+    serial_println!("0");
+    let r_no_prefetch = prefetcher_fun(
+        victim4k_start as *mut u8,
+        unsafe { (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize) },
+        threshold_flush,
+    );
+    serial_println!("1");
+    enable_prefetchers(true);
+    let r_prefetch = prefetcher_fun(
+        victim4k_start as *mut u8,
+        unsafe { (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize) },
+        threshold_flush,
+    );
+
+    for (i, (&npf, pf)) in r_no_prefetch.iter().zip(r_prefetch).enumerate() {
+        serial_println!("{} {} {}", i, npf, pf);
     }
 
     // Calibration

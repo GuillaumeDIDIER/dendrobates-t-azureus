@@ -1,6 +1,16 @@
 use x86_64::registers::model_specific::Msr;
 
+use crate::calibration::only_flush;
+use crate::flush;
+use crate::maccess;
+
+extern crate alloc;
+use alloc::vec;
+use alloc::vec::Vec;
+
 const MSR_MISC_FEATURE8CONTROL: u32 = 0x1a4;
+
+const N: i32 = 10;
 
 pub fn prefetcher_status() -> bool {
     let msr = Msr::new(MSR_MISC_FEATURE8CONTROL);
@@ -16,4 +26,22 @@ pub fn enable_prefetchers(status: bool) {
         value |= 0xf;
     }
     unsafe { msr.write(value) };
+}
+
+pub fn prefetcher_fun(victim4kaddr: *mut u8, victim2Maddr: *mut u8, threshold_ff: u64) -> Vec<i32> {
+    let mut results = vec![0; 4096 / 64];
+
+    for _ in 0..N {
+        //unsafe { maccess(victim4kaddr) };
+        for j in (0..4096).step_by(64).rev() {
+            let t = unsafe { only_flush(victim4kaddr.offset(j)) };
+            if threshold_ff < t {
+                // hit
+                results[(j / 64) as usize] += 1;
+            } else if threshold_ff > t {
+                results[(j / 64) as usize] -= 1;
+            }
+        }
+    }
+    results
 }
