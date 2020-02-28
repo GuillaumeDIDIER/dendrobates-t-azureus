@@ -1,0 +1,7 @@
+awk '/Prefetcher disabled/,/END/{ print $0 }' < ~/log_newcalibration2.filtered.txt > ~/newcal.2.txt
+
+cat ~/begin.txt ~/log_newcalibration2.filtered.txt | awk ' /BEGIN/,/Prefetcher disabled/{ print $0 }' > ~/newcal.1.txt
+
+awk '/Calibrating/,/Please compare histograms for sanity/ { print $0 }' < ~/log_newcalibration2.txt > ~/log_newcalibration2.filtered.txt
+
+
