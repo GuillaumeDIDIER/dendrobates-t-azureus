@@ -34,6 +34,8 @@ use x86_64::structures::paging::{
 use x86_64::PhysAddr;
 use x86_64::VirtAddr;
 
+use arrayref;
+
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
 #[panic_handler]
@@ -79,9 +81,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut victim = None;
 
     for region in boot_info.memory_map.iter() {
-        if region.region_type == Usable {
+        /*if region.region_type == Usable {
             serial_println!("Usable Region: {:?}", region);
-        }
+        }*/
         let new_region = {
             if victim.is_none()
                 && region.region_type == Usable
@@ -171,7 +173,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             end: PhysFrame::containing_address(PhysAddr::new(victim.range.end_addr())),
         })
     {
-        serial_println!("Mapping page {:x} on frame {:?}", page, frame);
+        //serial_println!("Mapping page {:x} on frame {:?}", page, frame);
         mapper
             .map_to(
                 Page::<Size4KiB>::containing_address(VirtAddr::new(page)),
@@ -182,12 +184,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             .expect("Failed to map the experiment buffer")
             .flush();
         let phys = mapper.translate_addr(VirtAddr::new(page));
-        serial_println!(
+        /*serial_println!(
             "Mapped page {:p}({:?}) on frame {:?}",
             page as *mut u8,
             VirtAddr::new(page),
             phys
-        );
+        );*/
 
         unsafe { maccess(page as *mut u8) };
     }
@@ -205,12 +207,36 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         cache_utils::prefetcher::prefetcher_status()
     );
 
-    let threshold_access_p = cache_utils::calibration::calibrate_access();
-    let threshold_flush_p = cache_utils::calibration::calibrate_flush();
+    let threshold_access_p = cache_utils::calibration::calibrate_access(unsafe {
+        arrayref::array_ref![
+            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            0,
+            4096
+        ]
+    });
+    let threshold_flush_p = cache_utils::calibration::calibrate_flush(unsafe {
+        arrayref::array_ref![
+            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            0,
+            4096
+        ]
+    });
     cache_utils::prefetcher::enable_prefetchers(false);
     serial_println!("Prefetcher disabled");
-    let threshold_access = cache_utils::calibration::calibrate_access();
-    let threshold_flush = cache_utils::calibration::calibrate_flush();
+    let threshold_access = cache_utils::calibration::calibrate_access(unsafe {
+        arrayref::array_ref![
+            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            0,
+            4096
+        ]
+    });
+    let threshold_flush = cache_utils::calibration::calibrate_flush(unsafe {
+        arrayref::array_ref![
+            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            0,
+            4096
+        ]
+    });
     serial_println!("Please compare histograms for sanity");
 
     if distance(threshold_access_p, threshold_access) > 10

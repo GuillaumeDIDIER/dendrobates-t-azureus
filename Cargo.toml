@@ -30,6 +30,7 @@ polling_serial = { path = "polling_serial" }
 volatile = "0.2.6"
 linked_list_allocator = "0.7.0"
 cache_utils = { path = "cache_utils" }
+arrayref = "0.3.6"
 
 [dependencies.lazy_static]
 version = "1.4.0"
