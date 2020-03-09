@@ -6,7 +6,6 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use core::arch::x86_64 as arch_x86;
-
 const CACHE_INFO_CPUID_LEAF: u32 = 0x4;
 
 pub fn get_cache_info() -> Vec<CacheInfo> {
@@ -33,19 +32,19 @@ pub enum CacheType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheInfo {
-    cache_type: CacheType,
-    level: u8,
-    self_init: bool,
-    fully_assoc: bool,
-    core_for_cache: u16,
-    core_in_package: u16,
-    cache_line_size: u16,
-    physical_line_partition: u16,
-    associativity: u16,
-    sets: u32,
-    wbinvd_no_guarantee: bool,
-    inclusive: bool,
-    complex_cache_indexing: bool,
+    pub cache_type: CacheType,
+    pub level: u8,
+    pub self_init: bool,
+    pub fully_assoc: bool,
+    pub core_for_cache: u16,
+    pub core_in_package: u16,
+    pub cache_line_size: u16,
+    pub physical_line_partition: u16,
+    pub associativity: u16,
+    pub sets: u32,
+    pub wbinvd_no_guarantee: bool,
+    pub inclusive: bool,
+    pub complex_cache_indexing: bool,
 }
 
 impl CacheInfo {

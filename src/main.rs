@@ -201,6 +201,18 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("{:#?}", caches);
 
     println!("Caches: {:?}", caches);
+    let mut cache_line_size: Option<u16> = None;
+    for cache in caches {
+        if let Some(cache_line_size) = cache_line_size {
+            if cache_line_size != cache.cache_line_size {
+                unimplemented!("Does not support multiple cache line for now");
+            }
+        } else {
+            cache_line_size = Some(cache.cache_line_size)
+        }
+    }
+
+    let cache_line_size = cache_line_size.unwrap_or(64) as usize;
 
     println!(
         "prefetcher status: {}",
@@ -214,13 +226,16 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             4096
         ]
     });
-    let threshold_flush_p = cache_utils::calibration::calibrate_flush(unsafe {
-        arrayref::array_ref![
-            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
-            0,
-            4096
-        ]
-    });
+    let threshold_flush_p = cache_utils::calibration::calibrate_flush(
+        unsafe {
+            arrayref::array_ref![
+                core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+                0,
+                4096
+            ]
+        },
+        cache_line_size,
+    );
     cache_utils::prefetcher::enable_prefetchers(false);
     serial_println!("Prefetcher disabled");
     let threshold_access = cache_utils::calibration::calibrate_access(unsafe {
@@ -230,13 +245,16 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             4096
         ]
     });
-    let threshold_flush = cache_utils::calibration::calibrate_flush(unsafe {
-        arrayref::array_ref![
-            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
-            0,
-            4096
-        ]
-    });
+    let threshold_flush = cache_utils::calibration::calibrate_flush(
+        unsafe {
+            arrayref::array_ref![
+                core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+                0,
+                4096
+            ]
+        },
+        cache_line_size,
+    );
     serial_println!("Please compare histograms for sanity");
 
     if distance(threshold_access_p, threshold_access) > 10

@@ -1,5 +1,5 @@
 use crate::{flush, maccess, rdtsc_fence};
-use polling_serial::serial_println;
+use polling_serial::serial_println as println;
 
 extern crate alloc;
 use alloc::vec;
@@ -45,8 +45,10 @@ pub unsafe fn only_flush(p: *const u8) -> u64 {
 const BUCKET_SIZE: usize = 5;
 const BUCKET_NUMBER: usize = 250;
 
+// TODO same as below, also add the whole page calibration
+
 pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
-    serial_println!("Calibrating...");
+    println!("Calibrating...");
 
     // Allocate a target array
     // TBD why size, why the position in the array, why the type (usize)
@@ -66,7 +68,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     // the address in memory we are going to target
     let pointer = &array[0] as *const u8;
 
-    serial_println!("buffer start {:p}", pointer);
+    println!("buffer start {:p}", pointer);
 
     if pointer as usize & 0x3f != 0 {
         panic!("not aligned nicely");
@@ -94,7 +96,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     let mut hit_max_i = 0;
     let mut miss_min_i = 0;
     for i in 0..hit_histogram.len() {
-        serial_println!(
+        println!(
             "{:3}: {:10} {:10}",
             i * BUCKET_SIZE,
             hit_histogram[i],
@@ -108,8 +110,8 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
             miss_min_i = i
         }
     }
-    serial_println!("Miss min {}", miss_min_i * BUCKET_SIZE);
-    serial_println!("Max hit {}", hit_max_i * BUCKET_SIZE);
+    println!("Miss min {}", miss_min_i * BUCKET_SIZE);
+    println!("Max hit {}", hit_max_i * BUCKET_SIZE);
 
     let mut min = u32::max_value();
     let mut min_i = 0;
@@ -120,16 +122,24 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
         }
     }
 
-    serial_println!("Threshold {}", min_i * BUCKET_SIZE);
-    serial_println!("Calibration done.");
+    println!("Threshold {}", min_i * BUCKET_SIZE);
+    println!("Calibration done.");
     (min_i * BUCKET_SIZE) as u64
 }
 
 const CFLUSH_BUCKET_SIZE: usize = 1;
 const CFLUSH_BUCKET_NUMBER: usize = 250;
 
-pub fn calibrate_flush(array: &[u8; 4096]) -> u64 {
-    serial_println!("Calibrating cflush...");
+/* TODO Code cleanup :
+  - change type back to a slice OK
+  - change return type to return thresholds per cache line ?
+  - change iteration to be per cache line OK
+  - take the cache line size as a parameter OK
+  - parametrize 4k vs 2M ? Or just use the slice length ? OK
+*/
+
+pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
+    println!("Calibrating cflush...");
 
     // Allocate a target array
     // TBD why size, why the position in the array, why the type (usize)
@@ -149,13 +159,13 @@ pub fn calibrate_flush(array: &[u8; 4096]) -> u64 {
         panic!("not aligned nicely");
     }
     // do a large sample of accesses to a cached line
-    for i in 0..(4 << 10) {
+    for i in (0..(array.len() as isize)).step_by(cache_line_size) {
         let mut hit_histogram = vec![0; CFLUSH_BUCKET_NUMBER];
 
         let mut miss_histogram = hit_histogram.clone();
-        serial_println!("Calibration for {:p}", unsafe { pointer.offset(i) });
+        println!("Calibration for {:p}", unsafe { pointer.offset(i) });
         unsafe { load_and_flush(pointer.offset(i)) }; // align down on 64 bytes
-        for _ in 1..(1 << 10) {
+        for _ in 1..(1 << 11) {
             let d = unsafe { load_and_flush(pointer.offset(i)) } as usize;
             hit_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
         }
@@ -169,11 +179,14 @@ pub fn calibrate_flush(array: &[u8; 4096]) -> u64 {
             miss_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
         }
 
+        // extract min, max, & median of the distribution.
+        // set the threshold to mid point between miss max & hit min.
+
         let mut hit_max: (usize, u32) = (0, 0);
         let mut miss_max: (usize, u32) = (0, 0);
 
         for i in 0..hit_histogram.len() {
-            serial_println!(
+            println!(
                 "{:3}: {:10} {:10}",
                 i * CFLUSH_BUCKET_SIZE,
                 hit_histogram[i],
@@ -186,8 +199,8 @@ pub fn calibrate_flush(array: &[u8; 4096]) -> u64 {
                 miss_max = (i, miss_histogram[i]);
             }
         }
-        serial_println!("Miss max {}", miss_max.0 * CFLUSH_BUCKET_SIZE);
-        serial_println!("Max hit {}", hit_max.0 * CFLUSH_BUCKET_SIZE);
+        println!("Miss max {}", miss_max.0 * CFLUSH_BUCKET_SIZE);
+        println!("Max hit {}", hit_max.0 * CFLUSH_BUCKET_SIZE);
         let mut threshold: (usize, u32) = (0, u32::max_value());
         for i in miss_max.0..hit_max.0 {
             if hit_histogram[i] + miss_histogram[i] < threshold.1 {
@@ -195,8 +208,8 @@ pub fn calibrate_flush(array: &[u8; 4096]) -> u64 {
             }
         }
 
-        serial_println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
-        serial_println!("Calibration done.");
+        println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
+        println!("Calibration done.");
     }
     //(threshold.0 * CFLUSH_BUCKET_SIZE) as u64
     0
