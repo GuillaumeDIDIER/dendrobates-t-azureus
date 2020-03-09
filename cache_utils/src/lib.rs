@@ -1,5 +1,15 @@
 #![cfg_attr(feature = "no_std", no_std)]
 
+use static_assertions::assert_cfg;
+
+assert_cfg!(
+    all(
+        not(all(feature = "std", feature = "no_std")),
+        any(feature = "std", feature = "no_std")
+    ),
+    "Choose std or no-std but not both"
+);
+
 pub mod cache_info;
 pub mod calibration;
 pub mod prefetcher;
