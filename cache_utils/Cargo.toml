@@ -19,3 +19,7 @@ std = ["nix"]
 no_std = ["polling_serial", "vga_buffer"]
 
 default = ["std"]
+
+[[bin]]
+name = "cache_utils"
+required-features = ["std"]
