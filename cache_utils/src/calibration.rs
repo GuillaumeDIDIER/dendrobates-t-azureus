@@ -1,4 +1,6 @@
 use crate::{flush, maccess, rdtsc_fence};
+
+#[cfg(feature = "no_std")]
 use polling_serial::serial_println as println;
 
 extern crate alloc;

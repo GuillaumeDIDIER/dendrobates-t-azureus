@@ -7,6 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-polling_serial = { path = "../polling_serial" }
-vga_buffer = { path = "../vga_buffer" }
+polling_serial = { path = "../polling_serial", optional = true }
+vga_buffer = { path = "../vga_buffer", optional = true }
 x86_64 = "0.9.2"
+static_assertions = "1.1.0"
+
+nix = { version = "0.17.0", optional = true }
+
+[features]
+std = ["nix"]
+no_std = ["polling_serial", "vga_buffer"]
+
+default = ["std"]
