@@ -3,7 +3,16 @@ use crate::{flush, maccess, rdtsc_fence};
 #[cfg(feature = "no_std")]
 use polling_serial::serial_println as println;
 
+#[derive(Ord, PartialOrd, Eq, PartialEq)]
+pub enum Verbosity {
+    NoOutput,
+    Thresholds,
+    RawResult,
+    Debug,
+}
+
 extern crate alloc;
+use crate::calibration::Verbosity::{Debug, RawResult, Thresholds};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -132,6 +141,9 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
 const CFLUSH_BUCKET_SIZE: usize = 1;
 const CFLUSH_BUCKET_NUMBER: usize = 250;
 
+const CFLUSH_NUM_ITER: usize = 1 << 11;
+const CFLUSH_SPURIOUS_THRESHOLD: usize = 1;
+
 /* TODO Code cleanup :
   - change type back to a slice OK
   - change return type to return thresholds per cache line ?
@@ -140,9 +152,14 @@ const CFLUSH_BUCKET_NUMBER: usize = 250;
   - parametrize 4k vs 2M ? Or just use the slice length ? OK
 */
 
-pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
+pub fn calibrate_flush(
+    array: &[u8],
+    cache_line_size: usize,
+    verbose_level: Verbosity,
+) -> Vec<(usize, Vec<(usize, usize)>, usize)> {
     println!("Calibrating cflush...");
 
+    let mut ret = Vec::new();
     // Allocate a target array
     // TBD why size, why the position in the array, why the type (usize)
     //let mut array = Vec::<usize>::with_capacity(5 << 10);
@@ -157,7 +174,7 @@ pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
     // the address in memory we are going to target
     let pointer = (&array[0]) as *const u8;
 
-    if pointer as usize & 0x3f != 0 {
+    if pointer as usize & (cache_line_size - 1) != 0 {
         panic!("not aligned nicely");
     }
     // do a large sample of accesses to a cached line
@@ -165,9 +182,11 @@ pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
         let mut hit_histogram = vec![0; CFLUSH_BUCKET_NUMBER];
 
         let mut miss_histogram = hit_histogram.clone();
-        println!("Calibration for {:p}", unsafe { pointer.offset(i) });
+        if verbose_level >= Thresholds {
+            println!("Calibration for {:p}", unsafe { pointer.offset(i) });
+        }
         unsafe { load_and_flush(pointer.offset(i)) }; // align down on 64 bytes
-        for _ in 1..(1 << 11) {
+        for _ in 1..CFLUSH_NUM_ITER {
             let d = unsafe { load_and_flush(pointer.offset(i)) } as usize;
             hit_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
         }
@@ -176,7 +195,7 @@ pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
         unsafe { flush(pointer.offset(i)) };
 
         unsafe { load_and_flush(pointer.offset(i)) };
-        for _ in 0..(1 << 10) {
+        for _ in 0..CFLUSH_NUM_ITER {
             let d = unsafe { flush_and_flush(pointer.offset(i)) } as usize;
             miss_histogram[min(CFLUSH_BUCKET_NUMBER - 1, d / CFLUSH_BUCKET_SIZE) as usize] += 1;
         }
@@ -184,35 +203,103 @@ pub fn calibrate_flush(array: &[u8], cache_line_size: usize) -> u64 {
         // extract min, max, & median of the distribution.
         // set the threshold to mid point between miss max & hit min.
 
-        let mut hit_max: (usize, u32) = (0, 0);
-        let mut miss_max: (usize, u32) = (0, 0);
+        // determine :
+        // Hit min, max, median
+        // Miss min, miss max, median
+        // If there is no overlap the threshold is trivial
+        // If there is Grab the point where the ratio is balanced
 
-        for i in 0..hit_histogram.len() {
-            println!(
-                "{:3}: {:10} {:10}",
-                i * CFLUSH_BUCKET_SIZE,
-                hit_histogram[i],
-                miss_histogram[i]
-            );
-            if hit_max.1 < hit_histogram[i] {
-                hit_max = (i, hit_histogram[i]);
+        let mut hit_min = 0;
+        let mut hit_max = 0;
+        let mut miss_min = 0;
+        let mut miss_max = 0;
+        let mut miss_med = 0;
+        let mut hit_med = 0;
+        let mut hit_sum = 0;
+        let mut miss_sum = 0;
+
+        //let mut hit_max: (usize, u32) = (0, 0);
+        //let mut miss_max: (usize, u32) = (0, 0);
+
+        for i in 0..(hit_histogram.len() - 1) {
+            // ignore the last bucket, spurious context switches
+            if verbose_level >= RawResult {
+                println!(
+                    "{:3}: {:10} {:10}",
+                    i * CFLUSH_BUCKET_SIZE,
+                    hit_histogram[i],
+                    miss_histogram[i]
+                );
             }
-            if miss_max.1 < miss_histogram[i] {
-                miss_max = (i, miss_histogram[i]);
+            // FIXME
+            // Code duplication for histogram analysis is meh.
+            // Is there a better way ?
+
+            for (min, max, med, sum, hist) in &mut [
+                (
+                    &mut hit_min,
+                    &mut hit_max,
+                    &mut hit_med,
+                    &mut hit_sum,
+                    &hit_histogram,
+                ),
+                (
+                    &mut miss_min,
+                    &mut miss_max,
+                    &mut miss_med,
+                    &mut miss_sum,
+                    &miss_histogram,
+                ),
+            ] {
+                if **min == 0 {
+                    // looking for min
+                    if hist[i] > CFLUSH_SPURIOUS_THRESHOLD {
+                        **min = i;
+                    }
+                } else {
+                    // min found, looking for max
+                    if hist[i] > CFLUSH_SPURIOUS_THRESHOLD {
+                        **max = i;
+                    }
+                }
+
+                if **med == 0 {
+                    **sum += hist[i];
+                    if **sum >= CFLUSH_NUM_ITER / 2 {
+                        **med = i;
+                    }
+                }
+            }
+            if verbose_level >= Debug {
+                println!("sum hit {} miss {}", hit_sum, miss_sum);
             }
         }
-        println!("Miss max {}", miss_max.0 * CFLUSH_BUCKET_SIZE);
-        println!("Max hit {}", hit_max.0 * CFLUSH_BUCKET_SIZE);
+
+        if verbose_level >= Thresholds {
+            println!("Hits: min {} max {} med {}", hit_min, hit_max, hit_med);
+            println!("Miss: min {} max {} med {}", miss_min, miss_max, miss_med);
+        }
+        //println!("Miss max {}", miss_max.0 * CFLUSH_BUCKET_SIZE);
+        //println!("Max hit {}", hit_max.0 * CFLUSH_BUCKET_SIZE);
         let mut threshold: (usize, u32) = (0, u32::max_value());
-        for i in miss_max.0..hit_max.0 {
+        /*for i in miss_max.0..hit_max.0 {
             if hit_histogram[i] + miss_histogram[i] < threshold.1 {
                 threshold = (i, hit_histogram[i] + miss_histogram[i]);
             }
-        }
+        }*/
 
         println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
         println!("Calibration done.");
+
+        ret.push((
+            i as usize,
+            hit_histogram
+                .iter()
+                .zip(&miss_histogram)
+                .map(|(&x, &y)| (x, y))
+                .collect(),
+            threshold.0,
+        ));
     }
-    //(threshold.0 * CFLUSH_BUCKET_SIZE) as u64
-    0
+    ret
 }

@@ -35,6 +35,7 @@ use x86_64::PhysAddr;
 use x86_64::VirtAddr;
 
 use arrayref;
+use cache_utils::calibration::Verbosity;
 
 // Custom panic handler, required for freestanding program
 #[cfg(not(test))]
@@ -214,6 +215,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let cache_line_size = cache_line_size.unwrap_or(64) as usize;
 
+    serial_println!("cache line size: {}", cache_line_size);
+
     println!(
         "prefetcher status: {}",
         cache_utils::prefetcher::prefetcher_status()
@@ -226,7 +229,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             4096
         ]
     });
-    let threshold_flush_p = cache_utils::calibration::calibrate_flush(
+    let flush_result_p = cache_utils::calibration::calibrate_flush(
         unsafe {
             arrayref::array_ref![
                 core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
@@ -235,6 +238,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             ]
         },
         cache_line_size,
+        Verbosity::RawResult,
     );
     cache_utils::prefetcher::enable_prefetchers(false);
     serial_println!("Prefetcher disabled");
@@ -245,7 +249,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             4096
         ]
     });
-    let threshold_flush = cache_utils::calibration::calibrate_flush(
+    let flush_resut = cache_utils::calibration::calibrate_flush(
         unsafe {
             arrayref::array_ref![
                 core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
@@ -254,14 +258,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             ]
         },
         cache_line_size,
+        Verbosity::RawResult,
     );
     serial_println!("Please compare histograms for sanity");
 
-    if distance(threshold_access_p, threshold_access) > 10
-        || distance(threshold_flush_p, threshold_flush) > 2
-    {
+    if distance(threshold_access_p, threshold_access) > 10 {
         panic!("Inconsistent thresholds");
     }
+
+    let threshold_flush = 0; // FIXME
 
     serial_println!("0");
     let r_no_prefetch = prefetcher_fun(
