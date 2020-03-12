@@ -20,17 +20,11 @@ struct Page {
 }
 
 pub fn main() {
-    println!("Hello World!");
-
     let p = Box::new(Page { mem: [0; 4096] });
 
     let m: &[u8] = &p.mem;
 
-    eprintln!("Count: {}", CpuSet::count());
-
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
-
-    eprintln!("old: {:?}", old);
 
     for i in 0..(CpuSet::count() - 1) {
         if old.is_set(i).unwrap() {

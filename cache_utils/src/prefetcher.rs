@@ -35,6 +35,7 @@ pub fn prefetcher_fun(
 ) -> Vec<i32> {
     let mut results = vec![0; 4096 / 64];
 
+    return results;
     for _ in 0..N {
         //unsafe { maccess(victim4kaddr) };
         for j in (0..4096).step_by(64).rev() {
