@@ -1,0 +1,1 @@
+gawk '/^Iteration [:digit:]*[.]*/ { print /bin/bash }' < cache_utils_log_citrovert.txt > Iterations_citron_vert.txt
