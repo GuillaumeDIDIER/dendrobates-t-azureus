@@ -24,11 +24,11 @@ test-success-exit-code = 33         # (0x10 << 1) | 1
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-x86_64 = "0.9.2"
+x86_64 = "0.9.6"
 vga_buffer = { path = "vga_buffer" }
 polling_serial = { path = "polling_serial" }
 volatile = "0.2.6"
-linked_list_allocator = "0.7.0"
+linked_list_allocator = "0.8.1"
 cache_utils = { path = "cache_utils", features = ["no_std"], default-features = false }
 arrayref = "0.3.6"
 
@@ -37,7 +37,7 @@ version = "1.4.0"
 features = ["spin_no_std"]
 
 [dependencies.bootloader]
-version = "0.8.6"
+version = "0.8.9"
 features = ["sse", "map_physical_memory"]
 
 #[patch.crates-io]
