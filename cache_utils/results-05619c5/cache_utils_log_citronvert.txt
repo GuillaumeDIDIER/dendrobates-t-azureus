@@ -1,0 +1,2584 @@
+Iteration 0...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 101 max 231 med 109
+Miss: min 95 max 182 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 104 max 192 med 113
+Miss: min 93 max 227 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 102 max 129 med 111
+Miss: min 81 max 156 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 85 max 121 med 95
+Miss: min 79 max 142 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 93 max 124 med 102
+Miss: min 85 max 188 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 95 max 140 med 104
+Miss: min 83 max 140 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 93 max 125 med 103
+Miss: min 79 max 108 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 85 max 120 med 93
+Miss: min 81 max 114 med 87
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 96 max 132 med 103
+Miss: min 89 max 108 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 97 max 152 med 105
+Miss: min 85 max 134 med 94
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 95 max 124 med 105
+Miss: min 81 max 193 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 85 max 211 med 99
+Miss: min 85 max 113 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 99 max 122 med 104
+Miss: min 93 max 110 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 101 max 246 med 106
+Miss: min 91 max 247 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 100 max 247 med 105
+Miss: min 87 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 89 max 247 med 98
+Miss: min 85 max 247 med 239
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 101 max 247 med 109
+Miss: min 91 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 99 max 247 med 111
+Miss: min 95 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 93 max 247 med 108
+Miss: min 90 max 247 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 112 max 245 med 118
+Miss: min 97 max 229 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 117 max 127 med 121
+Miss: min 104 max 117 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 120 max 129 med 124
+Miss: min 111 max 120 med 115
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 107 max 119 med 111
+Miss: min 99 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 119 max 154 med 123
+Miss: min 98 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 118 max 225 med 123
+Miss: min 105 max 141 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 118 max 229 med 123
+Miss: min 111 max 120 med 115
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 108 max 128 med 113
+Miss: min 100 max 201 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 120 max 146 med 124
+Miss: min 103 max 112 med 108
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 122 max 131 med 126
+Miss: min 108 max 129 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 118 max 127 med 123
+Miss: min 111 max 120 med 114
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 104 max 122 med 108
+Miss: min 96 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 116 max 211 med 119
+Miss: min 98 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 115 max 124 med 120
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 104 max 202 med 109
+Miss: min 97 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 116 max 128 med 120
+Miss: min 108 max 115 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 117 max 223 med 123
+Miss: min 104 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 115 max 247 med 120
+Miss: min 103 max 247 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 103 max 247 med 110
+Miss: min 97 max 247 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 116 max 247 med 124
+Miss: min 111 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 120 max 247 med 128
+Miss: min 108 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 118 max 247 med 125
+Miss: min 103 max 247 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 107 max 247 med 117
+Miss: min 107 max 248 med 0
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 123 max 247 med 128
+Miss: min 115 max 223 med 119
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 126 max 158 med 131
+Miss: min 112 max 122 med 116
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 123 max 134 med 127
+Miss: min 106 max 115 med 110
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 110 max 120 med 114
+Miss: min 102 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 123 max 132 med 127
+Miss: min 115 max 123 med 118
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 125 max 134 med 130
+Miss: min 111 max 120 med 115
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 111 max 215 med 116
+Miss: min 101 max 113 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 119 max 227 med 124
+Miss: min 102 max 144 med 110
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 123 max 174 med 128
+Miss: min 108 max 117 med 113
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 119 max 142 med 123
+Miss: min 111 max 120 med 114
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 106 max 117 med 112
+Miss: min 99 max 115 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 118 max 129 med 123
+Miss: min 102 max 113 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 120 max 131 med 125
+Miss: min 108 max 115 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 115 max 127 med 121
+Miss: min 107 max 115 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 105 max 115 med 109
+Miss: min 98 max 112 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 116 max 125 med 120
+Miss: min 99 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 119 max 150 med 123
+Miss: min 104 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 115 max 156 med 119
+Miss: min 106 max 115 med 111
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 103 max 120 med 108
+Miss: min 97 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 115 max 150 med 119
+Miss: min 99 max 124 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 118 max 134 med 122
+Miss: min 104 max 113 med 108
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 114 max 133 med 119
+Miss: min 107 max 116 med 111
+Threshold 0
+Calibration done.
+Iteration 0...ok 
+Iteration 1...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 113 max 140 med 118
+Miss: min 107 max 121 med 110
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 116 max 134 med 120
+Miss: min 103 max 142 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 102 max 120 med 107
+Miss: min 96 max 115 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 105 max 122 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 109 max 126 med 113
+Miss: min 102 max 120 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 112 max 127 med 116
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 101 max 117 med 105
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 104 max 152 med 108
+Miss: min 95 max 106 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 110 max 127 med 114
+Miss: min 103 max 111 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 112 max 142 med 116
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 102 max 158 med 106
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 105 max 148 med 109
+Miss: min 95 max 114 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 106 max 123 med 109
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 109 max 128 med 113
+Miss: min 97 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 98 max 113 med 102
+Miss: min 92 max 109 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 100 max 117 med 105
+Miss: min 92 max 101 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 108 max 126 med 113
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 106 max 123 med 110
+Miss: min 98 max 114 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 98 max 150 med 103
+Miss: min 89 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 97 max 111 med 100
+Miss: min 90 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 106 max 121 med 109
+Miss: min 95 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 102 max 120 med 106
+Miss: min 97 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 98 max 112 med 101
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 96 max 109 med 99
+Miss: min 89 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 106 max 122 med 109
+Miss: min 96 max 102 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 103 max 116 med 107
+Miss: min 97 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 99 max 123 med 103
+Miss: min 89 max 98 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 97 max 113 med 100
+Miss: min 90 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 106 max 122 med 109
+Miss: min 95 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 102 max 120 med 106
+Miss: min 96 max 113 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 98 max 118 med 101
+Miss: min 89 max 107 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 96 max 111 med 99
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 97 max 112 med 100
+Miss: min 89 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 96 max 113 med 100
+Miss: min 87 max 94 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 97 max 116 med 102
+Miss: min 93 max 99 med 96
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 99 max 115 med 103
+Miss: min 89 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 91 max 105 med 93
+Miss: min 85 max 91 med 87
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 93 max 109 med 96
+Miss: min 85 max 93 med 87
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 97 max 115 med 101
+Miss: min 91 max 101 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 103 max 121 med 109
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 94 max 109 med 97
+Miss: min 88 max 95 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 95 max 111 med 99
+Miss: min 87 max 97 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 104 max 119 med 107
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 105 max 126 med 109
+Miss: min 96 max 101 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 96 max 111 med 99
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 98 max 113 med 101
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 102 max 124 med 106
+Miss: min 97 max 105 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 106 max 126 med 109
+Miss: min 95 max 103 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 99 max 114 med 103
+Miss: min 89 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 97 max 111 med 100
+Miss: min 90 max 98 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 106 max 122 med 109
+Miss: min 95 max 106 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 103 max 120 med 107
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 98 max 115 med 101
+Miss: min 90 max 99 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 96 max 117 med 99
+Miss: min 89 max 106 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 106 max 122 med 109
+Miss: min 95 max 102 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 100 max 117 med 105
+Miss: min 93 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 96 max 114 med 99
+Miss: min 87 max 99 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 97 max 113 med 100
+Miss: min 90 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 106 max 121 med 109
+Miss: min 95 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 103 max 123 med 107
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 98 max 114 med 101
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 96 max 111 med 99
+Miss: min 90 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 106 max 123 med 109
+Miss: min 92 max 103 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 100 max 113 med 103
+Miss: min 94 max 107 med 97
+Threshold 0
+Calibration done.
+Iteration 1...ok 
+Iteration 2...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 96 max 118 med 100
+Miss: min 93 max 101 med 96
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 93 max 101 med 97
+Miss: min 87 max 97 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 95 max 102 med 97
+Miss: min 87 max 95 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 97 max 105 med 101
+Miss: min 87 max 95 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 93 max 101 med 96
+Miss: min 89 max 176 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 91 max 99 med 93
+Miss: min 87 max 170 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 95 max 103 med 98
+Miss: min 87 max 93 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 97 max 105 med 101
+Miss: min 87 max 109 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 93 max 103 med 97
+Miss: min 91 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 91 max 176 med 95
+Miss: min 87 max 97 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 95 max 104 med 99
+Miss: min 87 max 95 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 97 max 180 med 101
+Miss: min 87 max 97 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 93 max 178 med 97
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 91 max 99 med 93
+Miss: min 87 max 95 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 95 max 180 med 98
+Miss: min 87 max 93 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 97 max 182 med 101
+Miss: min 87 max 170 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 91 max 99 med 95
+Miss: min 87 max 93 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 93 max 103 med 97
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 98 max 105 med 101
+Miss: min 87 max 172 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 91 max 176 med 96
+Miss: min 85 max 168 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 87 max 99 med 91
+Miss: min 87 max 95 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 93 max 178 med 96
+Miss: min 89 max 175 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 97 max 184 med 101
+Miss: min 87 max 170 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 94 max 138 med 98
+Miss: min 87 max 96 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 91 max 111 med 99
+Miss: min 87 max 119 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 94 max 113 med 97
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 99 max 117 med 104
+Miss: min 87 max 93 med 89
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 95 max 107 med 98
+Miss: min 87 max 103 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 89 max 105 med 93
+Miss: min 87 max 104 med 90
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 93 max 115 med 96
+Miss: min 89 max 97 med 93
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 97 max 182 med 102
+Miss: min 87 max 115 med 91
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 95 max 107 med 101
+Miss: min 89 max 99 med 92
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 98 max 114 med 101
+Miss: min 92 max 101 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 103 max 190 med 108
+Miss: min 92 max 114 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 103 max 109 med 105
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 97 max 107 med 103
+Miss: min 91 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 100 max 109 med 105
+Miss: min 92 max 105 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 102 max 111 med 106
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 98 max 124 med 101
+Miss: min 95 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 95 max 103 med 99
+Miss: min 92 max 104 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 100 max 109 med 105
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 104 max 111 med 107
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 99 max 107 med 103
+Miss: min 96 max 109 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 96 max 105 med 99
+Miss: min 92 max 100 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 100 max 122 med 104
+Miss: min 92 max 97 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 103 max 110 med 105
+Miss: min 92 max 108 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 98 max 105 med 101
+Miss: min 95 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 95 max 103 med 99
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 105 max 114 med 109
+Miss: min 92 max 109 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 99 max 116 med 103
+Miss: min 91 max 101 med 96
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 97 max 111 med 100
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 99 max 107 med 102
+Miss: min 95 max 104 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 103 max 111 med 106
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 101 max 109 med 104
+Miss: min 91 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 95 max 103 med 99
+Miss: min 93 max 108 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 98 max 105 med 101
+Miss: min 95 max 101 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 103 max 115 med 107
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 100 max 109 med 104
+Miss: min 92 max 108 med 96
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 96 max 105 med 99
+Miss: min 92 max 98 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 100 max 108 med 103
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 103 max 111 med 106
+Miss: min 92 max 105 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 100 max 113 med 103
+Miss: min 90 max 99 med 94
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 95 max 105 med 99
+Miss: min 92 max 99 med 95
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 99 max 107 med 102
+Miss: min 94 max 140 med 98
+Threshold 0
+Calibration done.
+Iteration 2...ok 
+Iteration 3...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 98 max 107 med 101
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 99 max 109 med 103
+Miss: min 93 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 103 max 111 med 106
+Miss: min 93 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 104 max 113 med 108
+Miss: min 93 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 95 max 106 med 99
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 100 max 109 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 105 max 113 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 108 max 117 med 112
+Miss: min 95 max 101 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 99 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 101 max 109 med 104
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 106 max 115 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 108 max 116 med 112
+Miss: min 96 max 105 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 98 max 105 med 101
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 100 max 109 med 103
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 105 max 115 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 108 max 117 med 112
+Miss: min 94 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 102 max 110 med 105
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 97 max 107 med 101
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 108 max 116 med 112
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 105 max 115 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 100 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 96 max 105 med 101
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 109 max 117 med 112
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 104 max 113 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 100 max 109 med 104
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 99 max 107 med 103
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 108 max 115 med 112
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 105 max 114 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 100 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 98 max 106 med 101
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 109 max 116 med 112
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 105 max 113 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 106 max 114 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 108 max 116 med 112
+Miss: min 96 max 105 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 98 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 100 max 109 med 105
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 105 max 113 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 108 max 117 med 112
+Miss: min 94 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 99 max 108 med 103
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 100 max 108 med 103
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 105 max 113 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 108 max 117 med 112
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 98 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 101 max 109 med 105
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 105 max 113 med 108
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 108 max 117 med 112
+Miss: min 94 max 103 med 98
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 97 max 106 med 101
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 101 max 111 med 106
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 109 max 116 med 112
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 105 max 114 med 109
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 102 max 110 med 105
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 99 max 107 med 103
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 108 max 117 med 112
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 108 max 117 med 112
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 100 max 111 med 104
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 98 max 107 med 101
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 112 max 119 med 115
+Miss: min 99 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 106 max 115 med 109
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 102 max 112 med 105
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 102 max 111 med 106
+Miss: min 98 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 112 max 119 med 115
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 104 max 119 med 111
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 100 max 109 med 104
+Miss: min 96 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 100 max 110 med 105
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Iteration 3...ok 
+Iteration 4...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 110 max 132 med 114
+Miss: min 103 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 114 max 156 med 117
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 112 max 126 med 115
+Miss: min 95 max 111 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 104 max 122 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 110 max 127 med 114
+Miss: min 103 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 112 max 126 med 116
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 112 max 127 med 117
+Miss: min 98 max 115 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 102 max 119 med 106
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 114 max 156 med 118
+Miss: min 106 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 117 max 130 med 123
+Miss: min 104 max 113 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 114 max 128 med 118
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 100 max 127 med 105
+Miss: min 94 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 110 max 126 med 114
+Miss: min 103 max 119 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 116 max 130 med 120
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 114 max 132 med 117
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 102 max 126 med 106
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 117 max 132 med 121
+Miss: min 104 max 113 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 114 max 128 med 117
+Miss: min 107 max 113 med 110
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 103 max 119 med 107
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 114 max 131 med 118
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 116 max 131 med 119
+Miss: min 102 max 110 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 114 max 131 med 117
+Miss: min 107 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 102 max 120 med 106
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 114 max 130 med 117
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 117 max 131 med 121
+Miss: min 104 max 113 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 114 max 130 med 117
+Miss: min 107 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 104 max 119 med 107
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 114 max 133 med 118
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 116 max 166 med 120
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 114 max 132 med 117
+Miss: min 106 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 102 max 116 med 106
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 114 max 132 med 117
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 114 max 130 med 118
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 104 max 117 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 114 max 130 med 117
+Miss: min 106 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 117 max 131 med 121
+Miss: min 104 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 112 max 128 med 117
+Miss: min 98 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 102 max 120 med 106
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 114 max 128 med 117
+Miss: min 105 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 116 max 130 med 119
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 114 max 128 med 118
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 104 max 119 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 113 max 160 med 117
+Miss: min 106 max 112 med 108
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 117 max 146 med 121
+Miss: min 104 max 111 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 113 max 129 med 117
+Miss: min 98 max 112 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 102 max 116 med 106
+Miss: min 96 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 114 max 132 med 117
+Miss: min 105 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 116 max 130 med 120
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 104 max 118 med 107
+Miss: min 96 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 114 max 129 med 118
+Miss: min 99 max 105 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 117 max 166 med 121
+Miss: min 104 max 113 med 108
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 114 max 130 med 117
+Miss: min 107 max 117 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 102 max 119 med 106
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 114 max 128 med 117
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 116 max 132 med 119
+Miss: min 102 max 120 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 114 max 129 med 117
+Miss: min 107 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 104 max 120 med 107
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 114 max 130 med 118
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 117 max 130 med 121
+Miss: min 104 max 113 med 108
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 114 max 136 med 117
+Miss: min 107 max 113 med 110
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 102 max 116 med 106
+Miss: min 94 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 114 max 130 med 117
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 116 max 136 med 120
+Miss: min 102 max 110 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 114 max 134 med 117
+Miss: min 107 max 113 med 110
+Threshold 0
+Calibration done.
+Iteration 4...ok 
+Iteration 5...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 110 max 121 med 115
+Miss: min 104 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 114 max 122 med 118
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 104 max 112 med 107
+Miss: min 98 max 106 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 107 max 126 med 110
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 109 max 118 med 113
+Miss: min 104 max 122 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 114 max 123 med 118
+Miss: min 102 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 102 max 111 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 103 max 160 med 109
+Miss: min 94 max 101 med 97
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 108 max 116 med 112
+Miss: min 102 max 113 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 114 max 123 med 118
+Miss: min 102 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 104 max 119 med 108
+Miss: min 98 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 107 max 122 med 110
+Miss: min 97 max 113 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 110 max 118 med 114
+Miss: min 104 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 114 max 134 med 118
+Miss: min 102 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 103 max 119 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 106 max 113 med 109
+Miss: min 97 max 111 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 114 max 123 med 118
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 112 max 120 med 115
+Miss: min 105 max 112 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 107 max 115 med 111
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 104 max 113 med 109
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 113 max 123 med 117
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 110 max 118 med 114
+Miss: min 104 max 120 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 105 max 115 med 109
+Miss: min 96 max 104 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 103 max 118 med 107
+Miss: min 97 max 104 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 114 max 124 med 118
+Miss: min 102 max 121 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 112 max 120 med 115
+Miss: min 105 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 108 max 115 med 111
+Miss: min 97 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 104 max 113 med 109
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 113 max 122 med 117
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 110 max 118 med 114
+Miss: min 104 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 106 max 113 med 109
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 104 max 113 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 104 max 112 med 108
+Miss: min 98 max 106 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 107 max 123 med 110
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 112 max 126 med 116
+Miss: min 104 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 114 max 122 med 117
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 103 max 119 med 107
+Miss: min 96 max 104 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 106 max 114 med 109
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 110 max 118 med 114
+Miss: min 104 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 114 max 123 med 118
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 104 max 121 med 108
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 107 max 115 med 110
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 112 max 119 med 115
+Miss: min 104 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 114 max 122 med 118
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 102 max 111 med 107
+Miss: min 96 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 106 max 115 med 109
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 110 max 118 med 114
+Miss: min 104 max 113 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 114 max 123 med 118
+Miss: min 102 max 119 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 107 max 115 med 111
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 104 max 112 med 108
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 111 max 122 med 115
+Miss: min 100 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 108 max 119 med 112
+Miss: min 105 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 106 max 114 med 109
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 104 max 111 med 107
+Miss: min 97 max 103 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 114 max 125 med 118
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 110 max 118 med 114
+Miss: min 104 max 112 med 107
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 107 max 115 med 110
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 104 max 111 med 108
+Miss: min 98 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 114 max 123 med 117
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 112 max 128 med 115
+Miss: min 106 max 113 med 109
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 104 max 113 med 109
+Miss: min 96 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 104 max 111 med 107
+Miss: min 97 max 105 med 100
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 114 max 123 med 118
+Miss: min 102 max 110 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 110 max 119 med 114
+Miss: min 104 max 111 med 107
+Threshold 0
+Calibration done.
+Iteration 5...ok 
+Iteration 6...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 106 max 115 med 111
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 104 max 113 med 107
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 107 max 116 med 111
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 112 max 119 med 115
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 105 max 115 med 109
+Miss: min 102 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 102 max 111 med 106
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 107 max 117 med 112
+Miss: min 98 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 110 max 120 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 107 max 116 med 111
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 104 max 113 med 108
+Miss: min 99 max 105 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 107 max 117 med 111
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 112 max 120 med 116
+Miss: min 99 max 114 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 106 max 114 med 109
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 102 max 111 med 107
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 107 max 117 med 112
+Miss: min 98 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 110 max 117 med 114
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 103 max 111 med 107
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 107 max 115 med 110
+Miss: min 102 max 110 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 111 max 119 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 108 max 117 med 112
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 102 max 111 med 106
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 106 max 113 med 109
+Miss: min 102 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 110 max 119 med 114
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 108 max 117 med 112
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 103 max 113 med 109
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 107 max 113 med 110
+Miss: min 102 max 109 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 112 max 119 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 107 max 115 med 111
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 102 max 111 med 106
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 106 max 113 med 109
+Miss: min 102 max 111 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 110 max 119 med 114
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 108 max 117 med 112
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 107 max 116 med 111
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 112 max 120 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 107 max 115 med 110
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 104 max 113 med 107
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 107 max 117 med 112
+Miss: min 98 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 110 max 119 med 114
+Miss: min 99 max 105 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 105 max 113 med 109
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 102 max 111 med 106
+Miss: min 99 max 105 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 107 max 117 med 112
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 112 max 120 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 107 max 115 med 110
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 104 max 113 med 107
+Miss: min 99 max 105 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 107 max 117 med 111
+Miss: min 98 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 110 max 118 med 114
+Miss: min 99 max 107 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 106 max 113 med 109
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 102 max 111 med 107
+Miss: min 99 max 105 med 102
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 112 max 119 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 108 max 117 med 112
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 103 max 113 med 107
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 107 max 115 med 110
+Miss: min 102 max 111 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 110 max 117 med 114
+Miss: min 99 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 108 max 117 med 112
+Miss: min 98 max 107 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 102 max 111 med 106
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 106 max 113 med 109
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 112 max 119 med 115
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 108 max 118 med 112
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 102 max 113 med 107
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 107 max 114 med 110
+Miss: min 102 max 110 med 106
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 106 max 118 med 111
+Miss: min 95 max 103 med 99
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 105 max 113 med 109
+Miss: min 97 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 102 max 111 med 106
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 106 max 114 med 109
+Miss: min 101 max 109 med 105
+Threshold 0
+Calibration done.
+Iteration 6...ok 
+Iteration 7...
+Calibrating cflush...
+Calibration for 0x564ca66d6000
+Hits: min 102 max 113 med 107
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6040
+Hits: min 106 max 115 med 110
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6080
+Hits: min 110 max 119 med 114
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d60c0
+Hits: min 114 max 121 med 117
+Miss: min 101 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6100
+Hits: min 101 max 111 med 105
+Miss: min 100 max 108 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6140
+Hits: min 104 max 113 med 108
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6180
+Hits: min 108 max 117 med 113
+Miss: min 100 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d61c0
+Hits: min 114 max 121 med 117
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6200
+Hits: min 102 max 111 med 107
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6240
+Hits: min 106 max 113 med 110
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6280
+Hits: min 110 max 119 med 114
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d62c0
+Hits: min 114 max 121 med 117
+Miss: min 101 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6300
+Hits: min 102 max 111 med 107
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6340
+Hits: min 104 max 113 med 108
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6380
+Hits: min 108 max 119 med 113
+Miss: min 100 max 107 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d63c0
+Hits: min 116 max 125 med 120
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6400
+Hits: min 106 max 115 med 110
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6440
+Hits: min 103 max 111 med 107
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6480
+Hits: min 114 max 121 med 117
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d64c0
+Hits: min 112 max 121 med 117
+Miss: min 100 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6500
+Hits: min 104 max 113 med 109
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6540
+Hits: min 102 max 111 med 106
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6580
+Hits: min 114 max 121 med 117
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d65c0
+Hits: min 110 max 125 med 113
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6600
+Hits: min 104 max 114 med 109
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6640
+Hits: min 104 max 113 med 108
+Miss: min 100 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6680
+Hits: min 114 max 121 med 117
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d66c0
+Hits: min 110 max 123 med 115
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6700
+Hits: min 104 max 115 med 109
+Miss: min 100 max 126 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6740
+Hits: min 102 max 111 med 106
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6780
+Hits: min 113 max 124 med 117
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d67c0
+Hits: min 109 max 117 med 113
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6800
+Hits: min 110 max 119 med 115
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6840
+Hits: min 114 max 121 med 116
+Miss: min 101 max 107 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6880
+Hits: min 103 max 113 med 107
+Miss: min 100 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d68c0
+Hits: min 106 max 115 med 110
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6900
+Hits: min 110 max 119 med 113
+Miss: min 100 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6940
+Hits: min 114 max 121 med 117
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6980
+Hits: min 102 max 111 med 106
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d69c0
+Hits: min 104 max 113 med 109
+Miss: min 101 max 108 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a00
+Hits: min 109 max 119 med 114
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a40
+Hits: min 114 max 121 med 117
+Miss: min 101 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6a80
+Hits: min 103 max 112 med 107
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ac0
+Hits: min 106 max 114 med 110
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b00
+Hits: min 110 max 120 med 113
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b40
+Hits: min 114 max 121 med 117
+Miss: min 100 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6b80
+Hits: min 101 max 111 med 107
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6bc0
+Hits: min 104 max 115 med 108
+Miss: min 100 max 107 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c00
+Hits: min 114 max 122 med 117
+Miss: min 100 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c40
+Hits: min 110 max 119 med 114
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6c80
+Hits: min 103 max 115 med 107
+Miss: min 97 max 105 med 101
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6cc0
+Hits: min 100 max 111 med 104
+Miss: min 100 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d00
+Hits: min 114 max 122 med 117
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d40
+Hits: min 109 max 117 med 113
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6d80
+Hits: min 104 max 113 med 108
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6dc0
+Hits: min 102 max 111 med 106
+Miss: min 100 max 108 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e00
+Hits: min 114 max 121 med 117
+Miss: min 100 max 109 med 105
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e40
+Hits: min 110 max 119 med 114
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6e80
+Hits: min 106 max 115 med 110
+Miss: min 100 max 109 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6ec0
+Hits: min 104 max 113 med 107
+Miss: min 100 max 108 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f00
+Hits: min 114 max 121 med 117
+Miss: min 99 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f40
+Hits: min 109 max 119 med 113
+Miss: min 101 max 109 med 104
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6f80
+Hits: min 105 max 113 med 109
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Calibration for 0x564ca66d6fc0
+Hits: min 103 max 114 med 109
+Miss: min 100 max 107 med 103
+Threshold 0
+Calibration done.
+Iteration 7...ok 
