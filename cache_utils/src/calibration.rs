@@ -139,7 +139,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
 }
 
 const CFLUSH_BUCKET_SIZE: usize = 1;
-const CFLUSH_BUCKET_NUMBER: usize = 250;
+const CFLUSH_BUCKET_NUMBER: usize = 500;
 
 const CFLUSH_NUM_ITER: usize = 1 << 11;
 const CFLUSH_SPURIOUS_THRESHOLD: usize = 1;
@@ -231,9 +231,6 @@ pub fn calibrate_flush(
                     miss_histogram[i]
                 );
             }
-            // FIXME
-            // Code duplication for histogram analysis is meh.
-            // Is there a better way ?
 
             for (min, max, med, sum, hist) in &mut [
                 (
@@ -265,7 +262,7 @@ pub fn calibrate_flush(
 
                 if **med == 0 {
                     **sum += hist[i];
-                    if **sum >= CFLUSH_NUM_ITER / 2 {
+                    if **sum >= (CFLUSH_NUM_ITER - hist[hist.len() - 1]) / 2 {
                         **med = i;
                     }
                 }

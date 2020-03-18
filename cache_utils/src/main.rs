@@ -14,16 +14,53 @@ use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 use nix::Error::Sys;
 
+use nix::sys::mman;
+use static_assertions::_core::ptr::{null_mut, slice_from_raw_parts};
+
+/* from linux kernel headers.
+#define HUGETLB_FLAG_ENCODE_SHIFT       26
+#define HUGETLB_FLAG_ENCODE_MASK        0x3f
+
+#define HUGETLB_FLAG_ENCODE_64KB        (16 << HUGETLB_FLAG_ENCODE_SHIFT)
+#define HUGETLB_FLAG_ENCODE_512KB       (19 << HUGETLB_FLAG_ENCODE_SHIFT)
+#define HUGETLB_FLAG_ENCODE_1MB         (20 << HUGETLB_FLAG_ENCODE_SHIFT)
+#define HUGETLB_FLAG_ENCODE_2MB         (21 << HUGETLB_FLAG_ENCODE_SHIFT)
+*/
+
+const SIZE: usize = 2 << 20;
+/*
 #[repr(align(4096))]
 struct Page {
     pub mem: [u8; 4096],
 }
-
+*/
 pub fn main() {
-    let p = Box::new(Page { mem: [0; 4096] });
+    let m: &[u8] = unsafe {
+        let p: *mut u8 = mman::mmap(
+            null_mut(),
+            SIZE,
+            mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
+            mman::MapFlags::MAP_PRIVATE
+                | mman::MapFlags::MAP_ANONYMOUS
+                | mman::MapFlags::MAP_HUGETLB,
+            -1,
+            0,
+        )
+        .unwrap() as *mut u8;
+        /*addr: *mut c_void,
+        length: size_t,
+        prot: ProtFlags,
+        flags: MapFlags,
+        fd: RawFd,
+        offset: off_t*/
 
-    let m: &[u8] = &p.mem;
+        &*slice_from_raw_parts(p, SIZE)
+    };
+    /*
+        let p = Box::new(Page { mem: [0; 4096] });
 
+        let m: &[u8] = &p.mem;
+    */
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
     for i in 0..(CpuSet::count() - 1) {
