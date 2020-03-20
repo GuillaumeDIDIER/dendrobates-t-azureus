@@ -71,9 +71,11 @@ pub fn main() {
 
             match sched_setaffinity(Pid::from_raw(0), &core) {
                 Ok(()) => {
+                    calibrate_flush(m, 64, Verbosity::NoOutput);
                     calibrate_flush(m, 64, Verbosity::Thresholds);
                     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
                     println!("Iteration {}...ok ", i);
+                    eprintln!("Iteration {}...ok ", i);
                 }
                 Err(Sys(Errno::EINVAL)) => {
                     println!("skipping");

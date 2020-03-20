@@ -12,7 +12,7 @@ pub enum Verbosity {
 }
 
 extern crate alloc;
-use crate::calibration::Verbosity::{Debug, RawResult, Thresholds};
+use crate::calibration::Verbosity::{Debug, NoOutput, RawResult, Thresholds};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -157,8 +157,9 @@ pub fn calibrate_flush(
     cache_line_size: usize,
     verbose_level: Verbosity,
 ) -> Vec<(usize, Vec<(usize, usize)>, usize)> {
-    println!("Calibrating cflush...");
-
+    if verbose_level > NoOutput {
+        println!("Calibrating cflush...");
+    }
     let mut ret = Vec::new();
     // Allocate a target array
     // TBD why size, why the position in the array, why the type (usize)
@@ -284,9 +285,10 @@ pub fn calibrate_flush(
                 threshold = (i, hit_histogram[i] + miss_histogram[i]);
             }
         }*/
-
-        println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
-        println!("Calibration done.");
+        if verbose_level > NoOutput {
+            println!("Threshold {}", threshold.0 * CFLUSH_BUCKET_SIZE);
+            println!("Calibration done.");
+        }
 
         ret.push((
             i as usize,
