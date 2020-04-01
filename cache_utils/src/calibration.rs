@@ -2,7 +2,7 @@ use crate::{flush, maccess, rdtsc_fence};
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]
-use polling_serial::serial_println as println;
+use polling_serial::{serial_print as print, serial_println as println};
 
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Verbosity {
@@ -13,7 +13,7 @@ pub enum Verbosity {
 }
 
 extern crate alloc;
-use crate::calibration::Verbosity::{Debug, NoOutput, RawResult, Thresholds};
+use crate::calibration::Verbosity::*;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -150,7 +150,6 @@ const CFLUSH_BUCKET_SIZE: usize = 1;
 const CFLUSH_BUCKET_NUMBER: usize = 500;
 
 const CFLUSH_NUM_ITER: u32 = 1 << 11;
-const CFLUSH_SPURIOUS_THRESHOLD: usize = 1;
 
 /* TODO Code cleanup :
   - change type back to a slice OK

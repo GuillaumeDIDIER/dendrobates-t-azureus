@@ -81,8 +81,8 @@ pub fn main() {
                     println!("skipping");
                     continue;
                 }
-                Err(_) => {
-                    panic!("Unexpected error while setting affinity");
+                Err(e) => {
+                    panic!("Unexpected error while setting affinity: {}", e);
                 }
             }
         }

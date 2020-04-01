@@ -269,18 +269,26 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let threshold_flush = 0; // FIXME
 
     serial_println!("0");
-    let r_no_prefetch = prefetcher_fun(
-        victim4k_start as *mut u8,
-        unsafe { (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize) },
-        threshold_flush,
-    );
+    let r_no_prefetch = unsafe {
+        prefetcher_fun(
+            victim4k_start as *mut u8,
+            unsafe {
+                (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize)
+            },
+            threshold_flush,
+        )
+    };
     serial_println!("1");
     enable_prefetchers(true);
-    let r_prefetch = prefetcher_fun(
-        victim4k_start as *mut u8,
-        unsafe { (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize) },
-        threshold_flush,
-    );
+    let r_prefetch = unsafe {
+        prefetcher_fun(
+            victim4k_start as *mut u8,
+            unsafe {
+                (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize)
+            },
+            threshold_flush,
+        )
+    };
 
     for (i, (&npf, pf)) in r_no_prefetch.iter().zip(r_prefetch).enumerate() {
         serial_println!("{} {} {}", i, npf, pf);
