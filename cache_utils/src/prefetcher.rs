@@ -30,21 +30,22 @@ pub fn enable_prefetchers(status: bool) {
 
 pub fn prefetcher_fun(
     victim_4k_addr: *mut u8,
-    victim_2M_addr: *mut u8,
+    #[allow(non_snake_case)] _victim_2M_addr: *mut u8,
     threshold_ff: u64,
 ) -> Vec<i32> {
     let mut results = vec![0; 4096 / 64];
 
-    return results;
-    for _ in 0..N {
-        //unsafe { maccess(victim4kaddr) };
-        for j in (0..4096).step_by(64).rev() {
-            let t = unsafe { only_flush(victim_4k_addr.offset(j)) };
-            if threshold_ff < t {
-                // hit
-                results[(j / 64) as usize] += 1;
-            } else if threshold_ff > t {
-                results[(j / 64) as usize] -= 1;
+    if false {
+        for _ in 0..N {
+            //unsafe { maccess(victim4kaddr) };
+            for j in (0..4096).step_by(64).rev() {
+                let t = unsafe { only_flush(victim_4k_addr.offset(j)) };
+                if threshold_ff < t {
+                    // hit
+                    results[(j / 64) as usize] += 1;
+                } else if threshold_ff > t {
+                    results[(j / 64) as usize] -= 1;
+                }
             }
         }
     }
