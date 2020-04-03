@@ -1,5 +1,6 @@
 #![cfg(feature = "std")]
 
+use core::ffi::c_void;
 use core::ptr::null_mut;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use nix::sys::mman;
@@ -41,5 +42,13 @@ impl MMappedMemory {
 
     pub fn slice_mut(&self) -> &mut [u8] {
         unsafe { from_raw_parts_mut(self.pointer, self.size) }
+    }
+}
+
+impl Drop for MMappedMemory {
+    fn drop(&mut self) {
+        unsafe {
+            mman::munmap(self.pointer as *mut c_void, self.size).unwrap();
+        }
     }
 }
