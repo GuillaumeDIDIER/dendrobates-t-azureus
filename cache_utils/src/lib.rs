@@ -12,6 +12,8 @@ assert_cfg!(
 
 pub mod cache_info;
 pub mod calibration;
+#[cfg(feature = "std")]
+pub mod mmap;
 pub mod prefetcher;
 
 use core::arch::x86_64 as arch_x86;

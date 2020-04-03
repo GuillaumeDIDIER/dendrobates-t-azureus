@@ -14,8 +14,7 @@ use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 use nix::Error::Sys;
 
-use nix::sys::mman;
-use static_assertions::_core::ptr::{null_mut, slice_from_raw_parts};
+use cache_utils::mmap::MMappedMemory;
 
 /* from linux kernel headers.
 #define HUGETLB_FLAG_ENCODE_SHIFT       26
@@ -35,7 +34,7 @@ struct Page {
 }
 */
 pub fn main() {
-    let m: &[u8] = unsafe {
+    /*let array: &[u8] = unsafe {
         let p: *mut u8 = mman::mmap(
             null_mut(),
             SIZE,
@@ -55,7 +54,9 @@ pub fn main() {
         offset: off_t*/
 
         &*slice_from_raw_parts(p, SIZE)
-    };
+    };*/
+    let m = unsafe { MMappedMemory::new(SIZE) };
+    let array = m.slice();
     /*
         let p = Box::new(Page { mem: [0; 4096] });
 
@@ -71,8 +72,8 @@ pub fn main() {
 
             match sched_setaffinity(Pid::from_raw(0), &core) {
                 Ok(()) => {
-                    calibrate_flush(m, 64, Verbosity::NoOutput);
-                    calibrate_flush(m, 64, Verbosity::Thresholds);
+                    calibrate_flush(array, 64, Verbosity::NoOutput);
+                    calibrate_flush(array, 64, Verbosity::Thresholds);
                     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
                     println!("Iteration {}...ok ", i);
                     eprintln!("Iteration {}...ok ", i);

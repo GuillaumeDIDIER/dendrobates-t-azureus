@@ -151,14 +151,6 @@ const CFLUSH_BUCKET_NUMBER: usize = 500;
 
 const CFLUSH_NUM_ITER: u32 = 1 << 11;
 
-/* TODO Code cleanup :
-  - change type back to a slice OK
-  - change return type to return thresholds per cache line ?
-  - change iteration to be per cache line OK
-  - take the cache line size as a parameter OK
-  - parametrize 4k vs 2M ? Or just use the slice length ? OK
-*/
-
 pub fn calibrate_flush(
     array: &[u8],
     cache_line_size: usize,
