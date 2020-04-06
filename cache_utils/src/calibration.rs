@@ -14,6 +14,7 @@ pub enum Verbosity {
 
 extern crate alloc;
 use crate::calibration::Verbosity::*;
+use crate::complex_addressing::AddressHasher;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
@@ -219,6 +220,16 @@ fn calibrate_impl(
     num_iterations: u32,
     verbosity_level: Verbosity,
 ) -> Vec<CalibrateResult> {
+    // TODO : adapt this to detect CPU generation and grab the correct masks.
+    // These are the skylake masks.
+    let masks: [usize; 3] = [
+        0b1111_0011_0011_0011_0010_0100_1100_0100_000000,
+        0b1011_1010_1101_0111_1110_1010_1010_0010_000000,
+        0b0110_1101_0111_1101_0101_1101_0101_0001_000000,
+    ];
+
+    let hasher = AddressHasher::new(&masks);
+
     if verbosity_level >= Thresholds {
         println!(
             "Calibrating {}...",
@@ -231,7 +242,7 @@ fn calibrate_impl(
     let mut ret = Vec::new();
     if verbosity_level >= Thresholds {
         println!(
-            "CSV: address, {} min, {} median, {} max",
+            "CSV: address, hash, {} min, {} median, {} max",
             operations.iter().map(|(_, name)| name).format(" min, "),
             operations.iter().map(|(_, name)| name).format(" median, "),
             operations.iter().map(|(_, name)| name).format(" max, ")
@@ -239,9 +250,10 @@ fn calibrate_impl(
     }
     for i in (0..len).step_by(increment) {
         let pointer = unsafe { p.offset(i) };
+        let hash = hasher.hash(pointer as usize);
 
         if verbosity_level >= Thresholds {
-            println!("Calibration for {:p}", pointer);
+            println!("Calibration for {:p} (hash: {:x})", pointer, hash);
         }
 
         // TODO add some useful impl to CalibrateResults
@@ -325,8 +337,9 @@ fn calibrate_impl(
                 );
             }
             println!(
-                "CSV: {:p}, {}, {}, {}",
+                "CSV: {:p}; {:x}, {}, {}, {}",
                 pointer,
+                hash,
                 calibrate_result.min.iter().format(", "),
                 calibrate_result.median.iter().format(", "),
                 calibrate_result.max.iter().format(", ")

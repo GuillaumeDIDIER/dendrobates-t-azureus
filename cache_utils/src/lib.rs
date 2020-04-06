@@ -12,6 +12,7 @@ assert_cfg!(
 
 pub mod cache_info;
 pub mod calibration;
+pub mod complex_addressing;
 #[cfg(feature = "std")]
 pub mod mmap;
 pub mod prefetcher;
