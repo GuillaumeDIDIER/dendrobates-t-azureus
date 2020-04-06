@@ -57,6 +57,7 @@ pub fn main() {
     };*/
     let m = unsafe { MMappedMemory::new(SIZE) };
     let array = m.slice();
+
     /*
         let p = Box::new(Page { mem: [0; 4096] });
 
