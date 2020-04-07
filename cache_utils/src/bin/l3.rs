@@ -2,7 +2,7 @@ use cache_utils::flush;
 use cache_utils::mmap::MMappedMemory;
 
 pub fn main() {
-    let m = unsafe { MMappedMemory::new(2 << 20) };
+    let m = MMappedMemory::new(2 << 20);
     let array = m.slice();
     loop {
         unsafe {

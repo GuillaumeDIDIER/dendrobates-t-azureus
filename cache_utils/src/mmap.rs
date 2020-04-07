@@ -2,9 +2,12 @@
 
 use core::borrow::{Borrow, BorrowMut};
 use core::ffi::c_void;
+use core::mem::size_of;
 use core::ops::{Deref, DerefMut};
 use core::ptr::null_mut;
+use core::ptr::Unique;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
+use nix::errno::Errno::EINVAL;
 use nix::sys::mman;
 
 /* from linux kernel headers.
@@ -17,78 +20,88 @@ use nix::sys::mman;
 #define HUGETLB_FLAG_ENCODE_2MB         (21 << HUGETLB_FLAG_ENCODE_SHIFT)
 */
 
-pub struct MMappedMemory {
-    pointer: *mut u8,
+pub struct MMappedMemory<T> {
+    pointer: Unique<T>,
     size: usize,
 }
 
-impl MMappedMemory {
-    pub unsafe fn new(size: usize) -> MMappedMemory {
-        let p: *mut u8 = mman::mmap(
-            null_mut(),
-            size,
-            mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
-            mman::MapFlags::MAP_PRIVATE
-                | mman::MapFlags::MAP_ANONYMOUS
-                | mman::MapFlags::MAP_HUGETLB,
-            -1,
-            0,
-        )
-        .unwrap() as *mut u8;
-        MMappedMemory { pointer: p, size }
+impl<T> MMappedMemory<T> {
+    pub fn try_new(size: usize) -> Result<MMappedMemory<T>, nix::Error> {
+        assert_ne!(size_of::<T>(), 0);
+        if let Some(p) = unsafe {
+            let p = mman::mmap(
+                null_mut(),
+                size * size_of::<T>(),
+                mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
+                mman::MapFlags::MAP_PRIVATE
+                    | mman::MapFlags::MAP_ANONYMOUS
+                    | mman::MapFlags::MAP_HUGETLB,
+                -1,
+                0,
+            )?;
+            Unique::new(p as *mut T)
+        } {
+            Ok(MMappedMemory { pointer: p, size })
+        } else {
+            Err(nix::Error::Sys(EINVAL))
+        }
     }
 
-    pub fn slice(&self) -> &[u8] {
-        unsafe { from_raw_parts(self.pointer, self.size) }
+    pub fn new(size: usize) -> MMappedMemory<T> {
+        Self::try_new(size).unwrap()
     }
 
-    pub fn slice_mut(&mut self) -> &mut [u8] {
-        unsafe { from_raw_parts_mut(self.pointer, self.size) }
+    pub fn slice(&self) -> &[T] {
+        unsafe { from_raw_parts(self.pointer.as_ptr(), self.size) }
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [T] {
+        unsafe { from_raw_parts_mut(self.pointer.as_ptr(), self.size) }
     }
 }
 
-impl Drop for MMappedMemory {
+impl<T> Drop for MMappedMemory<T> {
     fn drop(&mut self) {
         unsafe {
-            mman::munmap(self.pointer as *mut c_void, self.size).unwrap();
+            mman::munmap(self.pointer.as_ptr() as *mut c_void, self.size).unwrap();
         }
     }
 }
 
-impl Deref for MMappedMemory {
-    type Target = [u8];
+impl<T> Deref for MMappedMemory<T> {
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
         self.slice()
     }
 }
 
-impl DerefMut for MMappedMemory {
+impl<T> DerefMut for MMappedMemory<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.slice_mut()
     }
 }
 
-impl AsRef<[u8]> for MMappedMemory {
-    fn as_ref(&self) -> &[u8] {
+impl<T> AsRef<[T]> for MMappedMemory<T> {
+    fn as_ref(&self) -> &[T] {
         unimplemented!()
     }
 }
 
-impl AsMut<[u8]> for MMappedMemory {
-    fn as_mut(&mut self) -> &mut [u8] {
+impl<T> AsMut<[T]> for MMappedMemory<T> {
+    fn as_mut(&mut self) -> &mut [T] {
         self.slice_mut()
     }
 }
 
-impl Borrow<[u8]> for MMappedMemory {
-    fn borrow(&self) -> &[u8] {
+impl<T> Borrow<[T]> for MMappedMemory<T> {
+    fn borrow(&self) -> &[T] {
         self.slice()
     }
 }
 
-impl BorrowMut<[u8]> for MMappedMemory {
-    fn borrow_mut(&mut self) -> &mut [u8] {
+impl<T> BorrowMut<[T]> for MMappedMemory<T> {
+    fn borrow_mut(&mut self) -> &mut [T] {
         self.slice_mut()
     }
 }

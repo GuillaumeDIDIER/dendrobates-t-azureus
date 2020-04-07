@@ -34,7 +34,7 @@ struct Page {
 }
 */
 pub fn main() {
-    let m = unsafe { MMappedMemory::new(SIZE) };
+    let m = MMappedMemory::new(SIZE);
     let array = m.slice();
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
