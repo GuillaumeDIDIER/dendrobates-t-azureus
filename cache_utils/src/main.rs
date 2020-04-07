@@ -34,37 +34,13 @@ struct Page {
 }
 */
 pub fn main() {
-    /*let array: &[u8] = unsafe {
-        let p: *mut u8 = mman::mmap(
-            null_mut(),
-            SIZE,
-            mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
-            mman::MapFlags::MAP_PRIVATE
-                | mman::MapFlags::MAP_ANONYMOUS
-                | mman::MapFlags::MAP_HUGETLB,
-            -1,
-            0,
-        )
-        .unwrap() as *mut u8;
-        /*addr: *mut c_void,
-        length: size_t,
-        prot: ProtFlags,
-        flags: MapFlags,
-        fd: RawFd,
-        offset: off_t*/
-
-        &*slice_from_raw_parts(p, SIZE)
-    };*/
     let m = unsafe { MMappedMemory::new(SIZE) };
     let array = m.slice();
 
-    /*
-        let p = Box::new(Page { mem: [0; 4096] });
-
-        let m: &[u8] = &p.mem;
-    */
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
+    // Let's grab all the list of CPUS
+    // Then iterate the calibration on each CPU core.
     for i in 0..(CpuSet::count() - 1) {
         if old.is_set(i).unwrap() {
             println!("Iteration {}...", i);
@@ -89,7 +65,4 @@ pub fn main() {
             }
         }
     }
-
-    // Let's grab all the list of CPUS
-    // Then iterate the calibration on each CPU core.
 }

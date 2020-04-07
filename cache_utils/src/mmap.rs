@@ -1,6 +1,8 @@
 #![cfg(feature = "std")]
 
+use core::borrow::{Borrow, BorrowMut};
 use core::ffi::c_void;
+use core::ops::{Deref, DerefMut};
 use core::ptr::null_mut;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use nix::sys::mman;
@@ -40,7 +42,7 @@ impl MMappedMemory {
         unsafe { from_raw_parts(self.pointer, self.size) }
     }
 
-    pub fn slice_mut(&self) -> &mut [u8] {
+    pub fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { from_raw_parts_mut(self.pointer, self.size) }
     }
 }
@@ -50,5 +52,43 @@ impl Drop for MMappedMemory {
         unsafe {
             mman::munmap(self.pointer as *mut c_void, self.size).unwrap();
         }
+    }
+}
+
+impl Deref for MMappedMemory {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.slice()
+    }
+}
+
+impl DerefMut for MMappedMemory {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.slice_mut()
+    }
+}
+
+impl AsRef<[u8]> for MMappedMemory {
+    fn as_ref(&self) -> &[u8] {
+        unimplemented!()
+    }
+}
+
+impl AsMut<[u8]> for MMappedMemory {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.slice_mut()
+    }
+}
+
+impl Borrow<[u8]> for MMappedMemory {
+    fn borrow(&self) -> &[u8] {
+        self.slice()
+    }
+}
+
+impl BorrowMut<[u8]> for MMappedMemory {
+    fn borrow_mut(&mut self) -> &mut [u8] {
+        self.slice_mut()
     }
 }
