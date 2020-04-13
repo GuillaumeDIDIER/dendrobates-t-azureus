@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use crate::{flush, maccess, rdtsc_fence};
 
 use core::arch::x86_64 as arch_x86;
@@ -337,7 +339,7 @@ fn calibrate_impl(
                 );
             }
             println!(
-                "CSV: {:p}; {:x}, {}, {}, {}",
+                "CSV: {:p}, {:x}, {}, {}, {}",
                 pointer,
                 hash,
                 calibrate_result.min.iter().format(", "),
