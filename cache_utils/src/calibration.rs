@@ -170,8 +170,16 @@ pub fn calibrate_flush(
         cache_line_size,
         array.len() as isize,
         &[
-            (load_and_flush, "clflush hit"),
-            (flush_and_flush, "clflush miss"),
+            CalibrateOperation {
+                op: load_and_flush,
+                name: "clflush_hit",
+                display_name: "clflush hit",
+            },
+            CalibrateOperation {
+                op: flush_and_flush,
+                name: "clflush_miss",
+                display_name: "clflush miss",
+            },
         ],
         CFLUSH_BUCKET_NUMBER,
         CFLUSH_BUCKET_SIZE,
@@ -189,11 +197,17 @@ pub struct CalibrateResult {
     max: Vec<u64>,
 }
 
+pub struct CalibrateOperation<'a> {
+    pub op: unsafe fn(*const u8) -> u64,
+    pub name: &'a str,
+    pub display_name: &'a str,
+}
+
 pub unsafe fn calibrate(
     p: *const u8,
     increment: usize,
     len: isize,
-    operations: &[(unsafe fn(*const u8) -> u64, &str)],
+    operations: &[CalibrateOperation],
     buckets_num: usize,
     bucket_size: usize,
     num_iterations: u32,
@@ -216,7 +230,7 @@ fn calibrate_impl(
     p: *const u8,
     increment: usize,
     len: isize,
-    operations: &[(unsafe fn(*const u8) -> u64, &str)],
+    operations: &[CalibrateOperation],
     buckets_num: usize,
     bucket_size: usize,
     num_iterations: u32,
@@ -235,7 +249,10 @@ fn calibrate_impl(
     if verbosity_level >= Thresholds {
         println!(
             "Calibrating {}...",
-            operations.iter().map(|(_, name)| { name }).format(", ")
+            operations
+                .iter()
+                .map(|operation| { operation.display_name })
+                .format(", ")
         );
     }
 
@@ -245,11 +262,30 @@ fn calibrate_impl(
     if verbosity_level >= Thresholds {
         println!(
             "CSV: address, hash, {} min, {} median, {} max",
-            operations.iter().map(|(_, name)| name).format(" min, "),
-            operations.iter().map(|(_, name)| name).format(" median, "),
-            operations.iter().map(|(_, name)| name).format(" max, ")
+            operations
+                .iter()
+                .map(|operation| operation.name)
+                .format(" min, "),
+            operations
+                .iter()
+                .map(|operation| operation.name)
+                .format(" median, "),
+            operations
+                .iter()
+                .map(|operation| operation.name)
+                .format(" max, ")
         );
     }
+    if verbosity_level >= RawResult {
+        println!(
+            "RESULT:address,hash,time,{}",
+            operations
+                .iter()
+                .map(|operation| operation.name)
+                .format(",")
+        );
+    }
+
     for i in (0..len).step_by(increment) {
         let pointer = unsafe { p.offset(i) };
         let hash = hasher.hash(pointer as usize);
@@ -271,7 +307,7 @@ fn calibrate_impl(
         for op in operations {
             let mut hist = vec![0; buckets_num];
             for _ in 0..num_iterations {
-                let time = unsafe { op.0(pointer) };
+                let time = unsafe { (op.op)(pointer) };
                 let bucket = min(buckets_num - 1, to_bucket(time));
                 hist[bucket] += 1;
             }
@@ -286,16 +322,9 @@ fn calibrate_impl(
             .map(|h| (num_iterations - h[buckets_num - 1]) / 2)
             .collect();
 
-        if verbosity_level >= RawResult {
-            println!(
-                "time {}",
-                operations.iter().map(|(_, name)| name).format(" ")
-            );
-        }
-
         for j in 0..buckets_num - 1 {
             if verbosity_level >= RawResult {
-                print!("{:3}:", from_bucket(j));
+                print!("RESULT:{:p},{:x},{}", pointer, hash, from_bucket(j));
             }
             // ignore the last bucket : spurious context switches etc.
             for op in 0..operations.len() {
@@ -305,7 +334,7 @@ fn calibrate_impl(
                 let med = &mut calibrate_result.median[op];
                 let sum = &mut sums[op];
                 if verbosity_level >= RawResult {
-                    print!("{:10}", hist);
+                    print!(",{}", hist);
                 }
 
                 if *min == 0 {
@@ -329,10 +358,10 @@ fn calibrate_impl(
             }
         }
         if verbosity_level >= Thresholds {
-            for (j, (_, op)) in operations.iter().enumerate() {
+            for (j, op) in operations.iter().enumerate() {
                 println!(
                     "{}: min {}, median {}, max {}",
-                    op,
+                    op.display_name,
                     calibrate_result.min[j],
                     calibrate_result.median[j],
                     calibrate_result.max[j]
@@ -367,7 +396,11 @@ pub fn calibrate_L3_miss_hit(
         pointer,
         cache_line_size,
         array.len() as isize,
-        &[(l3_and_reload, "L3 hit")],
+        &[CalibrateOperation {
+            op: l3_and_reload,
+            name: "l3_hit",
+            display_name: "L3 hit",
+        }],
         512,
         2,
         1 << 11,

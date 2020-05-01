@@ -41,6 +41,31 @@ pub fn main() {
 
     // Let's grab all the list of CPUS
     // Then iterate the calibration on each CPU core.
+    eprint!("Warming up...");
+    for i in 0..(CpuSet::count() - 1) {
+        if old.is_set(i).unwrap() {
+            //println!("Iteration {}...", i);
+            let mut core = CpuSet::new();
+            core.set(i).unwrap();
+
+            match sched_setaffinity(Pid::from_raw(0), &core) {
+                Ok(()) => {
+                    calibrate_flush(array, 64, Verbosity::NoOutput);
+                    sched_setaffinity(Pid::from_raw(0), &old).unwrap();
+                    //println!("Iteration {}...ok ", i);
+                    eprint!(" {}", i);
+                }
+                Err(Sys(Errno::EINVAL)) => {
+                    //println!("skipping");
+                    continue;
+                }
+                Err(e) => {
+                    panic!("Unexpected error while setting affinity: {}", e);
+                }
+            }
+        }
+    }
+    eprintln!();
     for i in 0..(CpuSet::count() - 1) {
         if old.is_set(i).unwrap() {
             println!("Iteration {}...", i);
@@ -50,7 +75,7 @@ pub fn main() {
             match sched_setaffinity(Pid::from_raw(0), &core) {
                 Ok(()) => {
                     calibrate_flush(array, 64, Verbosity::NoOutput);
-                    calibrate_flush(array, 64, Verbosity::Thresholds);
+                    calibrate_flush(array, 64, Verbosity::RawResult);
                     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
                     println!("Iteration {}...ok ", i);
                     eprintln!("Iteration {}...ok ", i);
