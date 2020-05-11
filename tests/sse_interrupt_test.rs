@@ -16,7 +16,7 @@
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use polling_serial::{serial_print, serial_println};
-use vga_buffer::{println};
+use vga_buffer::println;
 use volatile::Volatile;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 

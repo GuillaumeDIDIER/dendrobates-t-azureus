@@ -14,6 +14,12 @@ pub enum Verbosity {
     Debug,
 }
 
+pub struct HistParams {
+    iterations: u32,
+    bucket_size: usize,
+    bucket_number: usize,
+}
+
 extern crate alloc;
 use crate::calibration::Verbosity::*;
 use crate::complex_addressing::AddressHasher;
@@ -165,7 +171,7 @@ pub fn calibrate_flush(
         panic!("not aligned nicely");
     }
 
-    calibrate_impl(
+    calibrate_impl_fixed_freq(
         pointer,
         cache_line_size,
         array.len() as isize,
@@ -181,10 +187,13 @@ pub fn calibrate_flush(
                 display_name: "clflush miss",
             },
         ],
-        CFLUSH_BUCKET_NUMBER,
-        CFLUSH_BUCKET_SIZE,
-        CFLUSH_NUM_ITER,
+        HistParams {
+            bucket_number: CFLUSH_BUCKET_NUMBER,
+            bucket_size: CFLUSH_BUCKET_SIZE,
+            iterations: CFLUSH_NUM_ITER,
+        },
         verbose_level,
+        None,
     )
 }
 
@@ -213,39 +222,41 @@ pub unsafe fn calibrate(
     num_iterations: u32,
     verbosity_level: Verbosity,
 ) -> Vec<CalibrateResult> {
-    calibrate_impl(
+    calibrate_impl_fixed_freq(
         p,
         increment,
         len,
         operations,
-        buckets_num,
-        bucket_size,
-        num_iterations,
+        HistParams {
+            bucket_number: buckets_num,
+            bucket_size,
+            iterations: num_iterations,
+        },
         verbosity_level,
+        None,
     )
 }
 
 const SPURIOUS_THRESHOLD: u32 = 1;
-fn calibrate_impl(
+fn calibrate_impl_fixed_freq(
     p: *const u8,
     increment: usize,
     len: isize,
     operations: &[CalibrateOperation],
-    buckets_num: usize,
-    bucket_size: usize,
-    num_iterations: u32,
+    hist_params: HistParams,
     verbosity_level: Verbosity,
+    hasher: Option<&AddressHasher>,
 ) -> Vec<CalibrateResult> {
     // TODO : adapt this to detect CPU generation and grab the correct masks.
     // These are the skylake masks.
-    let masks: [usize; 3] = [
-        0b1111_0011_0011_0011_0010_0100_1100_0100_000000,
-        0b1011_1010_1101_0111_1110_1010_1010_0010_000000,
-        0b0110_1101_0111_1101_0101_1101_0101_0001_000000,
-    ];
+    /*let masks: [usize; 3] = [
+            0b1111_0011_0011_0011_0010_0100_1100_0100_000000,
+            0b1011_1010_1101_0111_1110_1010_1010_0010_000000,
+            0b0110_1101_0111_1101_0101_1101_0101_0001_000000,
+        ];
 
-    let hasher = AddressHasher::new(&masks);
-
+        let hasher = AddressHasher::new(&masks);
+    */
     if verbosity_level >= Thresholds {
         println!(
             "Calibrating {}...",
@@ -256,12 +267,16 @@ fn calibrate_impl(
         );
     }
 
-    let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
-    let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
+    let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
+    let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
     let mut ret = Vec::new();
     if verbosity_level >= Thresholds {
+        print!("CSV: address, ");
+        if hasher.is_some() {
+            print!("hash, ");
+        }
         println!(
-            "CSV: address, hash, {} min, {} median, {} max",
+            "{} min, {} median, {} max",
             operations
                 .iter()
                 .map(|operation| operation.name)
@@ -277,8 +292,12 @@ fn calibrate_impl(
         );
     }
     if verbosity_level >= RawResult {
+        print!("RESULT:address,");
+        if hasher.is_some() {
+            print!("hash,");
+        }
         println!(
-            "RESULT:address,hash,time,{}",
+            "time,{}",
             operations
                 .iter()
                 .map(|operation| operation.name)
@@ -288,10 +307,14 @@ fn calibrate_impl(
 
     for i in (0..len).step_by(increment) {
         let pointer = unsafe { p.offset(i) };
-        let hash = hasher.hash(pointer as usize);
+        let hash = hasher.map(|h| h.hash(pointer as usize));
 
         if verbosity_level >= Thresholds {
-            println!("Calibration for {:p} (hash: {:x})", pointer, hash);
+            print!("Calibration for {:p}", pointer);
+            if let Some(h) = hash {
+                print!(" (hash: {:x})", h)
+            }
+            println!();
         }
 
         // TODO add some useful impl to CalibrateResults
@@ -305,10 +328,10 @@ fn calibrate_impl(
         calibrate_result.histogram.reserve(operations.len());
 
         for op in operations {
-            let mut hist = vec![0; buckets_num];
-            for _ in 0..num_iterations {
+            let mut hist = vec![0; hist_params.bucket_number];
+            for _ in 0..hist_params.iterations {
                 let time = unsafe { (op.op)(pointer) };
-                let bucket = min(buckets_num - 1, to_bucket(time));
+                let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
                 hist[bucket] += 1;
             }
             calibrate_result.histogram.push(hist);
@@ -319,12 +342,16 @@ fn calibrate_impl(
         let median_thresholds: Vec<u32> = calibrate_result
             .histogram
             .iter()
-            .map(|h| (num_iterations - h[buckets_num - 1]) / 2)
+            .map(|h| (hist_params.iterations - h[hist_params.bucket_number - 1]) / 2)
             .collect();
 
-        for j in 0..buckets_num - 1 {
+        for j in 0..hist_params.bucket_number - 1 {
             if verbosity_level >= RawResult {
-                print!("RESULT:{:p},{:x},{}", pointer, hash, from_bucket(j));
+                print!("RESULT:{:p},", pointer);
+                if let Some(h) = hash {
+                    print!("{:x},", h);
+                }
+                print!("{}", from_bucket(j));
             }
             // ignore the last bucket : spurious context switches etc.
             for op in 0..operations.len() {
@@ -367,10 +394,12 @@ fn calibrate_impl(
                     calibrate_result.max[j]
                 );
             }
+            print!("CSV: {:p}, ", pointer);
+            if let Some(h) = hash {
+                print!("{:x}, ", h)
+            }
             println!(
-                "CSV: {:p}, {:x}, {}, {}, {}",
-                pointer,
-                hash,
+                "{}, {}, {}",
                 calibrate_result.min.iter().format(", "),
                 calibrate_result.median.iter().format(", "),
                 calibrate_result.max.iter().format(", ")
@@ -392,7 +421,7 @@ pub fn calibrate_L3_miss_hit(
     }
     let pointer = (&array[0]) as *const u8;
 
-    let r = calibrate_impl(
+    let r = calibrate_impl_fixed_freq(
         pointer,
         cache_line_size,
         array.len() as isize,
@@ -401,10 +430,13 @@ pub fn calibrate_L3_miss_hit(
             name: "l3_hit",
             display_name: "L3 hit",
         }],
-        512,
-        2,
-        1 << 11,
+        HistParams {
+            bucket_number: 512,
+            bucket_size: 2,
+            iterations: 1 << 11,
+        },
         verbose_level,
+        None,
     );
 
     r.into_iter().next().unwrap()

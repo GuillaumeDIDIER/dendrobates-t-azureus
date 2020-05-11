@@ -19,6 +19,8 @@ pub mod complex_addressing;
 pub mod mmap;
 pub mod prefetcher;
 
+pub mod frequency;
+
 use core::arch::x86_64 as arch_x86;
 use core::ptr;
 
