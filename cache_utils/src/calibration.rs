@@ -41,6 +41,12 @@ pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
     rdtsc_fence() - t
 }
 
+pub unsafe fn only_flush(p: *const u8) -> u64 {
+    let t = rdtsc_fence();
+    flush(p);
+    rdtsc_fence() - t
+}
+
 pub unsafe fn load_and_flush(p: *const u8) -> u64 {
     maccess(p);
     let t = rdtsc_fence();
@@ -50,11 +56,6 @@ pub unsafe fn load_and_flush(p: *const u8) -> u64 {
 
 pub unsafe fn flush_and_flush(p: *const u8) -> u64 {
     flush(p);
-    let t = rdtsc_fence();
-    flush(p);
-    rdtsc_fence() - t
-}
-pub unsafe fn only_flush(p: *const u8) -> u64 {
     let t = rdtsc_fence();
     flush(p);
     rdtsc_fence() - t
