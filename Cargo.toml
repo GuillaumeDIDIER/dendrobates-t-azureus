@@ -4,6 +4,7 @@ members = [
     "vga_buffer",
     "polling_serial",
     "cache_utils",
+    "cpuid"
 ]
 
 [package]
