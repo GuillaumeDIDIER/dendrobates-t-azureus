@@ -1,10 +1,20 @@
 #![allow(clippy::missing_safety_doc)]
 
+use crate::complex_addressing::{cache_slicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
+
+use cpuid::MicroArchitecture;
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]
 use polling_serial::{serial_print as print, serial_println as println};
+
+extern crate alloc;
+use crate::calibration::Verbosity::*;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cmp::min;
+use itertools::Itertools;
 
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Verbosity {
@@ -19,14 +29,6 @@ pub struct HistParams {
     bucket_size: usize,
     bucket_number: usize,
 }
-
-extern crate alloc;
-use crate::calibration::Verbosity::*;
-use crate::complex_addressing::AddressHasher;
-use alloc::vec;
-use alloc::vec::Vec;
-use core::cmp::min;
-use itertools::Itertools;
 
 pub unsafe fn only_reload(p: *const u8) -> u64 {
     let t = rdtsc_fence();
@@ -194,7 +196,6 @@ pub fn calibrate_flush(
             iterations: CFLUSH_NUM_ITER,
         },
         verbose_level,
-        None,
     )
 }
 
@@ -234,7 +235,6 @@ pub unsafe fn calibrate(
             iterations: num_iterations,
         },
         verbosity_level,
-        None,
     )
 }
 
@@ -246,18 +246,7 @@ fn calibrate_impl_fixed_freq(
     operations: &[CalibrateOperation],
     hist_params: HistParams,
     verbosity_level: Verbosity,
-    hasher: Option<&AddressHasher>,
 ) -> Vec<CalibrateResult> {
-    // TODO : adapt this to detect CPU generation and grab the correct masks.
-    // These are the skylake masks.
-    /*let masks: [usize; 3] = [
-            0b1111_0011_0011_0011_0010_0100_1100_0100_000000,
-            0b1011_1010_1101_0111_1110_1010_1010_0010_000000,
-            0b0110_1101_0111_1101_0101_1101_0101_0001_000000,
-        ];
-
-        let hasher = AddressHasher::new(&masks);
-    */
     if verbosity_level >= Thresholds {
         println!(
             "Calibrating {}...",
@@ -270,10 +259,28 @@ fn calibrate_impl_fixed_freq(
 
     let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
+
+    let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
+        Some(cache_slicing(uarch, 8))
+    } else {
+        None
+    };
+
+    let h = if let Some(s) = slicing {
+        if s.can_hash() {
+            Some(|addr: usize| -> usize { slicing.unwrap().hash(addr).unwrap() })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    // TODO fix the GROSS hack of using max cpu core supported
+
     let mut ret = Vec::new();
     if verbosity_level >= Thresholds {
         print!("CSV: address, ");
-        if hasher.is_some() {
+        if h.is_some() {
             print!("hash, ");
         }
         println!(
@@ -294,7 +301,7 @@ fn calibrate_impl_fixed_freq(
     }
     if verbosity_level >= RawResult {
         print!("RESULT:address,");
-        if hasher.is_some() {
+        if h.is_some() {
             print!("hash,");
         }
         println!(
@@ -308,7 +315,7 @@ fn calibrate_impl_fixed_freq(
 
     for i in (0..len).step_by(increment) {
         let pointer = unsafe { p.offset(i) };
-        let hash = hasher.map(|h| h.hash(pointer as usize));
+        let hash = h.map(|h| h(pointer as usize));
 
         if verbosity_level >= Thresholds {
             print!("Calibration for {:p}", pointer);
@@ -437,7 +444,6 @@ pub fn calibrate_L3_miss_hit(
             iterations: 1 << 11,
         },
         verbose_level,
-        None,
     );
 
     r.into_iter().next().unwrap()
