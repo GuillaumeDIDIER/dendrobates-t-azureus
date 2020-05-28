@@ -1,11 +1,11 @@
 use crate::frequency::Error::{Unimplemented, UnsupportedPlatform};
 
 use crate::rdtsc_fence;
-#[cfg(all(target_os = "linux", feature = "std"))]
+#[cfg(all(target_os = "linux", feature = "use_std"))]
 use libc::sched_getcpu;
-#[cfg(all(target_os = "linux", feature = "std"))]
+#[cfg(all(target_os = "linux", feature = "use_std"))]
 use std::convert::TryInto;
-#[cfg(all(target_os = "linux", feature = "std"))]
+#[cfg(all(target_os = "linux", feature = "use_std"))]
 use std::os::raw::{c_uint, c_ulong};
 
 pub enum Error {
@@ -14,13 +14,14 @@ pub enum Error {
     Unimplemented,
 }
 
-#[cfg(all(target_os = "linux", feature = "std"))]
 #[link(name = "cpupower")]
+#[cfg(all(target_os = "linux", feature = "use_std"))]
 extern "C" {
     //unsigned long cpufreq_get_freq_kernel(unsigned int cpu);
     fn cpufreq_get_freq_kernel(cpu: c_uint) -> c_ulong;
 }
 
+#[cfg(all(target_os = "linux", feature = "use_std"))]
 pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
     // TODO Add memorization
     return match unsafe { sched_getcpu() }.try_into() {
@@ -29,8 +30,15 @@ pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
     };
 }
 
+#[cfg(not(all(target_os = "linux", feature = "use_std")))]
+pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
+    // TODO Add memorization
+    Err(UnsupportedPlatform)
+}
+
+
 pub fn get_frequency() -> Result<u64, Error> {
-    if cfg!(target_os = "linux") && cfg!(feature = "std") {
+    if cfg!(target_os = "linux") && cfg!(feature = "use_std") {
         return get_freq_cpufreq_kernel();
     }
 

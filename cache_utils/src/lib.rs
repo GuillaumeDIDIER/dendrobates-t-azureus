@@ -6,8 +6,8 @@ use static_assertions::assert_cfg;
 
 assert_cfg!(
     all(
-        not(all(feature = "std", feature = "no_std")),
-        any(feature = "std", feature = "no_std")
+        not(all(feature = "use_std", feature = "no_std")),
+        any(feature = "use_std", feature = "no_std")
     ),
     "Choose std or no-std but not both"
 );
@@ -15,7 +15,7 @@ assert_cfg!(
 pub mod cache_info;
 pub mod calibration;
 pub mod complex_addressing;
-#[cfg(feature = "std")]
+#[cfg(feature = "use_std")]
 pub mod mmap;
 pub mod prefetcher;
 

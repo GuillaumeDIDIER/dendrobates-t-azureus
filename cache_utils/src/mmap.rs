@@ -1,4 +1,4 @@
-#![cfg(feature = "std")]
+#![cfg(feature = "use_std")]
 
 use core::borrow::{Borrow, BorrowMut};
 use core::ffi::c_void;
