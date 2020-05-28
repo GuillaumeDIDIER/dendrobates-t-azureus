@@ -14,8 +14,8 @@ pub enum Error {
     Unimplemented,
 }
 
-#[link(name = "cpupower")]
 #[cfg(all(target_os = "linux", feature = "use_std"))]
+#[link(name = "cpupower")]
 extern "C" {
     //unsigned long cpufreq_get_freq_kernel(unsigned int cpu);
     fn cpufreq_get_freq_kernel(cpu: c_uint) -> c_ulong;
