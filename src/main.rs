@@ -175,13 +175,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         })
     {
         //serial_println!("Mapping page {:x} on frame {:?}", page, frame);
-        mapper
+        unsafe {mapper
             .map_to(
                 Page::<Size4KiB>::containing_address(VirtAddr::new(page)),
-                unsafe { UnusedPhysFrame::new(frame) },
+                frame,
                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
                 &mut frame_allocator,
-            )
+            )}
             .expect("Failed to map the experiment buffer")
             .flush();
         let phys = mapper.translate_addr(VirtAddr::new(page));

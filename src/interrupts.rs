@@ -39,7 +39,7 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
     let error_code: u64;
 
     unsafe {
-        asm!("push rax" :::: "intel");
+        llvm_asm!("push rax" :::: "intel");
         let s = sf as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const u64).offset(1);
@@ -71,7 +71,7 @@ extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: Pa
     use x86_64::registers::control::Cr2;
 
     unsafe {
-        asm!("push rax" :::: "intel");
+        llvm_asm!("push rax" :::: "intel");
         let s = sf as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const PageFaultErrorCode).offset(1) as PageFaultErrorCode;
