@@ -15,6 +15,7 @@ use nix::unistd::Pid;
 use nix::Error::Sys;
 
 use cache_utils::mmap::MMappedMemory;
+use cpuid::MicroArchitecture;
 
 /* from linux kernel headers.
 #define HUGETLB_FLAG_ENCODE_SHIFT       26
@@ -41,6 +42,7 @@ pub fn main() {
 
     // Let's grab all the list of CPUS
     // Then iterate the calibration on each CPU core.
+    eprintln!("CPU MicroArch: {:?}", MicroArchitecture::get_micro_architecture());
     eprint!("Warming up...");
     for i in 0..(CpuSet::count() - 1) {
         if old.is_set(i).unwrap() {

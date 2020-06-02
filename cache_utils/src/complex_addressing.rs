@@ -30,7 +30,10 @@ pub fn cache_slicing(uarch: MicroArchitecture, physical_cores: u8) -> CacheSlici
         | MicroArchitecture::CoffeeLake => {
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
         }
-        MicroArchitecture::SandyBridge => {
+        MicroArchitecture::SandyBridge
+        | MicroArchitecture::Haswell | MicroArchitecture::HaswellE
+        | MicroArchitecture::Broadwell
+        | MicroArchitecture::IvyBridge | MicroArchitecture::IvyBridgeE => {
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
         }
         _ => Unsupported,
