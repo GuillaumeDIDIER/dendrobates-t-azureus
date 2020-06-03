@@ -7,7 +7,7 @@ use cpuid::MicroArchitecture;
 pub enum CacheSlicing {
     Unsupported,
     ComplexAddressing(&'static [usize]),
-    SimpleAddressing(&'static usize),
+    SimpleAddressing(usize),
     NoSlice,
 }
 const SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS: [usize; 4] = [
@@ -29,12 +29,15 @@ pub fn cache_slicing(uarch: MicroArchitecture, physical_cores: u8) -> CacheSlici
         | MicroArchitecture::KabyLake
         | MicroArchitecture::CoffeeLake => {
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
-        }
+        },
         MicroArchitecture::SandyBridge
         | MicroArchitecture::Haswell | MicroArchitecture::HaswellE
         | MicroArchitecture::Broadwell
         | MicroArchitecture::IvyBridge | MicroArchitecture::IvyBridgeE => {
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
+        },
+        MicroArchitecture::Nehalem | MicroArchitecture::Westmere => {
+            SimpleAddressing(((physical_cores -1) as usize) << 6 )// WRONG FIXME !!!
         }
         _ => Unsupported,
     }
@@ -53,7 +56,7 @@ impl CacheSlicing {
     }
     pub fn hash(&self, addr: usize) -> Option<usize> {
         match self {
-            SimpleAddressing(&mask) => Some((addr & mask)),
+            SimpleAddressing(mask) => Some((addr & *mask)),
             ComplexAddressing(masks) => {
                 let mut res = 0;
                 for mask in *masks {
