@@ -37,7 +37,7 @@ pub fn cache_slicing(uarch: MicroArchitecture, physical_cores: u8) -> CacheSlici
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
         },
         MicroArchitecture::Nehalem | MicroArchitecture::Westmere => {
-            SimpleAddressing(((physical_cores -1) as usize) << 6 )// WRONG FIXME !!!
+            SimpleAddressing(((physical_cores -1) as usize) << 6 + 8)// Hardcoded for 4 cores FIXME !!!
         }
         _ => Unsupported,
     }
