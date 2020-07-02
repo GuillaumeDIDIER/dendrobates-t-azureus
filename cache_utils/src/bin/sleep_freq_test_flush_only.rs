@@ -8,11 +8,11 @@ const SAMPLE_BETWEEN_SLEEP: usize = 100;
 const NUM_ITERATION: usize = 10;
 
 fn main() {
-    let SLEEP_TIME: Duration = Duration::new(1, 0);
+    let sleep_time: Duration = Duration::new(1, 0);
     let p = Box::new(42u8);
     let pointer = p.as_ref() as *const u8;
     // preheat
-    for i in 0..SAMPLE_BETWEEN_SLEEP {
+    for _ in 0..SAMPLE_BETWEEN_SLEEP {
         unsafe { only_flush(pointer) };
     }
 
@@ -24,7 +24,7 @@ fn main() {
 
     for frequency_sample in 0..SAMPLE_BETWEEN_SLEEP {
         for i in 0..NUM_ITERATION {
-            sleep(SLEEP_TIME);
+            sleep(sleep_time);
             for j in 0..SAMPLE_BETWEEN_SLEEP {
                 if j == frequency_sample {
                     let t = unsafe { rdtsc_fence() };

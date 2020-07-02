@@ -14,7 +14,7 @@ pub fn main() {
     let mut core = CpuSet::new();
     core.set(unsafe { sched_getcpu() } as usize).unwrap();
 
-    sched_setaffinity(Pid::from_raw(0), &core);
+    sched_setaffinity(Pid::from_raw(0), &core).unwrap();
     let t0_pre = unsafe { rdtsc_fence() };
     let start = Instant::now();
     let t0_post = unsafe { rdtsc_fence() };
@@ -22,7 +22,7 @@ pub fn main() {
     let mut tsc = t0_post;
 
     println!("TSC,Freq");
-    for i in 0..NUM_SAMPLE {
+    for _ in 0..NUM_SAMPLE {
         //let t1 = unsafe { rdtsc_fence() };
         let frequency = get_freq_cpufreq_kernel();
         let t2 = unsafe { rdtsc_fence() };
@@ -33,7 +33,7 @@ pub fn main() {
         }
     }
     println!("Idling");
-    for i in 0..NUM_SAMPLE_SLEEP {
+    for _ in 0..NUM_SAMPLE_SLEEP {
         sleep(Duration::from_micros(1000));
         let frequency = get_freq_cpufreq_kernel();
         let t2 = unsafe { rdtsc_fence() };

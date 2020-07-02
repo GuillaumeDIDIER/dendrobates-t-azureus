@@ -45,6 +45,8 @@ pub unsafe fn flush(p: *const u8) {
     arch_x86::_mm_clflush(p);
 }
 
+pub fn noop<T>(_: *const T) {}
+
 // future enhancements
 // prefetch
 // long nop (64 nops)

@@ -56,7 +56,7 @@ impl CacheSlicing {
     }
     pub fn hash(&self, addr: usize) -> Option<usize> {
         match self {
-            SimpleAddressing(mask) => Some((addr & *mask)),
+            SimpleAddressing(mask) => Some(addr & *mask),
             ComplexAddressing(masks) => {
                 let mut res = 0;
                 for mask in *masks {

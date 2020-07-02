@@ -1,6 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
 
-use crate::complex_addressing::{cache_slicing, CacheSlicing};
+use crate::complex_addressing::{cache_slicing};
 use crate::{flush, maccess, rdtsc_fence};
 
 use cpuid::MicroArchitecture;
@@ -25,9 +25,9 @@ pub enum Verbosity {
 }
 
 pub struct HistParams {
-    iterations: u32,
-    bucket_size: usize,
-    bucket_number: usize,
+    pub iterations: u32,
+    pub bucket_size: usize,
+    pub bucket_number: usize,
 }
 
 pub unsafe fn only_reload(p: *const u8) -> u64 {
@@ -38,9 +38,7 @@ pub unsafe fn only_reload(p: *const u8) -> u64 {
 
 pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
     flush(p);
-    let t = rdtsc_fence();
-    maccess(p);
-    rdtsc_fence() - t
+    only_reload(p)
 }
 
 pub unsafe fn only_flush(p: *const u8) -> u64 {
@@ -51,16 +49,12 @@ pub unsafe fn only_flush(p: *const u8) -> u64 {
 
 pub unsafe fn load_and_flush(p: *const u8) -> u64 {
     maccess(p);
-    let t = rdtsc_fence();
-    flush(p);
-    rdtsc_fence() - t
+    only_flush(p)
 }
 
 pub unsafe fn flush_and_flush(p: *const u8) -> u64 {
     flush(p);
-    let t = rdtsc_fence();
-    flush(p);
-    rdtsc_fence() - t
+    only_flush(p)
 }
 
 pub unsafe fn l3_and_reload(p: *const u8) -> u64 {
@@ -68,9 +62,7 @@ pub unsafe fn l3_and_reload(p: *const u8) -> u64 {
     arch_x86::_mm_mfence();
     arch_x86::_mm_prefetch(p as *const i8, arch_x86::_MM_HINT_T2);
     arch_x86::__cpuid_count(0, 0);
-    let t = rdtsc_fence();
-    maccess(p);
-    rdtsc_fence() - t
+    only_reload(p)
 }
 
 const BUCKET_SIZE: usize = 5;
@@ -158,10 +150,10 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     (min_i * BUCKET_SIZE) as u64
 }
 
-const CFLUSH_BUCKET_SIZE: usize = 1;
-const CFLUSH_BUCKET_NUMBER: usize = 500;
+pub const CFLUSH_BUCKET_SIZE: usize = 1;
+pub const CFLUSH_BUCKET_NUMBER: usize = 500;
 
-const CFLUSH_NUM_ITER: u32 = 1 << 11;
+pub const CFLUSH_NUM_ITER: u32 = 1 << 11;
 
 pub fn calibrate_flush(
     array: &[u8],
@@ -259,6 +251,8 @@ fn calibrate_impl_fixed_freq(
 
     let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
+
+
 
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         Some(cache_slicing(uarch, 8))
