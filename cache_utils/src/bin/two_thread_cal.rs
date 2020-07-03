@@ -98,7 +98,12 @@ fn main() {
             println!("{},{}", 0, i);
         }
         i = i << 1;
-
+    }
+    for i in 1..CpuSet::count() {
+        if old.is_set(i).unwrap() {
+            core_pairs.push((i, 0));
+            println!("{},{}", i, 0);
+        }
     }
 
     // operations

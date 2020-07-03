@@ -560,10 +560,11 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     for (main_core, helper_core) in cores {
         // set main thread affinity
 
-
         if verbosity_level >= Thresholds {
             println!("Calibration for main_core {}, helper {}.", main_core, helper_core);
         }
+
+        eprintln!("Calibration for main_core {}, helper {}.", main_core, helper_core);
 
         let mut core = CpuSet::new();
         match core.set(main_core) {
@@ -627,6 +628,11 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             for op in operations {
                 helper_thread_params.op.store(op.prepare, Ordering::Relaxed);
                 let mut hist = vec![0; hist_params.bucket_number];
+                for _ in 0..hist_params.iterations {
+                    next(&helper_thread_params.turn);
+                    wait(&helper_thread_params.turn, false);
+                    let _time = unsafe { (op.op)(pointer) };
+                }
                 for _ in 0..hist_params.iterations {
                     next(&helper_thread_params.turn);
                     wait(&helper_thread_params.turn, false);
