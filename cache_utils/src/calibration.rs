@@ -21,6 +21,8 @@ use nix::unistd::Pid;
 use std::sync::Arc;
 #[cfg(feature = "use_std")]
 use std::thread;
+#[cfg(feature = "use_std")]
+use nix::Error;
 
 extern crate alloc;
 use crate::calibration::Verbosity::*;
@@ -30,7 +32,7 @@ use core::cmp::min;
 use itertools::Itertools;
 use core::sync::atomic::{AtomicPtr, AtomicBool, Ordering, spin_loop_hint};
 use core::ptr::{/*null,*/ null_mut};
-use nix::Error;
+
 use atomic::Atomic;
 
 
@@ -470,6 +472,8 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
 ) -> Vec<CalibrateResult2T> {
     calibrate_fixed_freq_2_thread_impl(p, increment, len, cores, operations, hist_params, verbosity_level)
 }
+
+#[cfg(feature = "use_std")]
 fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     p: *const u8,
     increment: usize,
