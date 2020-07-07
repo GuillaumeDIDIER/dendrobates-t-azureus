@@ -1,6 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
 
-use crate::complex_addressing::{cache_slicing};
+use crate::complex_addressing::cache_slicing;
 use crate::{flush, maccess, rdtsc_fence};
 
 use cpuid::MicroArchitecture;
@@ -18,23 +18,22 @@ use nix::unistd::Pid;
 //#[cfg(feature = "use_std")]
 //use nix::Error::Sys;
 #[cfg(feature = "use_std")]
+use nix::Error;
+#[cfg(feature = "use_std")]
 use std::sync::Arc;
 #[cfg(feature = "use_std")]
 use std::thread;
-#[cfg(feature = "use_std")]
-use nix::Error;
 
 extern crate alloc;
 use crate::calibration::Verbosity::*;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
+use core::ptr::null_mut;
+use core::sync::atomic::{spin_loop_hint, AtomicBool, AtomicPtr, Ordering};
 use itertools::Itertools;
-use core::sync::atomic::{AtomicPtr, AtomicBool, Ordering, spin_loop_hint};
-use core::ptr::{/*null,*/ null_mut};
 
 use atomic::Atomic;
-
 
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Verbosity {
@@ -59,6 +58,12 @@ pub unsafe fn only_reload(p: *const u8) -> u64 {
 pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
     flush(p);
     only_reload(p)
+}
+
+pub unsafe fn reload_and_flush(p: *const u8) -> u64 {
+    let r = only_reload(p);
+    flush(p);
+    r
 }
 
 pub unsafe fn only_flush(p: *const u8) -> u64 {
@@ -272,8 +277,6 @@ fn calibrate_impl_fixed_freq(
     let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
 
-
-
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         Some(cache_slicing(uarch, 8))
     } else {
@@ -446,7 +449,7 @@ pub struct CalibrateResult2T {
     pub helper_core: usize,
     pub res: Result<Vec<CalibrateResult>, nix::Error>, // TODO
 
-    // TODO
+                                                       // TODO
 }
 
 fn wait(turn_lock: &AtomicBool, turn: bool) {
@@ -470,7 +473,15 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
     hist_params: HistParams,
     verbosity_level: Verbosity,
 ) -> Vec<CalibrateResult2T> {
-    calibrate_fixed_freq_2_thread_impl(p, increment, len, cores, operations, hist_params, verbosity_level)
+    calibrate_fixed_freq_2_thread_impl(
+        p,
+        increment,
+        len,
+        cores,
+        operations,
+        hist_params,
+        verbosity_level,
+    )
 }
 
 #[cfg(feature = "use_std")]
@@ -514,14 +525,12 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
 
     let mut ret = Vec::new();
 
-    let helper_thread_params = Arc::new(HelperThreadParams{
+    let helper_thread_params = Arc::new(HelperThreadParams {
         turn: AtomicBool::new(false),
         stop: AtomicBool::new(true),
         op: Atomic::new(operations[0].prepare),
         address: AtomicPtr::new(null_mut()),
     });
-
-
 
     if verbosity_level >= Thresholds {
         print!("CSV: main_core, helper_core, address, ");
@@ -565,47 +574,57 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         // set main thread affinity
 
         if verbosity_level >= Thresholds {
-            println!("Calibration for main_core {}, helper {}.", main_core, helper_core);
+            println!(
+                "Calibration for main_core {}, helper {}.",
+                main_core, helper_core
+            );
         }
 
-        eprintln!("Calibration for main_core {}, helper {}.", main_core, helper_core);
+        eprintln!(
+            "Calibration for main_core {}, helper {}.",
+            main_core, helper_core
+        );
 
         let mut core = CpuSet::new();
         match core.set(main_core) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
-                ret.push(CalibrateResult2T{main_core, helper_core, res:Err(e)});
+                ret.push(CalibrateResult2T {
+                    main_core,
+                    helper_core,
+                    res: Err(e),
+                });
                 continue;
             }
         }
 
         match sched_setaffinity(Pid::from_raw(0), &core) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
-                ret.push(CalibrateResult2T{main_core, helper_core, res:Err(e)});
+                ret.push(CalibrateResult2T {
+                    main_core,
+                    helper_core,
+                    res: Err(e),
+                });
                 continue;
             }
         }
-
 
         helper_thread_params.stop.store(false, Ordering::Relaxed);
         // set up the helper thread
 
         let htp = helper_thread_params.clone();
         let hc = helper_core;
-        let helper_thread = thread::spawn(move || {
-            calibrate_fixed_freq_2_thread_helper(htp, hc)
-        });
+        let helper_thread = thread::spawn(move || calibrate_fixed_freq_2_thread_helper(htp, hc));
 
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
         for i in (0..len).step_by(increment) {
-
             let pointer = unsafe { p.offset(i) };
-            helper_thread_params.address.store(p as *mut u8, Ordering::Relaxed);
-
-
+            helper_thread_params
+                .address
+                .store(pointer as *mut u8, Ordering::Relaxed);
 
             let hash = h.map(|h| h(pointer as usize));
 
@@ -626,8 +645,6 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                 max: vec![0; operations.len()],
             };
             calibrate_result.histogram.reserve(operations.len());
-
-
 
             for op in operations {
                 helper_thread_params.op.store(op.prepare, Ordering::Relaxed);
@@ -718,10 +735,10 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             calibrate_result_vec.push(calibrate_result);
         }
 
-        ret.push(CalibrateResult2T{
+        ret.push(CalibrateResult2T {
             main_core,
             helper_core,
-            res: Ok(calibrate_result_vec)
+            res: Ok(calibrate_result_vec),
         });
         // terminate the thread
         helper_thread_params.stop.store(true, Ordering::Relaxed);
@@ -729,7 +746,6 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         wait(&helper_thread_params.turn, false);
         // join thread.
         helper_thread.join();
-
     }
 
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
@@ -754,17 +770,16 @@ fn calibrate_fixed_freq_2_thread_helper(
     // set thread affinity
     let mut core = CpuSet::new();
     match core.set(helper_core) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_e) => {
             unimplemented!();
         }
     }
 
     match sched_setaffinity(Pid::from_raw(0), &core) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_e) => {
             unimplemented!();
-
         }
     }
 
@@ -778,7 +793,7 @@ fn calibrate_fixed_freq_2_thread_helper(
         // get the relevant parameters
         let addr: *const u8 = params.address.load(Ordering::Relaxed);
         let op = params.op.load(Ordering::Relaxed);
-        unsafe {op(addr)};
+        unsafe { op(addr) };
         // release lock
         next(&params.turn);
     }

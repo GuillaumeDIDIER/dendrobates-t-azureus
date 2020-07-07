@@ -1,12 +1,16 @@
-use core::sync::atomic::{AtomicBool,Ordering};
+use cache_utils::calibration::{
+    calibrate_fixed_freq_2_thread, flush_and_reload, load_and_flush, only_flush, only_reload,
+    reload_and_flush, CalibrateOperation2T, HistParams, Verbosity, CFLUSH_BUCKET_NUMBER,
+    CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER,
+};
+use cache_utils::mmap::MMappedMemory;
+use cache_utils::{flush, maccess, noop};
 use core::sync::atomic::spin_loop_hint;
+use core::sync::atomic::{AtomicBool, Ordering};
+use nix::sched::{sched_getaffinity, CpuSet};
+use nix::unistd::Pid;
 use std::sync::Arc;
 use std::thread;
-use cache_utils::mmap::MMappedMemory;
-use nix::sched::{CpuSet, sched_getaffinity};
-use cache_utils::calibration::{calibrate_fixed_freq_2_thread, CalibrateOperation2T, load_and_flush, HistParams, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, Verbosity, only_flush};
-use cache_utils::{maccess, noop, flush};
-use nix::unistd::Pid;
 
 /*
 fn wait(turn_lock: &AtomicBool, turn: bool) {
@@ -117,54 +121,79 @@ fn main() {
         if pointer as usize & (cache_line_size - 1) != 0 {
             panic!("not aligned nicely");
         }
-        calibrate_fixed_freq_2_thread(pointer,
-                                      64,
-                                      array.len() as isize,
-                                        &mut core_pairs.into_iter(),
-                                      &[
-                                          CalibrateOperation2T {
-                                              prepare: multiple_access,
-                                              op: only_flush,
-                                              name: "clflush_remote_hit",
-                                              display_name: "clflush remote hit",
-                                          },
-                                          CalibrateOperation2T {
-                                              prepare: multiple_access,
-                                              op: load_and_flush,
-                                              name: "clflush_shared_hit",
-                                              display_name: "clflush shared hit",
-                                          },
-                                          CalibrateOperation2T {
-                                              prepare: flush,
-                                              op: only_flush,
-                                              name: "clflush_miss_f",
-                                              display_name: "clflush miss - f",
-                                          },
-                                          CalibrateOperation2T {
-                                              prepare: flush,
-                                              op: load_and_flush,
-                                              name: "clflush_local_hit_f",
-                                              display_name: "clflush local hit - f",
-                                          },
-                                          CalibrateOperation2T {
-                                              prepare: noop::<u8>,
-                                              op: only_flush,
-                                              name: "clflush_miss_n",
-                                              display_name: "clflush miss - n",
-                                          },
-                                          CalibrateOperation2T {
-                                              prepare: noop::<u8>,
-                                              op: load_and_flush,
-                                              name: "clflush_local_hit_n",
-                                              display_name: "clflush local hit - n",
-                                          },
-                                      ],
-                                      HistParams {
-                                          bucket_number: CFLUSH_BUCKET_NUMBER,
-                                          bucket_size: CFLUSH_BUCKET_SIZE,
-                                          iterations: CFLUSH_NUM_ITER,
-                                      },
-                                      verbose_level,
+        calibrate_fixed_freq_2_thread(
+            pointer,
+            64,
+            array.len() as isize,
+            &mut core_pairs.into_iter(),
+            &[
+                CalibrateOperation2T {
+                    prepare: multiple_access,
+                    op: only_flush,
+                    name: "clflush_remote_hit",
+                    display_name: "clflush remote hit",
+                },
+                CalibrateOperation2T {
+                    prepare: multiple_access,
+                    op: load_and_flush,
+                    name: "clflush_shared_hit",
+                    display_name: "clflush shared hit",
+                },
+                CalibrateOperation2T {
+                    prepare: flush,
+                    op: only_flush,
+                    name: "clflush_miss_f",
+                    display_name: "clflush miss - f",
+                },
+                CalibrateOperation2T {
+                    prepare: flush,
+                    op: load_and_flush,
+                    name: "clflush_local_hit_f",
+                    display_name: "clflush local hit - f",
+                },
+                CalibrateOperation2T {
+                    prepare: noop::<u8>,
+                    op: only_flush,
+                    name: "clflush_miss_n",
+                    display_name: "clflush miss - n",
+                },
+                CalibrateOperation2T {
+                    prepare: noop::<u8>,
+                    op: load_and_flush,
+                    name: "clflush_local_hit_n",
+                    display_name: "clflush local hit - n",
+                },
+                CalibrateOperation2T {
+                    prepare: noop::<u8>,
+                    op: flush_and_reload,
+                    name: "reload_miss",
+                    display_name: "reload miss",
+                },
+                CalibrateOperation2T {
+                    prepare: multiple_access,
+                    op: reload_and_flush,
+                    name: "reload_remote_hit",
+                    display_name: "reload remote hit",
+                },
+                CalibrateOperation2T {
+                    prepare: multiple_access,
+                    op: only_reload,
+                    name: "reload_shared_hit",
+                    display_name: "reload shared hit",
+                },
+                CalibrateOperation2T {
+                    prepare: noop::<u8>,
+                    op: only_reload,
+                    name: "reload_local_hit",
+                    display_name: "reload local hit",
+                },
+            ],
+            HistParams {
+                bucket_number: CFLUSH_BUCKET_NUMBER,
+                bucket_size: CFLUSH_BUCKET_SIZE,
+                iterations: CFLUSH_NUM_ITER,
+            },
+            verbose_level,
         );
     }
 }
