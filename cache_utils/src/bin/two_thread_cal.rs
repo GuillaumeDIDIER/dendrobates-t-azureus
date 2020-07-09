@@ -96,17 +96,19 @@ fn main() {
     let mut core_pairs: Vec<(usize, usize)> = Vec::new();
     let mut i = 1;
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
-    while i < CpuSet::count() {
+    /*while i < CpuSet::count() {
         if old.is_set(i).unwrap() {
             core_pairs.push((0, i));
             println!("{},{}", 0, i);
         }
         i = i << 1;
-    }
-    for i in 1..CpuSet::count() {
-        if old.is_set(i).unwrap() {
-            core_pairs.push((i, 0));
-            println!("{},{}", i, 0);
+    }*/
+    for i in 0..CpuSet::count() {
+        for j in 0..CpuSet::count() {
+            if old.is_set(i).unwrap() && old.is_set(j).unwrap() {
+                core_pairs.push((i, j));
+                println!("{},{}", i, j);
+            }
         }
     }
 
@@ -124,7 +126,7 @@ fn main() {
         calibrate_fixed_freq_2_thread(
             pointer,
             64,
-            array.len() as isize,
+            array.len() as isize >> 3,
             &mut core_pairs.into_iter(),
             &[
                 CalibrateOperation2T {
