@@ -610,13 +610,18 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             }
         }
 
-        helper_thread_params.stop.store(false, Ordering::Relaxed);
-        // set up the helper thread
+        let helper_thread = if helper_core != main_core {
+            helper_thread_params.stop.store(false, Ordering::Relaxed);
+            // set up the helper thread
 
-        let htp = helper_thread_params.clone();
-        let hc = helper_core;
-        let helper_thread = thread::spawn(move || calibrate_fixed_freq_2_thread_helper(htp, hc));
-
+            let htp = helper_thread_params.clone();
+            let hc = helper_core;
+            Some(thread::spawn(move || {
+                calibrate_fixed_freq_2_thread_helper(htp, hc)
+            }))
+        } else {
+            None
+        };
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
@@ -646,24 +651,40 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             };
             calibrate_result.histogram.reserve(operations.len());
 
-            for op in operations {
-                helper_thread_params.op.store(op.prepare, Ordering::Relaxed);
-                let mut hist = vec![0; hist_params.bucket_number];
-                for _ in 0..hist_params.iterations {
-                    next(&helper_thread_params.turn);
-                    wait(&helper_thread_params.turn, false);
-                    let _time = unsafe { (op.op)(pointer) };
+            if helper_core != main_core {
+                for op in operations {
+                    helper_thread_params.op.store(op.prepare, Ordering::Relaxed);
+                    let mut hist = vec![0; hist_params.bucket_number];
+                    for _ in 0..hist_params.iterations {
+                        next(&helper_thread_params.turn);
+                        wait(&helper_thread_params.turn, false);
+                        let _time = unsafe { (op.op)(pointer) };
+                    }
+                    for _ in 0..hist_params.iterations {
+                        next(&helper_thread_params.turn);
+                        wait(&helper_thread_params.turn, false);
+                        let time = unsafe { (op.op)(pointer) };
+                        let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
+                        hist[bucket] += 1;
+                    }
+                    calibrate_result.histogram.push(hist);
                 }
-                for _ in 0..hist_params.iterations {
-                    next(&helper_thread_params.turn);
-                    wait(&helper_thread_params.turn, false);
-                    let time = unsafe { (op.op)(pointer) };
-                    let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
-                    hist[bucket] += 1;
+            } else {
+                for op in operations {
+                    let mut hist = vec![0; hist_params.bucket_number];
+                    for _ in 0..hist_params.iterations {
+                        unsafe { (op.prepare)(pointer) };
+                        let _time = unsafe { (op.op)(pointer) };
+                    }
+                    for _ in 0..hist_params.iterations {
+                        unsafe { (op.prepare)(pointer) };
+                        let time = unsafe { (op.op)(pointer) };
+                        let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
+                        hist[bucket] += 1;
+                    }
+                    calibrate_result.histogram.push(hist);
                 }
-                calibrate_result.histogram.push(hist);
             }
-
             let mut sums = vec![0; operations.len()];
 
             let median_thresholds: Vec<u32> = calibrate_result
@@ -740,12 +761,15 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             helper_core,
             res: Ok(calibrate_result_vec),
         });
-        // terminate the thread
-        helper_thread_params.stop.store(true, Ordering::Relaxed);
-        next(&helper_thread_params.turn);
-        wait(&helper_thread_params.turn, false);
-        // join thread.
-        helper_thread.join();
+
+        if helper_core != main_core {
+            // terminate the thread
+            helper_thread_params.stop.store(true, Ordering::Relaxed);
+            next(&helper_thread_params.turn);
+            wait(&helper_thread_params.turn, false);
+            // join thread.
+            helper_thread.unwrap().join();
+        }
     }
 
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
