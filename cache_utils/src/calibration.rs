@@ -3,7 +3,7 @@
 use crate::complex_addressing::cache_slicing;
 use crate::{flush, maccess, rdtsc_fence};
 
-use cpuid::MicroArchitecture;
+use cpuid::{CPUVendor, MicroArchitecture};
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]
@@ -278,14 +278,24 @@ fn calibrate_impl_fixed_freq(
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
 
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
-        Some(cache_slicing(uarch, 8))
+        if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
+            Some(cache_slicing(
+                uarch,
+                8,
+                vendor_family_model_stepping.0,
+                vendor_family_model_stepping.1,
+                vendor_family_model_stepping.2,
+            ))
+        } else {
+            None
+        }
     } else {
         None
     };
 
     let h = if let Some(s) = slicing {
         if s.can_hash() {
-            Some(|addr: usize| -> usize { slicing.unwrap().hash(addr).unwrap() })
+            Some(|addr: usize| -> u8 { slicing.unwrap().hash(addr).unwrap() })
         } else {
             None
         }
@@ -508,14 +518,24 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
 
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
-        Some(cache_slicing(uarch, 8))
+        if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
+            Some(cache_slicing(
+                uarch,
+                8,
+                vendor_family_model_stepping.0,
+                vendor_family_model_stepping.1,
+                vendor_family_model_stepping.2,
+            ))
+        } else {
+            None
+        }
     } else {
         None
     };
 
     let h = if let Some(s) = slicing {
         if s.can_hash() {
-            Some(|addr: usize| -> usize { slicing.unwrap().hash(addr).unwrap() })
+            Some(|addr: usize| -> u8 { slicing.unwrap().hash(addr).unwrap() })
         } else {
             None
         }
