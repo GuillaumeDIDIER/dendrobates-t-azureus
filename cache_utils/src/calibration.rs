@@ -674,10 +674,12 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                     let mut hist = vec![0; hist_params.bucket_number];
                     for _ in 0..hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
+                        unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let _time = unsafe { (op.op)(pointer) };
                     }
                     for _ in 0..hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
+                        unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let time = unsafe { (op.op)(pointer) };
                         let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
                         hist[bucket] += 1;
