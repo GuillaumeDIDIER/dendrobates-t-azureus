@@ -4,6 +4,8 @@ use crate::complex_addressing::CacheSlicing::{
 use cpuid::{CPUVendor, MicroArchitecture};
 
 #[cfg(feature = "no_std")]
+use alloc::collections::VecDeque;
+#[cfg(feature = "no_std")]
 use hashbrown::HashMap;
 #[cfg(feature = "no_std")]
 use hashbrown::HashSet;
@@ -12,6 +14,7 @@ use hashbrown::HashSet;
 use std::collections::HashMap;
 #[cfg(feature = "use_std")]
 use std::collections::HashSet;
+#[cfg(feature = "use_std")]
 use std::collections::VecDeque;
 
 #[derive(Debug, Copy, Clone)]
@@ -165,8 +168,10 @@ impl CacheSlicing {
                         if found_pivot {
                             for j in 0..matrix.len() {
                                 if j != i {
-                                    matrix[j].0 ^= matrix[i].0;
-                                    matrix[j].1 ^= matrix[i].1;
+                                    if bit & matrix[j].0 != 0 {
+                                        matrix[j].0 ^= matrix[i].0;
+                                        matrix[j].1 ^= matrix[i].1;
+                                    }
                                 }
                             }
                             i += 1;
@@ -189,8 +194,8 @@ impl CacheSlicing {
 
     pub fn image(&self, mask: usize) -> Option<HashSet<u8>> {
         match self {
-            ComplexAddressing(functions) => {
-                let mut matrix = self.pivot(mask);
+            ComplexAddressing(_functions) => {
+                let matrix = self.pivot(mask);
 
                 let mut result = HashSet::<u8>::new();
                 result.insert(0);
@@ -210,7 +215,7 @@ impl CacheSlicing {
 
     pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<u8, usize>> {
         match self {
-            ComplexAddressing(functions) => {
+            ComplexAddressing(_functions) => {
                 let matrix = self.pivot(mask);
                 let mut result = HashMap::new();
                 for (slice, addr) in matrix {
