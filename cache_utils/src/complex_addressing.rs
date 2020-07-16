@@ -12,6 +12,7 @@ use hashbrown::HashSet;
 use std::collections::HashMap;
 #[cfg(feature = "use_std")]
 use std::collections::HashSet;
+use std::collections::VecDeque;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimpleAddressingParams {
@@ -26,6 +27,8 @@ pub enum CacheSlicing {
     SimpleAddressing(SimpleAddressingParams),
     NoSlice,
 }
+
+/// Function known to be used on most powers of 2 core processors from Sandy Bridge to Skylake
 const SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS: [usize; 4] = [
     0b0110_1101_0111_1101_0101_1101_0101_0001_000000,
     0b1011_1010_1101_0111_1110_1010_1010_0010_000000,
@@ -33,6 +36,18 @@ const SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS: [usize; 4] = [
     0b0, // TODO
 ];
 
+/// Functions for crystall well
+/// Not able to test bit 34
+/// o0 = b10 b12 b14 b16 b17 b18 b20 b22 b24 b25 b26 b27 b28 b30 b32 b33
+///
+/// o1 = b11 b13 b15 b17 b19 b20 b21 b22 b23 b24 b26 b28 b29 b31 b33
+const CRYSTAL_WELL_FUNCTIONS: [usize; 2] = [
+    0b0000_1101_0111_1101_0101_1101_0101_0000_000000,
+    0b0000_1010_1101_0111_1110_1010_1010_0000_000000,
+];
+
+/// function known to be used on core i9-9900
+#[allow(non_upper_case_globals)]
 const KABYLAKE_i9_FUNCTIONS: [usize; 4] = [
     0b0000_1111_1111_1101_0101_1101_0101_0001_000000,
     0b0000_0110_1111_1011_1010_1100_0100_1000_000000,
@@ -73,8 +88,7 @@ pub fn cache_slicing(
         }
         MicroArchitecture::Haswell => {
             if family_model_display == 0x06_46 {
-                // Crystal Well
-                Unsupported
+                ComplexAddressing(&CRYSTAL_WELL_FUNCTIONS[0..((trailing_zeros) as usize)])
             } else {
                 ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
             }
@@ -112,11 +126,102 @@ impl CacheSlicing {
         }
     }
 
-    pub fn image(&self, mask: usize) -> Option<HashSet<usize>> {
-        None
+    // Only works for Complex Addressing rn
+    // May work in the future for simple.
+    fn pivot(&self, mask: usize) -> Vec<(u8, usize)> {
+        match self {
+            ComplexAddressing(functions) => {
+                let mut matrix = Vec::new();
+
+                let mut i = 1;
+                let mut hashspace = 0;
+                while i != 0 {
+                    if i & mask != 0 {
+                        let h = self.hash(i).unwrap();
+
+                        hashspace |= h;
+                        matrix.push((h, i));
+                    }
+                    i <<= 1;
+                }
+
+                let mut i = 0; // current line in the matrix.
+                let mut bit = 1;
+                while bit != 0 {
+                    if bit & hashspace != 0 {
+                        let mut found_pivot = false;
+                        for j in i..matrix.len() {
+                            if matrix[j].0 & bit != 0 {
+                                found_pivot = true;
+                                if j != i {
+                                    let mi = matrix[i];
+                                    let mj = matrix[j];
+                                    matrix[i] = mj;
+                                    matrix[j] = mi;
+                                }
+                                break;
+                            }
+                        }
+                        if found_pivot {
+                            for j in 0..matrix.len() {
+                                if j != i {
+                                    matrix[j].0 ^= matrix[i].0;
+                                    matrix[j].1 ^= matrix[i].1;
+                                }
+                            }
+                            i += 1;
+                        }
+                    }
+                    bit <<= 1;
+                }
+                while i < matrix.len() {
+                    if matrix[i].0 != 0 {
+                        panic!("Something went wrong with the pivot algorithm")
+                    }
+                    i += 1;
+                }
+
+                matrix
+            }
+            _ => panic!("Should not be called"),
+        }
     }
 
-    pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<usize, usize>> {
-        None
+    pub fn image(&self, mask: usize) -> Option<HashSet<u8>> {
+        match self {
+            ComplexAddressing(functions) => {
+                let mut matrix = self.pivot(mask);
+
+                let mut result = HashSet::<u8>::new();
+                result.insert(0);
+
+                for (u, _) in matrix {
+                    let mut tmp = HashSet::new();
+                    for v in &result {
+                        tmp.insert(v ^ u);
+                    }
+                    result.extend(tmp);
+                }
+                Some(result)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<u8, usize>> {
+        match self {
+            ComplexAddressing(functions) => {
+                let matrix = self.pivot(mask);
+                let mut result = HashMap::new();
+                for (slice, addr) in matrix {
+                    if slice != 0 {
+                        result.insert(slice, addr);
+                    }
+                }
+
+                Some(result)
+            }
+            _ => None,
+        }
     }
 }
