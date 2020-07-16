@@ -5,69 +5,8 @@ use cache_utils::calibration::{
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop};
-use core::sync::atomic::spin_loop_hint;
-use core::sync::atomic::{AtomicBool, Ordering};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
-use std::sync::Arc;
-use std::thread;
-
-/*
-fn wait(turn_lock: &AtomicBool, turn: bool) {
-    while turn_lock.load(Ordering::Acquire) != turn {
-        spin_loop_hint();
-    }
-    assert_eq!(turn_lock.load(Ordering::Relaxed), turn);
-}
-
-fn next(turn_lock: &AtomicBool) {
-    turn_lock.fetch_xor(true, Ordering::Release);
-}
-
-fn ping(turn_lock: &AtomicBool) {
-    wait(turn_lock, false);
-    println!("ping");
-    next(turn_lock);
-}
-
-fn pong_thread(turn_lock: Arc<AtomicBool>, stop: Arc<AtomicBool>) {
-    while pong(&turn_lock, &stop) {
-
-    }
-}
-
-fn pong(turn_lock: &AtomicBool, stop: &AtomicBool) -> bool {
-    wait(turn_lock, true);
-    if stop.load(Ordering::Relaxed) {
-        return false;
-    }
-    println!("pong");
-    next(turn_lock);
-    true
-}
-
-
-
-fn joke() {
-    let turn_counter = Arc::new(AtomicBool::new(false));
-    let stop = Arc::new(AtomicBool::new(false));
-    let tcc = turn_counter.clone();
-    let sc = stop.clone();
-
-    let thread = thread::spawn(|| {
-        pong_thread(tcc, sc)
-    });
-
-    for _ in 0..10 {
-        ping(&turn_counter);
-    }
-    wait(&turn_counter, false);
-    stop.store(true, Ordering::Relaxed);
-    next(&turn_counter);
-    thread.join().unwrap();
-    println!("Okay");
-}
-*/
 
 use core::arch::x86_64 as arch_x86;
 
@@ -94,15 +33,8 @@ fn main() {
 
     // Generate core iterator
     let mut core_pairs: Vec<(usize, usize)> = Vec::new();
-    let mut i = 1;
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
-    /*while i < CpuSet::count() {
-        if old.is_set(i).unwrap() {
-            core_pairs.push((0, i));
-            println!("{},{}", 0, i);
-        }
-        i = i << 1;
-    }*/
+
     for i in 0..CpuSet::count() {
         for j in 0..CpuSet::count() {
             if old.is_set(i).unwrap() && old.is_set(j).unwrap() {
