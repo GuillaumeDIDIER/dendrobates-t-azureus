@@ -497,8 +497,17 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
     cores: &mut I,
     operations: &[CalibrateOperation2T],
     options: CalibrationOptions,
+    core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
-    calibrate_fixed_freq_2_thread_impl(p, increment, len, cores, operations, options)
+    calibrate_fixed_freq_2_thread_impl(
+        p,
+        increment,
+        len,
+        cores,
+        operations,
+        options,
+        core_per_socket,
+    )
 }
 
 // TODO : Add the optimised address support
@@ -512,6 +521,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     cores: &mut I,
     operations: &[CalibrateOperation2T],
     options: CalibrationOptions,
+    core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
     if options.verbosity >= Thresholds {
         println!(
@@ -530,7 +540,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
             Some(cache_slicing(
                 uarch,
-                8,
+                core_per_socket,
                 vendor_family_model_stepping.0,
                 vendor_family_model_stepping.1,
                 vendor_family_model_stepping.2,
