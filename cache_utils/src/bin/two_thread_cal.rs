@@ -9,6 +9,8 @@ use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
+use std::process::Command;
+use std::str::from_utf8;
 
 unsafe fn multiple_access(p: *const u8) {
     maccess::<u8>(p);
@@ -26,6 +28,24 @@ const SIZE: usize = 2 << 20;
 
 fn main() {
     // Grab a slice of memory
+
+    let core_per_socket_out = Command::new("sh")
+        .arg("-c")
+        .arg("lscpu | grep socket | cut -b 22-")
+        .output()
+        .expect("Failed to detect cpu count");
+    //println!("{:#?}", core_per_socket_str);
+
+    let core_per_socket_str = from_utf8(&core_per_socket_out.stdout).unwrap();
+
+    //println!("Number of cores per socket: {}", cps_str);
+
+    let core_per_socket: i32 = core_per_socket_str[0..(core_per_socket_str.len() - 1)]
+        .parse()
+        .unwrap_or(0);
+
+    println!("Number of cores per socket: {}", core_per_socket);
+
     let m = MMappedMemory::new(SIZE);
     let array = m.slice();
 
