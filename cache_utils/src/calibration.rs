@@ -49,6 +49,22 @@ pub struct HistParams {
     pub bucket_number: usize,
 }
 
+pub struct CalibrationOptions {
+    pub hist_params: HistParams,
+    pub verbosity: Verbosity,
+    pub optimised_addresses: bool,
+}
+
+impl CalibrationOptions {
+    pub fn new(hist_params: HistParams, verbosity: Verbosity) -> CalibrationOptions {
+        CalibrationOptions {
+            hist_params,
+            verbosity,
+            optimised_addresses: false,
+        }
+    }
+}
+
 pub unsafe fn only_reload(p: *const u8) -> u64 {
     let t = rdtsc_fence();
     maccess(p);
@@ -480,19 +496,13 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
     len: isize,
     cores: &mut I,
     operations: &[CalibrateOperation2T],
-    hist_params: HistParams,
-    verbosity_level: Verbosity,
+    options: CalibrationOptions,
 ) -> Vec<CalibrateResult2T> {
-    calibrate_fixed_freq_2_thread_impl(
-        p,
-        increment,
-        len,
-        cores,
-        operations,
-        hist_params,
-        verbosity_level,
-    )
+    calibrate_fixed_freq_2_thread_impl(p, increment, len, cores, operations, options)
 }
+
+// TODO : Add the optimised address support
+// TODO : Modularisation / factorisation of some of the common code with the single threaded no_std version ?
 
 #[cfg(feature = "use_std")]
 fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
@@ -501,10 +511,9 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     len: isize,
     cores: &mut I,
     operations: &[CalibrateOperation2T],
-    hist_params: HistParams,
-    verbosity_level: Verbosity,
+    options: CalibrationOptions,
 ) -> Vec<CalibrateResult2T> {
-    if verbosity_level >= Thresholds {
+    if options.verbosity >= Thresholds {
         println!(
             "Calibrating {}...",
             operations
@@ -514,8 +523,8 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         );
     }
 
-    let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
-    let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
+    let to_bucket = |time: u64| -> usize { time as usize / options.hist_params.bucket_size };
+    let from_bucket = |bucket: usize| -> u64 { (bucket * options.hist_params.bucket_size) as u64 };
 
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
@@ -552,7 +561,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         address: AtomicPtr::new(null_mut()),
     });
 
-    if verbosity_level >= Thresholds {
+    if options.verbosity >= Thresholds {
         print!("CSV: main_core, helper_core, address, ");
         if h.is_some() {
             print!("hash, ");
@@ -574,7 +583,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         );
     }
 
-    if verbosity_level >= RawResult {
+    if options.verbosity >= RawResult {
         print!("RESULT:main_core,helper_core,address,");
         if h.is_some() {
             print!("hash,");
@@ -593,7 +602,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     for (main_core, helper_core) in cores {
         // set main thread affinity
 
-        if verbosity_level >= Thresholds {
+        if options.verbosity >= Thresholds {
             println!(
                 "Calibration for main_core {}, helper {}.",
                 main_core, helper_core
@@ -653,7 +662,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
 
             let hash = h.map(|h| h(pointer as usize));
 
-            if verbosity_level >= Thresholds {
+            if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);
                 if let Some(h) = hash {
                     print!(" (hash: {:x})", h)
@@ -674,34 +683,34 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             if helper_core != main_core {
                 for op in operations {
                     helper_thread_params.op.store(op.prepare, Ordering::Relaxed);
-                    let mut hist = vec![0; hist_params.bucket_number];
-                    for _ in 0..hist_params.iterations {
+                    let mut hist = vec![0; options.hist_params.bucket_number];
+                    for _ in 0..options.hist_params.iterations {
                         next(&helper_thread_params.turn);
                         wait(&helper_thread_params.turn, false);
                         let _time = unsafe { (op.op)(pointer) };
                     }
-                    for _ in 0..hist_params.iterations {
+                    for _ in 0..options.hist_params.iterations {
                         next(&helper_thread_params.turn);
                         wait(&helper_thread_params.turn, false);
                         let time = unsafe { (op.op)(pointer) };
-                        let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
+                        let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
                     calibrate_result.histogram.push(hist);
                 }
             } else {
                 for op in operations {
-                    let mut hist = vec![0; hist_params.bucket_number];
-                    for _ in 0..hist_params.iterations {
+                    let mut hist = vec![0; options.hist_params.bucket_number];
+                    for _ in 0..options.hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let _time = unsafe { (op.op)(pointer) };
                     }
-                    for _ in 0..hist_params.iterations {
+                    for _ in 0..options.hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let time = unsafe { (op.op)(pointer) };
-                        let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
+                        let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
                     calibrate_result.histogram.push(hist);
@@ -712,11 +721,13 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
             let median_thresholds: Vec<u32> = calibrate_result
                 .histogram
                 .iter()
-                .map(|h| (hist_params.iterations - h[hist_params.bucket_number - 1]) / 2)
+                .map(|h| {
+                    (options.hist_params.iterations - h[options.hist_params.bucket_number - 1]) / 2
+                })
                 .collect();
 
-            for j in 0..hist_params.bucket_number - 1 {
-                if verbosity_level >= RawResult {
+            for j in 0..options.hist_params.bucket_number - 1 {
+                if options.verbosity >= RawResult {
                     print!("RESULT:{},{},{:p},", main_core, helper_core, pointer);
                     if let Some(h) = hash {
                         print!("{:x},", h);
@@ -730,7 +741,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                     let max = &mut calibrate_result.max[op];
                     let med = &mut calibrate_result.median[op];
                     let sum = &mut sums[op];
-                    if verbosity_level >= RawResult {
+                    if options.verbosity >= RawResult {
                         print!(",{}", hist);
                     }
 
@@ -750,11 +761,11 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                         }
                     }
                 }
-                if verbosity_level >= RawResult {
+                if options.verbosity >= RawResult {
                     println!();
                 }
             }
-            if verbosity_level >= Thresholds {
+            if options.verbosity >= Thresholds {
                 for (j, op) in operations.iter().enumerate() {
                     println!(
                         "{}: min {}, median {}, max {}",

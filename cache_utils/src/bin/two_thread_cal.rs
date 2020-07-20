@@ -1,7 +1,7 @@
 use cache_utils::calibration::{
     calibrate_fixed_freq_2_thread, flush_and_reload, load_and_flush, only_flush, only_reload,
-    reload_and_flush, CalibrateOperation2T, HistParams, Verbosity, CFLUSH_BUCKET_NUMBER,
-    CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER,
+    reload_and_flush, CalibrateOperation2T, CalibrationOptions, HistParams, Verbosity,
+    CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop};
@@ -122,12 +122,15 @@ fn main() {
                     display_name: "reload local hit",
                 },
             ],
-            HistParams {
-                bucket_number: CFLUSH_BUCKET_NUMBER,
-                bucket_size: CFLUSH_BUCKET_SIZE,
-                iterations: CFLUSH_NUM_ITER,
+            CalibrationOptions {
+                hist_params: HistParams {
+                    bucket_number: CFLUSH_BUCKET_NUMBER,
+                    bucket_size: CFLUSH_BUCKET_SIZE,
+                    iterations: CFLUSH_NUM_ITER,
+                },
+                verbosity: verbose_level,
+                optimised_addresses: true,
             },
-            verbose_level,
         );
     }
 }
