@@ -29,7 +29,7 @@ use dendrobates_tinctoreus_azureus::memory;
 use vga_buffer::{set_colors, Color, ForegroundColor};
 use x86_64::structures::paging::frame::PhysFrameRange;
 use x86_64::structures::paging::{
-    Mapper, MapperAllSizes, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB, UnusedPhysFrame,
+    Mapper, MapperAllSizes, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB,
 };
 use x86_64::PhysAddr;
 use x86_64::VirtAddr;
@@ -56,8 +56,11 @@ fn distance<T: Sub<Output = T> + Ord>(a: T, b: T) -> T {
     }
 }
 
-const victim4k_start: u64 = 0x0ccc_0000_0000_u64;
-const victim4k_end: u64 = victim4k_start + (1 << 21);
+// 4k with metric suffix is not capitalized.
+#[allow(non_upper_case_globals)]
+const VICTIM_4k_START: u64 = 0x0ccc_0000_0000_u64;
+#[allow(non_upper_case_globals)]
+const VICTIM_4k_END: u64 = VICTIM_4k_START + (1 << 21);
 entry_point!(kernel_main);
 
 // Kernel entry point
@@ -167,7 +170,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         serial_println!("{:?} -> {:?}", virt, phys);
     }
     */
-    for (page, frame) in (victim4k_start..victim4k_end)
+    for (page, frame) in (VICTIM_4k_START..VICTIM_4k_END)
         .step_by(Size4KiB::SIZE as usize)
         .zip(PhysFrameRange {
             start: PhysFrame::containing_address(PhysAddr::new(victim.range.start_addr())),
@@ -175,15 +178,16 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         })
     {
         //serial_println!("Mapping page {:x} on frame {:?}", page, frame);
-        unsafe {mapper
-            .map_to(
+        unsafe {
+            mapper.map_to(
                 Page::<Size4KiB>::containing_address(VirtAddr::new(page)),
                 frame,
                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
                 &mut frame_allocator,
-            )}
-            .expect("Failed to map the experiment buffer")
-            .flush();
+            )
+        }
+        .expect("Failed to map the experiment buffer")
+        .flush();
         let phys = mapper.translate_addr(VirtAddr::new(page));
         /*serial_println!(
             "Mapped page {:p}({:?}) on frame {:?}",
@@ -224,7 +228,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let threshold_access_p = cache_utils::calibration::calibrate_access(unsafe {
         arrayref::array_ref![
-            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            core::slice::from_raw_parts(VICTIM_4k_START as *mut u8, 4096),
             0,
             4096
         ]
@@ -232,7 +236,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let flush_result_p = cache_utils::calibration::calibrate_flush(
         unsafe {
             arrayref::array_ref![
-                core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+                core::slice::from_raw_parts(VICTIM_4k_START as *mut u8, 4096),
                 0,
                 4096
             ]
@@ -244,7 +248,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Prefetcher disabled");
     let threshold_access = cache_utils::calibration::calibrate_access(unsafe {
         arrayref::array_ref![
-            core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+            core::slice::from_raw_parts(VICTIM_4k_START as *mut u8, 4096),
             0,
             4096
         ]
@@ -252,7 +256,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let flush_resut = cache_utils::calibration::calibrate_flush(
         unsafe {
             arrayref::array_ref![
-                core::slice::from_raw_parts(victim4k_start as *mut u8, 4096),
+                core::slice::from_raw_parts(VICTIM_4k_START as *mut u8, 4096),
                 0,
                 4096
             ]
@@ -271,10 +275,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("0");
     let r_no_prefetch = unsafe {
         prefetcher_fun(
-            victim4k_start as *mut u8,
-            unsafe {
-                (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize)
-            },
+            VICTIM_4k_START as *mut u8,
+            (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize),
             threshold_flush,
         )
     };
@@ -282,10 +284,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     enable_prefetchers(true);
     let r_prefetch = unsafe {
         prefetcher_fun(
-            victim4k_start as *mut u8,
-            unsafe {
-                (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize)
-            },
+            VICTIM_4k_START as *mut u8,
+            (victim.range.start_addr() as *mut u8).offset(phys_mem_offset.as_u64() as isize),
             threshold_flush,
         )
     };
