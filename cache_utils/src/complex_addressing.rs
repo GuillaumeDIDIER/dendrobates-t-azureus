@@ -3,8 +3,12 @@ use crate::complex_addressing::CacheSlicing::{
 };
 use cpuid::{CPUVendor, MicroArchitecture};
 
+extern crate alloc;
+
 #[cfg(feature = "no_std")]
 use alloc::collections::VecDeque;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
 #[cfg(feature = "no_std")]
 use hashbrown::HashMap;
 #[cfg(feature = "no_std")]
@@ -224,6 +228,28 @@ impl CacheSlicing {
                     }
                 }
 
+                Some(result)
+            }
+            _ => None,
+        }
+    }
+    pub fn image_antecedent(&self, mask: usize) -> Option<HashMap<u8, usize>> {
+        match self {
+            ComplexAddressing(_functions) => {
+                let matrix = self.pivot(mask);
+
+                let mut result = HashMap::<u8, usize>::new();
+                result.insert(0, 0);
+
+                for (slice_u, addr_u) in matrix {
+                    if (slice_u != 0) {
+                        let mut tmp = HashMap::new();
+                        for (slice_v, addr_v) in &result {
+                            tmp.insert(slice_v ^ slice_u, addr_v ^ addr_u);
+                        }
+                        result.extend(tmp);
+                    }
+                }
                 Some(result)
             }
             _ => None,

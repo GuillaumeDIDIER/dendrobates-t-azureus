@@ -16,6 +16,7 @@ pub fn main() {
             );
             println!("{:?}", slicing.image((1 << 12) - 1));
             println!("{:?}", slicing.kernel_compl_basis((1 << 12) - 1));
+            println!("{:?}", slicing.image_antecedent((1 << 12) - 1));
         }
     }
 }
