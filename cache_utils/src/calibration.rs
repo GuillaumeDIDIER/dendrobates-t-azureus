@@ -664,7 +664,17 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
-        for i in (0..len).step_by(increment) {
+        let image_antecedent = match slicing {
+            Some(s) => s.image_antecedent(len as usize - 1),
+            None => None,
+        };
+
+        let offsets: Box<dyn Iterator<Item = isize>> = match image_antecedent {
+            Some(ima) => Box::new(ima.into_iter().map(|(_k, v)| v)),
+            None => Box::new((0..len as isize).step_by(increment)),
+        };
+
+        for i in offsets {
             let pointer = unsafe { p.offset(i) };
             helper_thread_params
                 .address

@@ -135,7 +135,7 @@ impl CacheSlicing {
 
     // Only works for Complex Addressing rn
     // May work in the future for simple.
-    fn pivot(&self, mask: usize) -> Vec<(u8, usize)> {
+    fn pivot(&self, mask: isize) -> Vec<(u8, isize)> {
         match self {
             ComplexAddressing(functions) => {
                 let mut matrix = Vec::new();
@@ -144,7 +144,7 @@ impl CacheSlicing {
                 let mut hashspace = 0;
                 while i != 0 {
                     if i & mask != 0 {
-                        let h = self.hash(i).unwrap();
+                        let h = self.hash(i as usize).unwrap();
 
                         hashspace |= h;
                         matrix.push((h, i));
@@ -199,7 +199,7 @@ impl CacheSlicing {
     pub fn image(&self, mask: usize) -> Option<HashSet<u8>> {
         match self {
             ComplexAddressing(_functions) => {
-                let matrix = self.pivot(mask);
+                let matrix = self.pivot(mask as isize);
 
                 let mut result = HashSet::<u8>::new();
                 result.insert(0);
@@ -217,10 +217,10 @@ impl CacheSlicing {
         }
     }
 
-    pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<u8, usize>> {
+    pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<u8, isize>> {
         match self {
             ComplexAddressing(_functions) => {
-                let matrix = self.pivot(mask);
+                let matrix = self.pivot(mask as isize);
                 let mut result = HashMap::new();
                 for (slice, addr) in matrix {
                     if slice != 0 {
@@ -233,12 +233,12 @@ impl CacheSlicing {
             _ => None,
         }
     }
-    pub fn image_antecedent(&self, mask: usize) -> Option<HashMap<u8, usize>> {
+    pub fn image_antecedent(&self, mask: usize) -> Option<HashMap<u8, isize>> {
         match self {
             ComplexAddressing(_functions) => {
-                let matrix = self.pivot(mask);
+                let matrix = self.pivot(mask as isize);
 
-                let mut result = HashMap::<u8, usize>::new();
+                let mut result = HashMap::<u8, isize>::new();
                 result.insert(0, 0);
 
                 for (slice_u, addr_u) in matrix {
