@@ -520,7 +520,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     len: isize,
     cores: &mut I,
     operations: &[CalibrateOperation2T],
-    options: CalibrationOptions,
+    mut options: CalibrationOptions,
     core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
     if options.verbosity >= Thresholds {
@@ -533,8 +533,10 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         );
     }
 
-    let to_bucket = |time: u64| -> usize { time as usize / options.hist_params.bucket_size };
-    let from_bucket = |bucket: usize| -> u64 { (bucket * options.hist_params.bucket_size) as u64 };
+    let bucket_size = options.hist_params.bucket_size;
+
+    let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
+    let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
 
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
@@ -607,6 +609,14 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         );
     }
 
+    let image_antecedent = match slicing {
+        Some(s) => s.image_antecedent(len as usize - 1),
+        None => None,
+    };
+    if image_antecedent.is_some() {
+        options.hist_params.iterations *= 1024;
+    }
+
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
     for (main_core, helper_core) in cores {
@@ -664,13 +674,8 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
-        let image_antecedent = match slicing {
-            Some(s) => s.image_antecedent(len as usize - 1),
-            None => None,
-        };
-
         let offsets: Box<dyn Iterator<Item = isize>> = match image_antecedent {
-            Some(ima) => Box::new(ima.into_iter().map(|(_k, v)| v)),
+            Some(ref ima) => Box::new(ima.values().copied()),
             None => Box::new((0..len as isize).step_by(increment)),
         };
 
