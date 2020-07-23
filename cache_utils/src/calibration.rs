@@ -510,6 +510,8 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
     )
 }
 
+const OPTIMISED_ADDR_ITER_FACTOR: u32 = 64;
+
 // TODO : Add the optimised address support
 // TODO : Modularisation / factorisation of some of the common code with the single threaded no_std version ?
 
@@ -614,7 +616,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         None => None,
     };
     if image_antecedent.is_some() {
-        options.hist_params.iterations *= 1024;
+        options.hist_params.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
     }
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
