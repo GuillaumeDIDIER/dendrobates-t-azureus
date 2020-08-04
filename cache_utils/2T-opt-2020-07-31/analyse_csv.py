@@ -15,7 +15,7 @@ def convert64(x):
 def convert8(x):
     return np.int8(int(x, base=16))
 
-df = pd.read_csv(sys.argv[1],
+df = pd.read_csv(sys.argv[1] + "-result_lite.csv.bz2",
         dtype={
             "main_core": np.int8,
             "helper_core": np.int8,
@@ -122,7 +122,7 @@ stats["clflush_remote_hit"] = hit_remote.values
 stats["clflush_local_hit_n"] = hit_local.values
 stats["clflush_shared_hit"] = hit_shared.values
 
-stats.to_csv(sys.argv[1] + ".stats", index=False)
+stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 
 print(stats.to_string())
 
