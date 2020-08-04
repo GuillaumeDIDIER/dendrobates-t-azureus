@@ -1,6 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
 
-use crate::complex_addressing::cache_slicing;
+use crate::complex_addressing::{cache_slicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
 
 use cpuid::{CPUVendor, MicroArchitecture};
@@ -234,11 +234,11 @@ pub fn calibrate_flush(
 
 #[derive(Debug)]
 pub struct CalibrateResult {
-    offset: isize,
-    histogram: Vec<Vec<u32>>,
-    median: Vec<u64>,
-    min: Vec<u64>,
-    max: Vec<u64>,
+    pub offset: isize,
+    pub histogram: Vec<Vec<u32>>,
+    pub median: Vec<u64>,
+    pub min: Vec<u64>,
+    pub max: Vec<u64>,
 }
 
 pub struct CalibrateOperation<'a> {
@@ -293,6 +293,7 @@ fn calibrate_impl_fixed_freq(
     let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
 
+    // FIXME : Core per socket
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
             Some(cache_slicing(
@@ -510,7 +511,25 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
     )
 }
 
-const OPTIMISED_ADDR_ITER_FACTOR: u32 = 64;
+pub fn get_cache_slicing(core_per_socket: u8) -> Option<CacheSlicing> {
+    if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
+        if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
+            Some(cache_slicing(
+                uarch,
+                core_per_socket,
+                vendor_family_model_stepping.0,
+                vendor_family_model_stepping.1,
+                vendor_family_model_stepping.2,
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+const OPTIMISED_ADDR_ITER_FACTOR: u32 = 16;
 
 // TODO : Add the optimised address support
 // TODO : Modularisation / factorisation of some of the common code with the single threaded no_std version ?
@@ -540,21 +559,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
     let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
 
-    let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
-        if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
-            Some(cache_slicing(
-                uarch,
-                core_per_socket,
-                vendor_family_model_stepping.0,
-                vendor_family_model_stepping.1,
-                vendor_family_model_stepping.2,
-            ))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let slicing = get_cache_slicing(core_per_socket);
 
     let h = if let Some(s) = slicing {
         if s.can_hash() {
