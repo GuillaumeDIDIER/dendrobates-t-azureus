@@ -9,13 +9,29 @@ from functools import partial
 
 import sys
 
+# For cyber cobay sanity check :
+from gmpy2 import popcount
+functions_i9_9900 = [
+             0b1111111111010101110101010001000000,
+             0b0110111110111010110001001000000000,
+             0b1111111000011111110010110000000000]
+
+
+def complex_hash(addr):
+    r = 0
+    for f in reversed(functions_i9_9900):
+        r <<= 1
+        r |= (popcount(f & addr) & 1)
+    return r
+
+
 def convert64(x):
     return np.int64(int(x, base=16))
 
 def convert8(x):
     return np.int8(int(x, base=16))
 
-df = pd.read_csv(sys.argv[1] + "-result_lite.csv.bz2",
+df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
         dtype={
             "main_core": np.int8,
             "helper_core": np.int8,
@@ -58,6 +74,10 @@ sample_flush_columns = [
 ]
 print(df.columns)
 #df["Hash"] = df["Addr"].apply(lambda x: (x >> 15)&0x3)
+
+addresses = df["address"].unique()
+print(addresses)
+print(*[bin(a) for a in addresses], sep='\n')
 
 print(df.head())
 
@@ -124,7 +144,7 @@ stats["clflush_shared_hit"] = hit_shared.values
 
 stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 
-print(stats.to_string())
+#print(stats.to_string())
 
 plt.show()
 exit(0)

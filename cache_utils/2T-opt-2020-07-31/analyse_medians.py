@@ -75,6 +75,12 @@ graph_upper_miss = int(((max_time_miss + 9) // 10) * 10)
 
 print("Graphing from {} to {}".format(graph_lower_miss, graph_upper_miss))
 
+g_ = sns.FacetGrid(stats, col="main_core_fixed", row="slice_group")
+
+g_.map(sns.distplot, 'clflush_miss_n', bins=range(graph_lower_miss, graph_upper_miss), color="b")
+#g.map(sns.scatterplot, 'slice_group', 'clflush_local_hit_n', color="g")
+plt.show()
+
 g = sns.FacetGrid(stats, row="main_core_fixed")
 
 g.map(sns.scatterplot, 'slice_group', 'clflush_miss_n', color="b")
