@@ -55,7 +55,7 @@ const CRYSTAL_WELL_FUNCTIONS: [usize; 2] = [
 
 /// function known to be used on core i9-9900
 #[allow(non_upper_case_globals)]
-const KABYLAKE_i9_FUNCTIONS: [usize; 4] = [
+const COFFEELAKE_R_i9_FUNCTIONS: [usize; 4] = [
     0b0000_1111_1111_1101_0101_1101_0101_0001_000000,
     0b0000_0110_1111_1011_1010_1100_0100_1000_000000,
     0b0000_1111_1110_0001_1111_1100_1011_0000_000000,
@@ -80,11 +80,17 @@ pub fn cache_slicing(
     }
 
     match uarch {
-        MicroArchitecture::Skylake | MicroArchitecture::CoffeeLake => {
+        MicroArchitecture::KabyLake | MicroArchitecture::Skylake => {
             ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
         }
-        MicroArchitecture::KabyLake => {
-            ComplexAddressing(&KABYLAKE_i9_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
+        MicroArchitecture::CoffeeLake => {
+            if family_model_display == 0x6_9E {
+                ComplexAddressing(&COFFEELAKE_R_i9_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
+            } else {
+                ComplexAddressing(
+                    &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
+                )
+            }
         }
         MicroArchitecture::SandyBridge
         | MicroArchitecture::HaswellE
