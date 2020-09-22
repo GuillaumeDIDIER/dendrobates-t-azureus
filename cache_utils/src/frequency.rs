@@ -24,10 +24,10 @@ extern "C" {
 #[cfg(all(target_os = "linux", feature = "use_std"))]
 pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
     // TODO Add memorization
-    return match unsafe { sched_getcpu() }.try_into() {
+    match unsafe { sched_getcpu() }.try_into() {
         Ok(cpu) => Ok(unsafe { cpufreq_get_freq_kernel(cpu) }),
         Err(e) => Err(Unimplemented),
-    };
+    }
 }
 
 #[cfg(not(all(target_os = "linux", feature = "use_std")))]
@@ -35,7 +35,6 @@ pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
     // TODO Add memorization
     Err(UnsupportedPlatform)
 }
-
 
 pub fn get_frequency() -> Result<u64, Error> {
     if cfg!(target_os = "linux") && cfg!(feature = "use_std") {
@@ -71,5 +70,5 @@ pub fn get_frequency_change_period(period: u64) -> Result<u64, Error> {
             }
         }
     }
-    return Ok(t / period);
+    Ok(t / period)
 }

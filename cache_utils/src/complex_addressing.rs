@@ -184,11 +184,9 @@ impl CacheSlicing {
                         }
                         if found_pivot {
                             for j in 0..matrix.len() {
-                                if j != i {
-                                    if bit & matrix[j].0 != 0 {
-                                        matrix[j].0 ^= matrix[i].0;
-                                        matrix[j].1 ^= matrix[i].1;
-                                    }
+                                if j != i && bit & matrix[j].0 != 0 {
+                                    matrix[j].0 ^= matrix[i].0;
+                                    matrix[j].1 ^= matrix[i].1;
                                 }
                             }
                             i += 1;

@@ -68,10 +68,16 @@ pub trait SimpleCacheSideChannel {
 
 pub trait TableCacheSideChannel {
     //type ChannelFatalError: Debug;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn calibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), ChannelFatalError>;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn attack<'a, 'b>(
         &'a mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
@@ -81,10 +87,18 @@ pub trait TableCacheSideChannel {
 
 pub trait SingleAddrCacheSideChannel: Debug {
     //type SingleChannelFatalError: Debug;
-
+    /// # Safety
+    ///
+    /// addr must be a valid pointer to read.
     unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError>;
+    /// # Safety
+    ///
+    /// addr must be a valid pointer to read.
     unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError>;
     fn victim_single(&mut self, operation: &dyn Fn());
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn calibrate_single(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
@@ -94,15 +108,26 @@ pub trait SingleAddrCacheSideChannel: Debug {
 pub trait MultipleAddrCacheSideChannel: Debug {
     //type MultipleChannelFatalError: Debug;
 
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn test(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError>;
+
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn prepare(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), SideChannelError>;
     fn victim(&mut self, operation: &dyn Fn());
+
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn calibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
@@ -196,6 +221,9 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel for T {
     }
     //type ChannelFatalError = T::MultipleChannelFatalError;
 
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
     unsafe fn attack<'a, 'b, 'c>(
         &'a mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
@@ -233,14 +261,10 @@ pub struct AESTTableParams<'a> {
     pub te: [isize; 4],
 }
 
+/// # Safety
+///
+/// te need to refer to the correct t tables offset in the openssl library at path.
 pub unsafe fn attack_t_tables_poc(
-    side_channel: &mut impl TableCacheSideChannel,
-    parameters: AESTTableParams,
-) {
-    attack_t_tables_poc_impl(side_channel, parameters)
-}
-
-fn attack_t_tables_poc_impl(
     side_channel: &mut impl TableCacheSideChannel,
     parameters: AESTTableParams,
 ) {

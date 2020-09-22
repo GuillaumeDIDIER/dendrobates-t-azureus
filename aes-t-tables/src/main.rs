@@ -86,7 +86,7 @@ fn get_vpn<T>(p: *const T) -> usize {
     (p as usize) & (!(PAGE_LEN - 1)) // FIXME
 }
 
-fn cum_sum(vector: &Vec<u32>) -> Vec<u32> {
+fn cum_sum(vector: &[u32]) -> Vec<u32> {
     let len = vector.len();
     let mut res = vec![0; len];
     res[0] = vector[0];
@@ -160,7 +160,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         let mut pages = HashMap::<VPN, HashSet<*const u8>>::new();
         for addr in addresses {
             let page = get_vpn(addr);
-            pages.entry(page).or_insert(HashSet::new()).insert(addr);
+            pages.entry(page).or_insert_with(HashSet::new).insert(addr);
         }
 
         let core_per_socket = find_core_per_socket();
@@ -315,9 +315,9 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
                             // insert in per_core
                             if per_core
                                 .entry(core)
-                                .or_insert(HashMap::new())
+                                .or_insert_with(HashMap::new)
                                 .entry(page)
-                                .or_insert(HashMap::new())
+                                .or_insert_with(HashMap::new)
                                 .insert(
                                     slice,
                                     (
@@ -360,7 +360,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         println!("Best core: {}, rate: {}", best_core, best_error_rate);
         let tmp = per_core.remove(&best_core).unwrap();
         for (page, per_page) in tmp {
-            let page_entry = thresholds.entry(page).or_insert(HashMap::new());
+            let page_entry = thresholds.entry(page).or_insert_with(HashMap::new);
             for (slice, per_slice) in per_page {
                 println!(
                     "page: {:x}, slice: {}, threshold: {:?}, error_rate: {}",
