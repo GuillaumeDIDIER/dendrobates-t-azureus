@@ -6,6 +6,7 @@ version = "0.1.0"
 dependencies = [
  "cache_utils 0.1.0",
  "memmap2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nix 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl 0.10.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "openssl-sys 0.9.58 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",

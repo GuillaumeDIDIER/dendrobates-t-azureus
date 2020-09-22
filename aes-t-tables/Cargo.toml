@@ -12,3 +12,4 @@ openssl = "0.10.30"
 cache_utils = { path = "../cache_utils" }
 memmap2 = "0.1.0"
 rand = "0.7.3"
+nix = "0.17.0"
