@@ -9,29 +9,13 @@ from functools import partial
 
 import sys
 
-# For cyber cobay sanity check :
-from gmpy2 import popcount
-functions_i9_9900 = [
-             0b1111111111010101110101010001000000,
-             0b0110111110111010110001001000000000,
-             0b1111111000011111110010110000000000]
-
-
-def complex_hash(addr):
-    r = 0
-    for f in reversed(functions_i9_9900):
-        r <<= 1
-        r |= (popcount(f & addr) & 1)
-    return r
-
-
 def convert64(x):
     return np.int64(int(x, base=16))
 
 def convert8(x):
     return np.int8(int(x, base=16))
 
-df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
+df = pd.read_csv(sys.argv[1],
         dtype={
             "main_core": np.int8,
             "helper_core": np.int8,
@@ -72,37 +56,8 @@ sample_flush_columns = [
     "clflush_miss_n",
     "clflush_local_hit_n",
 ]
-
-
-slice_mapping = pd.read_csv(sys.argv[1] + ".slices.csv")
-core_mapping = pd.read_csv(sys.argv[1] + ".cores.csv")
-
-def remap_core(key):
-    def remap(core):
-        remapped = core_mapping.iloc[core]
-        return remapped[key]
-
-    return remap
-
-
-df["main_socket"] = df["main_core"].apply(remap_core("socket"))
-df["main_core_fixed"] = df["main_core"].apply(remap_core("core"))
-df["main_ht"] = df["main_core"].apply(remap_core("hthread"))
-df["helper_socket"] = df["helper_core"].apply(remap_core("socket"))
-df["helper_core_fixed"] = df["helper_core"].apply(remap_core("core"))
-df["helper_ht"] = df["helper_core"].apply(remap_core("hthread"))
-
-# slice_mapping = {3: 0, 1: 1, 2: 2, 0: 3}
-
-df["slice_group"] = df["hash"].apply(lambda h: slice_mapping["slice_group"].iloc[h])
-
-
 print(df.columns)
 #df["Hash"] = df["Addr"].apply(lambda x: (x >> 15)&0x3)
-
-addresses = df["address"].unique()
-print(addresses)
-print(*[bin(a) for a in addresses], sep='\n')
 
 print(df.head())
 
@@ -147,38 +102,25 @@ g2.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_loc
 
 # g.map(sns.distplot, "time", hist_kws={"weights": df["clflush_hit"]}, kde=False)
 
-#plt.show()
+plt.show()
 #plt.figure()
 
-df_mcf6 = df[df["main_core_fixed"] == 6]
-df_mcf6_slg7 = df_mcf6[df_mcf6["slice_group"] == 7]
-g3 = sns.FacetGrid(df_mcf6_slg7, row="helper_core_fixed", col="main_ht")
-g3.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
 
-g4 = sns.FacetGrid(df_mcf6_slg7, row="helper_core_fixed", col="helper_ht")
-g4.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
+exit(0)
 
 def stat(x, key):
-    return wq.median(x["time"], x[key])
+    return wq.median(x["Time"], x[key])
 
 
-miss = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_miss_n")
-hit_remote = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_remote_hit")
-hit_local = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_local_hit_n")
-hit_shared = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_shared_hit")
-
+miss = df.groupby(["Core", "Hash"]).apply(stat, "ClflushMiss")
 stats = miss.reset_index()
-stats.columns = ["main_core", "helper_core", "hash", "clflush_miss_n"]
-stats["clflush_remote_hit"] = hit_remote.values
-stats["clflush_local_hit_n"] = hit_local.values
-stats["clflush_shared_hit"] = hit_shared.values
+stats.columns = ["Core", "Hash", "Miss"]
+hit = df.groupby(["Core", "Hash"]).apply(stat, "ClflushHit")
+stats["Hit"] = hit.values
 
-stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 
-#print(stats.to_string())
+print(stats.to_string())
 
-plt.show()
-exit(0)
 g = sns.FacetGrid(stats, row="Core")
 
 g.map(sns.distplot, 'Miss', bins=range(100, 480), color="r")

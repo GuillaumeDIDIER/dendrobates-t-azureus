@@ -3,7 +3,7 @@
 use crate::complex_addressing::{cache_slicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
 
-use cpuid::{CPUVendor, MicroArchitecture};
+use cpuid::MicroArchitecture;
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]

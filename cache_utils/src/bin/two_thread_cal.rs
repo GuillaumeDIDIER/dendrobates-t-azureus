@@ -176,8 +176,8 @@ fn main() {
 
         let r = calibrate_fixed_freq_2_thread(
             pointer,
-            64,
-            array.len() as isize >> 3,
+            64,                        // FIXME : MAGIC
+            array.len() as isize >> 3, // MAGIC
             &mut core_pairs.into_iter(),
             &operations,
             CalibrationOptions {
@@ -227,8 +227,8 @@ fn main() {
                 Ok(results) => {
                     for r in results {
                         let offset = r.offset;
-                        let miss_hist = r.histogram[miss_index].clone();
-                        let hit_hist = r.histogram[hit_index].clone();
+                        let miss_hist = &r.histogram[miss_index];
+                        let hit_hist = &r.histogram[hit_index];
 
                         if miss_hist.len() != hit_hist.len() {
                             panic!("Maformed results");
@@ -272,10 +272,10 @@ fn main() {
                                 victim: result.helper_core as u8,
                             },
                             ResultAnalysis {
-                                miss: miss_hist,
+                                miss: miss_hist.clone(),
                                 miss_cum_sum,
                                 miss_total,
-                                hit: hit_hist,
+                                hit: hit_hist.clone(),
                                 hit_cum_sum,
                                 hit_total,
                                 error_miss_less_than_hit,

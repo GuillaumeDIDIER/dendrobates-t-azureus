@@ -6,8 +6,6 @@ use cpuid::{CPUVendor, MicroArchitecture};
 extern crate alloc;
 
 #[cfg(feature = "no_std")]
-use alloc::collections::VecDeque;
-#[cfg(feature = "no_std")]
 use alloc::vec::Vec;
 #[cfg(feature = "no_std")]
 use hashbrown::HashMap;
@@ -18,8 +16,6 @@ use hashbrown::HashSet;
 use std::collections::HashMap;
 #[cfg(feature = "use_std")]
 use std::collections::HashSet;
-#[cfg(feature = "use_std")]
-use std::collections::VecDeque;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimpleAddressingParams {
@@ -72,43 +68,54 @@ pub fn cache_slicing(
     physical_cores: u8,
     vendor: CPUVendor,
     family_model_display: u32,
-    stepping: u32,
+    _stepping: u32,
 ) -> CacheSlicing {
     let trailing_zeros = physical_cores.trailing_zeros();
     if physical_cores != (1 << trailing_zeros) {
         return Unsupported;
     }
 
-    match uarch {
-        MicroArchitecture::KabyLake | MicroArchitecture::Skylake => {
-            ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
-        }
-        MicroArchitecture::CoffeeLake => {
-            if family_model_display == 0x6_9E {
-                ComplexAddressing(&COFFEELAKE_R_i9_FUNCTIONS[0..((trailing_zeros + 1) as usize)])
-            } else {
-                ComplexAddressing(
+    match vendor {
+        CPUVendor::Intel => {
+            match uarch {
+                MicroArchitecture::KabyLake | MicroArchitecture::Skylake => ComplexAddressing(
                     &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
-                )
+                ),
+                MicroArchitecture::CoffeeLake => {
+                    if family_model_display == 0x6_9E {
+                        // TODO stepping should probably be involved here
+                        ComplexAddressing(
+                            &COFFEELAKE_R_i9_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
+                        )
+                    } else {
+                        ComplexAddressing(
+                            &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
+                        )
+                    }
+                }
+                MicroArchitecture::SandyBridge
+                | MicroArchitecture::HaswellE
+                | MicroArchitecture::Broadwell
+                | MicroArchitecture::IvyBridge
+                | MicroArchitecture::IvyBridgeE => ComplexAddressing(
+                    &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)],
+                ),
+                MicroArchitecture::Haswell => {
+                    if family_model_display == 0x06_46 {
+                        ComplexAddressing(&CRYSTAL_WELL_FUNCTIONS[0..((trailing_zeros) as usize)])
+                    } else {
+                        ComplexAddressing(
+                            &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)],
+                        )
+                    }
+                }
+                MicroArchitecture::Nehalem | MicroArchitecture::Westmere => {
+                    Unsupported //SimpleAddressing(((physical_cores - 1) as usize) << 6 + 8) // Hardcoded for 4 cores FIXME !!!
+                }
+                _ => Unsupported,
             }
         }
-        MicroArchitecture::SandyBridge
-        | MicroArchitecture::HaswellE
-        | MicroArchitecture::Broadwell
-        | MicroArchitecture::IvyBridge
-        | MicroArchitecture::IvyBridgeE => {
-            ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
-        }
-        MicroArchitecture::Haswell => {
-            if family_model_display == 0x06_46 {
-                ComplexAddressing(&CRYSTAL_WELL_FUNCTIONS[0..((trailing_zeros) as usize)])
-            } else {
-                ComplexAddressing(&SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)])
-            }
-        }
-        MicroArchitecture::Nehalem | MicroArchitecture::Westmere => {
-            Unsupported //SimpleAddressing(((physical_cores - 1) as usize) << 6 + 8) // Hardcoded for 4 cores FIXME !!!
-        }
+        CPUVendor::AMD => Unsupported,
         _ => Unsupported,
     }
 }
@@ -126,7 +133,7 @@ impl CacheSlicing {
     }
     pub fn hash(&self, addr: usize) -> Option<u8> {
         match self {
-            SimpleAddressing(mask) => None, //Some(addr & *mask),
+            SimpleAddressing(mask) => Some(((addr >> mask.shift) & ((1 << mask.bits) - 1)) as u8),
             ComplexAddressing(masks) => {
                 let mut res = 0;
                 for mask in *masks {
@@ -143,7 +150,7 @@ impl CacheSlicing {
     // May work in the future for simple.
     fn pivot(&self, mask: isize) -> Vec<(u8, isize)> {
         match self {
-            ComplexAddressing(functions) => {
+            ComplexAddressing(_functions) => {
                 let mut matrix = Vec::new();
 
                 let mut i = 1;
@@ -248,7 +255,7 @@ impl CacheSlicing {
                 result.insert(0, 0);
 
                 for (slice_u, addr_u) in matrix {
-                    if (slice_u != 0) {
+                    if slice_u != 0 {
                         let mut tmp = HashMap::new();
                         for (slice_v, addr_v) in &result {
                             tmp.insert(slice_v ^ slice_u, addr_v ^ addr_u);
