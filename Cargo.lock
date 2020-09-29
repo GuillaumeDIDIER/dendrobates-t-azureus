@@ -56,9 +56,9 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
 name = "bootloader"
-version = "0.9.9"
+version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd6d8b0a125f7c1be168f6fd21d12c84148a807ef4896df8215a5607f9b2a9b4"
+checksum = "8c5c959bf675ba4d842740373760b2aeb5b8f5457451cd18370b4c339d4926e9"
 dependencies = [
  "bit_field 0.10.1",
 ]
@@ -181,9 +181,9 @@ checksum = "f2f96b10ec2560088a8e76961b00d47107b3a625fecb76dedb29ee7ccbf98235"
 
 [[package]]
 name = "linked_list_allocator"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "660b26e6156a7d00eefb19052fe1943cf5ab2f353a723a577fad6ba2f99d1f90"
+checksum = "84565678e403453d1a27a0886882b3b271701e65146d972d9d7d9a4c4a0ff498"
 dependencies = [
  "spinning_top",
 ]
@@ -370,9 +370,9 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "x86_64"
-version = "0.11.7"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa580d2cf2a6a8c55f6283d6d06271b1ccab4d93cb3741edab290d5408d848c4"
+checksum = "5fa1f02f6b33489502afe477f7d428cfa1eee22d4a10966e95dfeed96c523d46"
 dependencies = [
  "bit_field 0.9.0",
  "bitflags",
