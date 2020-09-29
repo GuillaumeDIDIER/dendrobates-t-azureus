@@ -378,7 +378,7 @@ pub unsafe fn attack_t_tables_poc(
 
     let te0 = unsafe { base.offset(parameters.te[0]) };
     if unsafe { (te0 as *const u64).read() } != 0xf87c7c84c66363a5 {
-        panic!("Hmm This does not look like a T-table, check your address and the openssl used")
+        panic!("Hmm This does not look like a T-table, check your address and the openssl used\nUse `nm libcrypto.so.1.0.0 | \"grep Te[0-4]\"`")
     }
 
     let key_struct = aes::AesKey::new_encrypt(&parameters.key).unwrap();

