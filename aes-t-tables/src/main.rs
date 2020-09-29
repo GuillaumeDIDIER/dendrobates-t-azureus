@@ -452,7 +452,7 @@ const KEY2: [u8; 32] = [
 // 00000000001cc080 r Te1
 // 00000000001cbc80 r Te2
 // 00000000001cb880 r Te3
-const TE_CYBER_COBAYE : [isize;4] = [0x1cc480, 0x1cc080, 0x1ccc80, 0x1cc880];
+const TE_CYBER_COBAYE : [isize;4] = [0x1cc480, 0x1cc080, 0x1cbc80, 0x1cb880];
 
 const TE_CITRON_VERT : [isize; 4] = [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140];
 
