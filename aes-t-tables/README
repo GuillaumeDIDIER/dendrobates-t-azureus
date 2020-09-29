@@ -1,0 +1,1 @@
+You need to build openssl with no-asm no-hw options. Also adjust the install path in ./cargo.sh
