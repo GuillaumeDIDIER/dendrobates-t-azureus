@@ -5,7 +5,8 @@ members = [
     "polling_serial",
     "cache_utils",
     "cpuid",
-    "aes-t-tables"
+    "aes-t-tables",
+    "turn_lock",
 ]
 
 [package]
