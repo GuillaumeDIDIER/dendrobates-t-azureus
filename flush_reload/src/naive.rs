@@ -1,4 +1,6 @@
-use crate::{CacheStatus, ChannelFatalError, SideChannelError, SingleAddrCacheSideChannel};
+use cache_side_channel::{
+    CacheStatus, ChannelFatalError, SideChannelError, SingleAddrCacheSideChannel,
+};
 use cache_utils::calibration::only_reload;
 use cache_utils::flush;
 

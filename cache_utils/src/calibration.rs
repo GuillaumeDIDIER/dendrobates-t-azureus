@@ -34,6 +34,12 @@ use core::sync::atomic::{spin_loop_hint, AtomicBool, AtomicPtr, Ordering};
 use itertools::Itertools;
 
 use atomic::Atomic;
+use core::hash::Hash;
+use core::ops::{Add, AddAssign};
+#[cfg(feature = "no_std")]
+use hashbrown::HashMap;
+#[cfg(feature = "use_std")]
+use std::collections::HashMap;
 
 #[derive(Ord, PartialOrd, Eq, PartialEq)]
 pub enum Verbosity {
@@ -104,6 +110,12 @@ pub unsafe fn l3_and_reload(p: *const u8) -> u64 {
     arch_x86::_mm_prefetch(p as *const i8, arch_x86::_MM_HINT_T2);
     arch_x86::__cpuid_count(0, 0);
     only_reload(p)
+}
+
+pub const PAGE_LEN: usize = 1 << 12;
+
+pub fn get_vpn<T>(p: *const T) -> usize {
+    (p as usize) & (!(PAGE_LEN - 1)) // FIXME
 }
 
 const BUCKET_SIZE: usize = 5;
@@ -917,4 +929,765 @@ pub fn calibrate_L3_miss_hit(
     );
 
     r.into_iter().next().unwrap()
+}
+
+/*
+   ASVP trait ?
+   Easily put any combination, use None to signal Any possible value, Some to signal fixed value.
+*/
+
+pub type VPN = usize;
+pub type Slice = u8;
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct ASVP {
+    pub attacker: usize,
+    pub slice: Slice,
+    pub victim: usize,
+    pub page: VPN,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct CSP {
+    pub core: usize,
+    pub slice: Slice,
+    pub page: VPN,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct ASP {
+    pub attacker: usize,
+    pub slice: Slice,
+    pub page: VPN,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct SVP {
+    pub slice: Slice,
+    pub victim: usize,
+    pub page: VPN,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct SP {
+    pub slice: Slice,
+    pub page: VPN,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct AV {
+    pub attacker: usize,
+    pub victim: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawHistogram {
+    pub hit: Vec<u32>,
+    pub miss: Vec<u32>,
+}
+
+// ALL Histogram deal in buckets : FIXME we should clearly distinguish bucket vs time.
+// Thresholds are less than equal.
+impl RawHistogram {
+    pub fn from(
+        mut calibrate_result: CalibrateResult,
+        hit_index: usize,
+        miss_index: usize,
+    ) -> Self {
+        calibrate_result.histogram.push(Vec::default());
+        let hit = calibrate_result.histogram.swap_remove(hit_index);
+        calibrate_result.histogram.push(Vec::default());
+        let miss = calibrate_result.histogram.swap_remove(miss_index);
+        RawHistogram { hit, miss }
+    }
+
+    pub fn empty(len: usize) -> Self {
+        Self {
+            hit: vec![0; len],
+            miss: vec![0; len],
+        }
+    }
+}
+
+// Addition logic
+
+// Tough case, both references.
+
+impl Add for &RawHistogram {
+    type Output = RawHistogram;
+
+    fn add(self, rhs: &RawHistogram) -> Self::Output {
+        assert_eq!(self.hit.len(), rhs.hit.len());
+        assert_eq!(self.miss.len(), rhs.miss.len());
+        assert_eq!(self.hit.len(), self.miss.len());
+        let len = self.hit.len();
+        let mut r = RawHistogram {
+            hit: vec![0; len],
+            miss: vec![0; len],
+        };
+        for i in 0..len {
+            r.hit[i] = self.hit[i] + rhs.hit[i];
+            r.miss[i] = self.miss[i] + rhs.miss[i];
+        }
+        r
+    }
+}
+
+// most common case re-use of self is possible. (Or a reduction to such a case)
+
+impl AddAssign<&RawHistogram> for RawHistogram {
+    //type Rhs = &RawHistogram;
+    fn add_assign(&mut self, rhs: &Self) {
+        assert_eq!(self.hit.len(), rhs.hit.len());
+        assert_eq!(self.miss.len(), rhs.miss.len());
+        assert_eq!(self.hit.len(), self.miss.len());
+
+        for i in 0..self.hit.len() {
+            self.hit[i] + rhs.hit[i];
+            self.miss[i] + rhs.miss[i];
+        }
+    }
+}
+
+// Fallback to most common case
+
+impl Add for RawHistogram {
+    type Output = RawHistogram;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for RawHistogram {
+    type Output = RawHistogram;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<RawHistogram> for &RawHistogram {
+    type Output = RawHistogram;
+
+    fn add(self, mut rhs: RawHistogram) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for RawHistogram {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
+    let len = vector.len();
+    let mut res = vec![0; len];
+    res[0] = vector[0];
+    for i in 1..len {
+        res[i] = res[i - 1] + vector[i];
+    }
+    assert_eq!(len, res.len());
+    assert_eq!(len, vector.len());
+    res
+}
+
+#[derive(Debug, Clone)]
+pub struct HistogramCumSum {
+    pub num_hit: u32,
+    pub num_miss: u32,
+    pub hit: Vec<u32>,
+    pub miss: Vec<u32>,
+    pub hit_cum_sum: Vec<u32>,
+    pub miss_cum_sum: Vec<u32>,
+}
+
+impl HistogramCumSum {
+    pub fn from(raw_histogram: RawHistogram) -> Self {
+        let len = raw_histogram.miss.len();
+
+        assert_eq!(raw_histogram.hit.len(), len);
+
+        // Cum Sums
+        let miss_cum_sum = cum_sum(&raw_histogram.miss);
+        let hit_cum_sum = cum_sum(&raw_histogram.hit);
+        let miss_total = miss_cum_sum[len - 1];
+        let hit_total = hit_cum_sum[len - 1];
+        Self {
+            num_hit: hit_total,
+            num_miss: miss_total,
+            hit: raw_histogram.hit,
+            miss: raw_histogram.miss,
+            hit_cum_sum,
+            miss_cum_sum,
+        }
+    }
+
+    pub fn from_calibrate(
+        calibrate_result: CalibrateResult,
+        hit_index: usize,
+        miss_index: usize,
+    ) -> Self {
+        Self::from(RawHistogram::from(calibrate_result, hit_index, miss_index))
+    }
+
+    pub fn error_for_threshold(&self, threshold: Threshold) -> ErrorPrediction {
+        if threshold.miss_faster_than_hit {
+            ErrorPrediction {
+                true_hit: self.num_hit - self.hit_cum_sum[threshold.bucket_index],
+                true_miss: self.miss_cum_sum[threshold.bucket_index],
+                false_hit: self.num_miss - self.miss_cum_sum[threshold.bucket_index],
+                false_miss: self.hit_cum_sum[threshold.bucket_index],
+            }
+        } else {
+            ErrorPrediction {
+                true_hit: self.hit_cum_sum[threshold.bucket_index],
+                true_miss: self.num_miss - self.miss_cum_sum[threshold.bucket_index],
+                false_hit: self.miss_cum_sum[threshold.bucket_index],
+                false_miss: self.num_hit - self.hit_cum_sum[threshold.bucket_index],
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.hit.len()
+    }
+
+    pub fn empty(len: usize) -> Self {
+        Self {
+            num_hit: 0,
+            num_miss: 0,
+            hit: vec![0; len],
+            miss: vec![0; len],
+            hit_cum_sum: vec![0; len],
+            miss_cum_sum: vec![0; len],
+        }
+    }
+}
+
+// Addition logic
+
+// Tough case, both references.
+
+impl Add for &HistogramCumSum {
+    type Output = HistogramCumSum;
+
+    fn add(self, rhs: &HistogramCumSum) -> Self::Output {
+        assert_eq!(self.hit.len(), self.miss.len());
+        assert_eq!(self.hit.len(), self.hit_cum_sum.len());
+        assert_eq!(self.hit.len(), self.miss_cum_sum.len());
+        assert_eq!(self.hit.len(), rhs.hit.len());
+        assert_eq!(self.hit.len(), rhs.miss.len());
+        assert_eq!(self.hit.len(), rhs.hit_cum_sum.len());
+        assert_eq!(self.hit.len(), rhs.miss_cum_sum.len());
+        let len = self.len();
+        let mut r = HistogramCumSum {
+            num_hit: self.num_hit + rhs.num_hit,
+            num_miss: self.num_miss + rhs.num_miss,
+            hit: vec![0; len],
+            miss: vec![0; len],
+            hit_cum_sum: vec![0; len],
+            miss_cum_sum: vec![0; len],
+        };
+        for i in 0..len {
+            r.hit[i] = self.hit[i] + rhs.hit[i];
+            r.miss[i] = self.miss[i] + rhs.miss[i];
+            r.hit_cum_sum[i] = self.hit_cum_sum[i] + rhs.hit_cum_sum[i];
+            r.miss_cum_sum[i] = self.miss_cum_sum[i] + rhs.miss_cum_sum[i];
+        }
+        r
+    }
+}
+
+// most common case re-use of self is possible. (Or a reduction to such a case)
+
+impl AddAssign<&Self> for HistogramCumSum {
+    fn add_assign(&mut self, rhs: &Self) {
+        assert_eq!(self.hit.len(), self.miss.len());
+        assert_eq!(self.hit.len(), self.hit_cum_sum.len());
+        assert_eq!(self.hit.len(), self.miss_cum_sum.len());
+        assert_eq!(self.hit.len(), rhs.hit.len());
+        assert_eq!(self.hit.len(), rhs.miss.len());
+        assert_eq!(self.hit.len(), rhs.hit_cum_sum.len());
+        assert_eq!(self.hit.len(), rhs.miss_cum_sum.len());
+        self.num_hit += rhs.num_hit;
+        self.num_miss += rhs.num_miss;
+        let len = self.len();
+        for i in 0..len {
+            self.hit[i] += rhs.hit[i];
+            self.miss[i] += rhs.miss[i];
+            self.hit_cum_sum[i] += rhs.hit_cum_sum[i];
+            self.miss_cum_sum[i] += rhs.miss_cum_sum[i];
+        }
+    }
+}
+
+// Fallback to most common case
+
+impl Add for HistogramCumSum {
+    type Output = HistogramCumSum;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for HistogramCumSum {
+    type Output = HistogramCumSum;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<HistogramCumSum> for &HistogramCumSum {
+    type Output = HistogramCumSum;
+
+    fn add(self, mut rhs: HistogramCumSum) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for HistogramCumSum {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ErrorPrediction {
+    pub true_hit: u32,
+    pub true_miss: u32,
+    pub false_hit: u32,
+    pub false_miss: u32,
+}
+
+impl ErrorPrediction {
+    pub fn total_error(&self) -> u32 {
+        self.false_hit + self.false_miss
+    }
+    pub fn total(&self) -> u32 {
+        self.false_hit + self.false_miss + self.true_hit + self.true_miss
+    }
+    pub fn error_rate(&self) -> f32 {
+        (self.false_miss + self.false_hit) as f32 / (self.total() as f32)
+    }
+}
+
+impl Add for &ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(self, rhs: &ErrorPrediction) -> Self::Output {
+        ErrorPrediction {
+            true_hit: self.true_hit + rhs.true_hit,
+            true_miss: self.true_miss + rhs.true_miss,
+            false_hit: self.false_hit + rhs.false_hit,
+            false_miss: self.true_miss + rhs.false_miss,
+        }
+    }
+}
+
+// most common case re-use of self is possible. (Or a reduction to such a case)
+
+impl AddAssign<&Self> for ErrorPrediction {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.true_hit += rhs.true_hit;
+        self.true_miss += rhs.true_miss;
+        self.false_hit += rhs.false_hit;
+        self.false_miss += rhs.false_miss;
+    }
+}
+
+// Fallback to most common case
+
+impl Add for ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<ErrorPrediction> for &ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(self, mut rhs: ErrorPrediction) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for ErrorPrediction {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ErrorPredictions {
+    pub histogram: HistogramCumSum,
+    pub error_miss_less_than_hit: Vec<u32>,
+    pub error_hit_less_than_miss: Vec<u32>,
+}
+
+impl ErrorPredictions {
+    // BUGGY TODO
+    pub fn predict_errors(hist: HistogramCumSum) -> Self {
+        let mut error_miss_less_than_hit = vec![0; hist.len() - 1];
+        let mut error_hit_less_than_miss = vec![0; hist.len() - 1];
+        for threshold_bucket_index in 0..(hist.len() - 1) {
+            error_miss_less_than_hit[threshold_bucket_index] = hist
+                .error_for_threshold(Threshold {
+                    bucket_index: threshold_bucket_index,
+                    miss_faster_than_hit: true,
+                })
+                .total_error();
+
+            error_hit_less_than_miss[threshold_bucket_index] = hist
+                .error_for_threshold(Threshold {
+                    bucket_index: threshold_bucket_index,
+                    miss_faster_than_hit: false,
+                })
+                .total_error();
+        }
+        Self {
+            histogram: hist,
+            error_miss_less_than_hit,
+            error_hit_less_than_miss,
+        }
+    }
+
+    pub fn empty(len: usize) -> Self {
+        Self::predict_errors(HistogramCumSum::empty(len))
+    }
+
+    pub fn debug(&self) {
+        println!("Debug:HEADER TBD");
+        for i in 0..(self.histogram.len() - 1) {
+            println!(
+                "Debug:{:5},{:5},{:6},{:6},{:6}, {:6}",
+                self.histogram.hit[i],
+                self.histogram.miss[i],
+                self.histogram.hit_cum_sum[i],
+                self.histogram.miss_cum_sum[i],
+                self.error_miss_less_than_hit[i],
+                self.error_hit_less_than_miss[i]
+            );
+        }
+        let i = self.histogram.len() - 1;
+        println!(
+            "Debug:{:5},{:5},{:6},{:6}",
+            self.histogram.hit[i],
+            self.histogram.miss[i],
+            self.histogram.hit_cum_sum[i],
+            self.histogram.miss_cum_sum[i]
+        );
+    }
+}
+
+// Addition logic
+
+// Tough case, both references.
+
+impl Add for &ErrorPredictions {
+    type Output = ErrorPredictions;
+
+    fn add(self, rhs: &ErrorPredictions) -> Self::Output {
+        assert_eq!(
+            self.error_hit_less_than_miss.len(),
+            rhs.error_hit_less_than_miss.len()
+        );
+        assert_eq!(
+            self.error_hit_less_than_miss.len(),
+            self.error_miss_less_than_hit.len()
+        );
+        assert_eq!(
+            self.error_miss_less_than_hit.len(),
+            rhs.error_miss_less_than_hit.len()
+        );
+        let len = self.error_miss_less_than_hit.len();
+        let mut r = ErrorPredictions {
+            histogram: &self.histogram + &rhs.histogram,
+            error_miss_less_than_hit: vec![0; len],
+            error_hit_less_than_miss: vec![0; len],
+        };
+        for i in 0..len {
+            r.error_miss_less_than_hit[i] =
+                self.error_miss_less_than_hit[i] + rhs.error_miss_less_than_hit[i];
+            r.error_hit_less_than_miss[i] =
+                self.error_hit_less_than_miss[i] + rhs.error_hit_less_than_miss[i];
+        }
+        r
+    }
+}
+
+// most common case re-use of self is possible. (Or a reduction to such a case)
+
+impl AddAssign<&Self> for ErrorPredictions {
+    fn add_assign(&mut self, rhs: &Self) {
+        assert_eq!(
+            self.error_hit_less_than_miss.len(),
+            rhs.error_hit_less_than_miss.len()
+        );
+        assert_eq!(
+            self.error_hit_less_than_miss.len(),
+            self.error_miss_less_than_hit.len()
+        );
+        assert_eq!(
+            self.error_miss_less_than_hit.len(),
+            rhs.error_miss_less_than_hit.len()
+        );
+        self.histogram += &rhs.histogram;
+        for i in 0..self.error_hit_less_than_miss.len() {
+            self.error_hit_less_than_miss[i] += rhs.error_hit_less_than_miss[i];
+            self.error_miss_less_than_hit[i] += rhs.error_miss_less_than_hit[i];
+        }
+    }
+}
+
+// Fallback to most common case
+
+impl Add for ErrorPredictions {
+    type Output = ErrorPredictions;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for ErrorPredictions {
+    type Output = ErrorPredictions;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<ErrorPredictions> for &ErrorPredictions {
+    type Output = ErrorPredictions;
+
+    fn add(self, mut rhs: ErrorPredictions) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for ErrorPredictions {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ThresholdError {
+    pub threshold: Threshold,
+    pub error: ErrorPrediction,
+}
+
+#[derive(Debug, Clone)]
+pub struct PotentialThresholds {
+    pub threshold_errors: Vec<ThresholdError>,
+}
+
+impl PotentialThresholds {
+    pub fn median(mut self) -> Option<ThresholdError> {
+        if self.threshold_errors.len() > 0 {
+            let index = (self.threshold_errors.len() - 1) / 2;
+            self.threshold_errors.push(Default::default());
+            Some(self.threshold_errors.swap_remove(index))
+        } else {
+            None
+        }
+    }
+
+    pub fn minimizing_total_error(error_pred: ErrorPredictions) -> Self {
+        let mut min_error = u32::max_value();
+        let mut threshold_errors = Vec::new();
+        for i in 0..error_pred.error_miss_less_than_hit.len() {
+            if error_pred.error_miss_less_than_hit[i] < min_error {
+                min_error = error_pred.error_miss_less_than_hit[i];
+                threshold_errors = Vec::new();
+            }
+            if error_pred.error_hit_less_than_miss[i] < min_error {
+                min_error = error_pred.error_hit_less_than_miss[i];
+                threshold_errors = Vec::new();
+            }
+            if error_pred.error_miss_less_than_hit[i] == min_error {
+                let threshold = Threshold {
+                    bucket_index: i,
+                    miss_faster_than_hit: true,
+                };
+                let error = error_pred.histogram.error_for_threshold(threshold);
+                threshold_errors.push(ThresholdError { threshold, error })
+            }
+            if error_pred.error_hit_less_than_miss[i] == min_error {
+                let threshold = Threshold {
+                    bucket_index: i,
+                    miss_faster_than_hit: false,
+                };
+                let error = error_pred.histogram.error_for_threshold(threshold);
+                threshold_errors.push(ThresholdError { threshold, error })
+            }
+        }
+        Self { threshold_errors }
+    }
+}
+
+// Thresholds are less than equal.
+// usize for bucket, u64 for time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Threshold {
+    pub bucket_index: usize,
+    pub miss_faster_than_hit: bool,
+}
+
+impl Threshold {
+    // FIXME !!!!
+    fn to_time(&self, bucket: usize) -> u64 {
+        bucket as u64
+    }
+
+    pub fn is_hit(&self, time: u64) -> bool {
+        self.miss_faster_than_hit && time >= self.to_time(self.bucket_index)
+            || !self.miss_faster_than_hit && time < self.to_time(self.bucket_index)
+    }
+}
+
+pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
+    results: Vec<CalibrateResult2T>,
+    base: *const u8,
+    analysis: Analysis,
+    slicing: &impl Fn(usize) -> u8,
+) -> Result<HashMap<ASVP, T>, nix::Error> {
+    let mut analysis_result: HashMap<ASVP, T> = HashMap::new();
+    for calibrate_2t_result in results {
+        let attacker = calibrate_2t_result.main_core;
+        let victim = calibrate_2t_result.helper_core;
+        match calibrate_2t_result.res {
+            Err(e) => return Err(e),
+            Ok(calibrate_1t_results) => {
+                for result_1t in calibrate_1t_results {
+                    let offset = result_1t.offset;
+                    let addr = unsafe { base.offset(offset) };
+                    let page = get_vpn(addr); //TODO
+                    let slice = slicing(addr as usize);
+                    let analysed = analysis(result_1t);
+                    let asvp = ASVP {
+                        attacker,
+                        slice,
+                        victim,
+                        page,
+                    };
+                    analysis_result.insert(asvp, analysed);
+                }
+            }
+        }
+    }
+    Ok(analysis_result)
+}
+
+pub fn map_values<K, U, V, F>(input: HashMap<K, U>, f: F) -> HashMap<K, V>
+where
+    K: Hash + Eq,
+    F: Fn(U, &K) -> V,
+{
+    let mut results = HashMap::new();
+    for (k, u) in input {
+        let f_u = f(u, &k);
+        results.insert(k, f_u);
+    }
+    results
+}
+
+pub fn accumulate<K, V, RK, Reduction, Accumulator, Accumulation, AccumulatorDefault>(
+    input: HashMap<K, V>,
+    reduction: Reduction,
+    accumulator_default: AccumulatorDefault,
+    aggregation: Accumulation,
+) -> HashMap<RK, Accumulator>
+where
+    K: Hash + Eq + Copy,
+    RK: Hash + Eq + Copy,
+    Reduction: Fn(K) -> RK,
+    Accumulation: Fn(&mut Accumulator, V, K, RK) -> (),
+    AccumulatorDefault: Fn() -> Accumulator,
+{
+    let mut accumulators = HashMap::new();
+    for (k, v) in input {
+        let rk = reduction(k);
+        aggregation(
+            accumulators
+                .entry(rk)
+                .or_insert_with(|| accumulator_default()),
+            v,
+            k,
+            rk,
+        );
+    }
+    accumulators
+}
+
+pub fn reduce<K, V, RK, RV, Reduction, Accumulator, Accumulation, AccumulatorDefault, Extract>(
+    input: HashMap<K, V>,
+    reduction: Reduction,
+    accumulator_default: AccumulatorDefault,
+    aggregation: Accumulation,
+    extraction: Extract,
+) -> HashMap<RK, RV>
+where
+    K: Hash + Eq + Copy,
+    RK: Hash + Eq + Copy,
+    Reduction: Fn(K) -> RK,
+    AccumulatorDefault: Fn() -> Accumulator,
+    Accumulation: Fn(&mut Accumulator, V, K, RK) -> (),
+    Extract: Fn(Accumulator, &RK) -> RV,
+{
+    let accumulators = accumulate(input, reduction, accumulator_default, aggregation);
+    let result = map_values(accumulators, extraction);
+    result
+}
+
+/*
+pub fn compute_threshold_error() -> (Threshold, ()) {
+    unimplemented!();
+} // TODO
+*/
+
+#[cfg(test)]
+mod tests {
+
+    use crate::calibration::map_values;
+    #[cfg(feature = "no_std")]
+    use hashbrown::HashMap;
+    #[cfg(feature = "use_std")]
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_map_values() {
+        let mut input = HashMap::new();
+        input.insert(0, "a");
+        input.insert(1, "b");
+        let output = map_values(input, |c| c.to_uppercase());
+        assert_eq!(output[&0], "A");
+        assert_eq!(output[&1], "B");
+    }
 }

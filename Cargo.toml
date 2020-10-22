@@ -6,6 +6,11 @@ members = [
     "cache_utils",
     "cpuid",
     "aes-t-tables",
+    "covert_channels_evaluation",
+    "cache_side_channel",
+    "flush_reload",
+    "flush_flush",
+    "basic_timing_cache_channel",
     "turn_lock",
 ]
 

@@ -32,6 +32,12 @@
       <sourceFolder url="file://$MODULE_DIR$/cache_utils/benches" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/cpuid/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/aes-t-tables/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_side_channel/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/flush_reload/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/flush_flush/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/covert_channels_evaluation/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/basic_timing_cache_channel/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/turn_lock/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
