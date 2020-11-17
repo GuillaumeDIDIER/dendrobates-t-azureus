@@ -188,7 +188,7 @@ fn main() {
                 hist_params: HistParams {
                     bucket_number: CFLUSH_BUCKET_NUMBER,
                     bucket_size: CFLUSH_BUCKET_SIZE,
-                    iterations: CFLUSH_NUM_ITER,
+                    iterations: CFLUSH_NUM_ITER << 4,
                 },
                 verbosity: verbose_level,
                 optimised_addresses: true,
