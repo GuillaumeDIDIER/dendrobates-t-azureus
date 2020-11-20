@@ -38,6 +38,7 @@
       <sourceFolder url="file://$MODULE_DIR$/covert_channels_evaluation/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/basic_timing_cache_channel/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/turn_lock/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/covert_channels_benchmark/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />

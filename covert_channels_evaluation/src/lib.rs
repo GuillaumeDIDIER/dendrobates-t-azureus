@@ -16,22 +16,28 @@ const PAGE_SIZE: usize = 1 << 12; // FIXME Magic
 // Alos time in order to determine duration, in rdtsc and seconds.
 
 use bit_field::BitField;
+use cache_side_channel::{restore_affinity, set_affinity, CoreSpec};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::rdtsc_fence;
+use nix::sched::sched_getaffinity;
+use nix::unistd::Pid;
 use std::any::Any;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::thread;
 
 /**
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
-pub trait CovertChannel: Send + Sync {
+pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
     const BIT_PER_PAGE: usize;
     unsafe fn transmit(&self, page: *const u8, bits: &mut BitIterator);
     unsafe fn receive(&self, page: *const u8) -> Vec<bool>;
+    unsafe fn ready_page(&mut self, page: *const u8);
 }
 
+#[derive(Debug)]
 pub struct CovertChannelBenchmarkResult {
     pub num_bytes_transmitted: usize,
     pub num_bit_errors: usize,
@@ -84,7 +90,6 @@ struct CovertChannelPage {
 struct CovertChannelParams<T: CovertChannel + Send> {
     pages: Vec<CovertChannelPage>,
     covert_channel: Arc<T>,
-    transmit_core: usize,
 }
 
 unsafe impl<T: 'static + CovertChannel + Send> Send for CovertChannelParams<T> {}
@@ -93,45 +98,58 @@ fn transmit_thread<T: CovertChannel>(
     num_bytes: usize,
     mut params: CovertChannelParams<T>,
 ) -> (u64, Vec<u8>) {
+    let old_affinity = set_affinity(&(*params.covert_channel).helper_core());
+
     let mut result = Vec::new();
     result.reserve(num_bytes);
     for _ in 0..num_bytes {
         let byte = rand::random();
         result.push(byte);
     }
+
+    let mut bit_sent = 0;
     let mut bit_iter = BitIterator::new(&result);
     let start = unsafe { rdtsc_fence() };
     while !bit_iter.atEnd() {
         for page in params.pages.iter_mut() {
             page.turn.wait();
             unsafe { params.covert_channel.transmit(page.addr, &mut bit_iter) };
+            bit_sent += T::BIT_PER_PAGE;
             page.turn.next();
+            if bit_iter.atEnd() {
+                break;
+            }
         }
     }
-
     (start, result)
 }
 
 pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
-    channel: T,
+    mut channel: T,
     num_pages: usize,
     num_bytes: usize,
-    transmit_core: usize,
-    receive_core: usize,
 ) -> CovertChannelBenchmarkResult {
     // Allocate pages
+
+    let old_affinity = set_affinity(&channel.main_core());
+
     let size = num_pages * PAGE_SIZE;
-    let m = MMappedMemory::new(size);
+    let mut m = MMappedMemory::new(size, false);
     let mut pages_transmit = Vec::new();
     let mut pages_receive = Vec::new();
+    for i in 0..num_pages {
+        m.slice_mut()[i * PAGE_SIZE] = i as u8;
+    }
     let array: &[u8] = m.slice();
     for i in 0..num_pages {
         let addr = &array[i * PAGE_SIZE] as *const u8;
         let mut turns = TurnLock::new(2);
         let mut t_iter = turns.drain(0..);
-        let receive_lock = t_iter.next().unwrap();
         let transmit_lock = t_iter.next().unwrap();
+        let receive_lock = t_iter.next().unwrap();
+
         assert!(t_iter.next().is_none());
+        unsafe { channel.ready_page(addr) };
         pages_transmit.push(CovertChannelPage {
             turn: transmit_lock,
             addr,
@@ -141,16 +159,12 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
             addr,
         });
     }
+
     let covert_channel_arc = Arc::new(channel);
     let params = CovertChannelParams {
         pages: pages_transmit,
         covert_channel: covert_channel_arc.clone(),
-        transmit_core,
     };
-
-    if transmit_core == receive_core {
-        unimplemented!()
-    }
 
     let helper = thread::spawn(move || transmit_thread(num_bytes, params));
     // Create the thread parameters
@@ -171,10 +185,14 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
                 }
                 received_bytes.push(byte);
             }
+            if received_bytes.len() >= num_bytes {
+                break;
+            }
         }
         // TODO
         // receiver thread
     }
+
     let stop = unsafe { rdtsc_fence() };
     let r = helper.join();
     let (start, sent_bytes) = match r {
@@ -184,13 +202,15 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     assert_eq!(sent_bytes.len(), received_bytes.len());
     assert_eq!(num_bytes, received_bytes.len());
 
+    restore_affinity(&old_affinity);
+
     let mut num_bit_error = 0;
     for i in 0..num_bytes {
         num_bit_error += (sent_bytes[i] ^ received_bytes[i]).count_ones() as usize;
     }
 
     let error_rate = (num_bit_error as f64) / ((num_bytes * u8::BIT_LENGTH) as f64);
-    // Create transmit thread
+
     CovertChannelBenchmarkResult {
         num_bytes_transmitted: num_bytes,
         num_bit_errors: num_bit_error,

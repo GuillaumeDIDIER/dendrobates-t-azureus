@@ -76,6 +76,9 @@ dependencies = [
 [[package]]
 name = "cache_side_channel"
 version = "0.1.0"
+dependencies = [
+ "nix",
+]
 
 [[package]]
 name = "cache_utils"
@@ -106,11 +109,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "covert_channels_benchmark"
+version = "0.1.0"
+dependencies = [
+ "covert_channels_evaluation",
+ "flush_flush",
+]
+
+[[package]]
 name = "covert_channels_evaluation"
 version = "0.1.0"
 dependencies = [
  "bit_field 0.10.1",
+ "cache_side_channel",
  "cache_utils",
+ "nix",
  "rand",
  "turn_lock",
 ]
@@ -149,6 +162,7 @@ version = "0.1.0"
 dependencies = [
  "cache_side_channel",
  "cache_utils",
+ "covert_channels_evaluation",
  "nix",
 ]
 
@@ -158,6 +172,8 @@ version = "0.1.0"
 dependencies = [
  "cache_side_channel",
  "cache_utils",
+ "covert_channels_evaluation",
+ "nix",
 ]
 
 [[package]]

@@ -1,13 +1,11 @@
 [package]
-name = "flush_flush"
+name = "covert_channels_benchmark"
 version = "0.1.0"
-authors = ["GuillaumeDIDIER <guillaume.didier95@hotmail.fr>"]
+authors = ["Guillume DIDIER <guillaume.didier@inria.fr>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cache_utils = { path = "../cache_utils" }
-cache_side_channel = { path = "../cache_side_channel" }
-nix = "0.18.0"
 covert_channels_evaluation = {path = "../covert_channels_evaluation"}
+flush_flush = {path = "../flush_flush"}

@@ -252,7 +252,6 @@ fn main() {
     let new_analysis: Result<HashMap<ASVP, ErrorPredictions>, nix::Error> =
         calibration_result_to_ASVP(
             r,
-            pointer,
             |cal_1t_res| {
                 ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
                     cal_1t_res, hit_index, miss_index,
@@ -645,8 +644,8 @@ fn main() {
     // Print header
     println!(
         "AVAnalysis:Attacker,Victim,{},{}",
-        error_header("AVSP_Best_AV_"),
-        error_header("AV_Best_AV_")
+        error_header("AVSP_AVAverage_"),
+        error_header("AV_AVAverage_")
     );
     //print lines
 
@@ -668,9 +667,9 @@ fn main() {
 
     println!(
         "AttackerAnalysis:Attacker,{},{},{}",
-        error_header("AVSP_Best_A_"),
-        error_header("ASP_Best_A_"),
-        error_header("AV_Best_A_"),
+        error_header("AVSP_AAverage_"),
+        error_header("ASP_AAverage_"),
+        error_header("AV_AAverage_"),
     );
 
     for attacker in keys {
@@ -682,15 +681,4 @@ fn main() {
             AV = format_error(&av_best_a_erros[&attacker].0)
         );
     }
-
-    /*
-    println!(
-        "analysis result: {:?}",
-        asvp_threshold_errors.keys().copied().collect::<Vec<ASVP>>()
-    );
-    println!("Global Analysis: {:#?}", global_threshold_errors);
-    println!(
-        "Global thrshold total error rate :{}",
-        global_threshold_errors.error.error_rate()
-    );*/
 }

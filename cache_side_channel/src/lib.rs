@@ -2,6 +2,8 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
+use nix::unistd::Pid;
 use std::fmt::Debug;
 
 pub mod table_side_channel;
@@ -17,6 +19,7 @@ pub enum ChannelFatalError {
     Oops,
 }
 
+#[derive(Debug)]
 pub enum SideChannelError {
     NeedRecalibration,
     FatalError(ChannelFatalError),
@@ -24,7 +27,23 @@ pub enum SideChannelError {
     AddressNotCalibrated(*const u8),
 }
 
-pub trait SingleAddrCacheSideChannel: Debug {
+pub trait CoreSpec {
+    fn main_core(&self) -> CpuSet;
+    fn helper_core(&self) -> CpuSet;
+}
+
+pub fn restore_affinity(cpu_set: &CpuSet) {
+    sched_setaffinity(Pid::from_raw(0), &cpu_set).unwrap();
+}
+
+#[must_use = "This result must be used to restore affinity"]
+pub fn set_affinity(cpu_set: &CpuSet) -> CpuSet {
+    let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+    sched_setaffinity(Pid::from_raw(0), &cpu_set).unwrap();
+    old
+}
+
+pub trait SingleAddrCacheSideChannel: CoreSpec + Debug {
     //type SingleChannelFatalError: Debug;
     /// # Safety
     ///
@@ -44,7 +63,7 @@ pub trait SingleAddrCacheSideChannel: Debug {
     ) -> Result<(), ChannelFatalError>;
 }
 
-pub trait MultipleAddrCacheSideChannel: Debug {
+pub trait MultipleAddrCacheSideChannel: CoreSpec + Debug {
     const MAX_ADDR: u32;
     /// # Safety
     ///

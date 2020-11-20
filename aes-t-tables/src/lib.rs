@@ -6,7 +6,7 @@ use openssl::aes;
 
 use crate::CacheStatus::Miss;
 use cache_side_channel::table_side_channel::TableCacheSideChannel;
-use cache_side_channel::CacheStatus;
+use cache_side_channel::{restore_affinity, set_affinity, CacheStatus};
 use memmap2::Mmap;
 use openssl::aes::aes_ige;
 use openssl::symm::Mode;
@@ -58,6 +58,8 @@ pub unsafe fn attack_t_tables_poc(
     side_channel: &mut impl TableCacheSideChannel,
     parameters: AESTTableParams,
 ) {
+    let old_affinity = set_affinity(&side_channel.main_core());
+
     // Note : This function doesn't handle the case where the address space is not shared. (Additionally you have the issue of complicated eviction sets due to complex addressing)
     // TODO
 
@@ -133,4 +135,6 @@ pub unsafe fn attack_t_tables_poc(
         }
         println!();
     }
+
+    restore_affinity(&old_affinity);
 }

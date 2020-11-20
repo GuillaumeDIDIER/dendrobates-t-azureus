@@ -26,7 +26,7 @@ pub struct MMappedMemory<T> {
 }
 
 impl<T> MMappedMemory<T> {
-    pub fn try_new(size: usize) -> Result<MMappedMemory<T>, nix::Error> {
+    pub fn try_new(size: usize, huge: bool) -> Result<MMappedMemory<T>, nix::Error> {
         assert_ne!(size_of::<T>(), 0);
         if let Some(p) = unsafe {
             let p = mman::mmap(
@@ -35,11 +35,16 @@ impl<T> MMappedMemory<T> {
                 mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
                 mman::MapFlags::MAP_PRIVATE
                     | mman::MapFlags::MAP_ANONYMOUS
-                    | mman::MapFlags::MAP_HUGETLB,
+                    | if huge {
+                        mman::MapFlags::MAP_HUGETLB
+                    } else {
+                        mman::MapFlags::MAP_ANONYMOUS
+                    },
                 -1,
                 0,
             )?;
-            Unique::new(p as *mut T)
+            let pointer_T = p as *mut T;
+            Unique::new(pointer_T)
         } {
             Ok(MMappedMemory { pointer: p, size })
         } else {
@@ -47,8 +52,8 @@ impl<T> MMappedMemory<T> {
         }
     }
 
-    pub fn new(size: usize) -> MMappedMemory<T> {
-        Self::try_new(size).unwrap()
+    pub fn new(size: usize, huge: bool) -> MMappedMemory<T> {
+        Self::try_new(size, huge).unwrap()
     }
 
     pub fn slice(&self) -> &[T] {

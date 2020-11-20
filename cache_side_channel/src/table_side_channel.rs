@@ -1,9 +1,10 @@
 use crate::{
-    CacheStatus, ChannelFatalError, MultipleAddrCacheSideChannel, SideChannelError,
+    CacheStatus, ChannelFatalError, CoreSpec, MultipleAddrCacheSideChannel, SideChannelError,
     SingleAddrCacheSideChannel,
 };
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 pub struct TableAttackResult {
     pub addr: *const u8,
@@ -20,7 +21,7 @@ impl TableAttackResult {
     }
 }
 
-pub trait TableCacheSideChannel {
+pub trait TableCacheSideChannel: CoreSpec + Debug {
     //type ChannelFatalError: Debug;
     /// # Safety
     ///

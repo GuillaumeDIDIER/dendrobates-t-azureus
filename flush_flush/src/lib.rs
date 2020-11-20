@@ -5,13 +5,14 @@ pub mod naive;
 
 use cache_side_channel::SideChannelError::{AddressNotCalibrated, AddressNotReady};
 use cache_side_channel::{
-    CacheStatus, ChannelFatalError, MultipleAddrCacheSideChannel, SideChannelError,
+    CacheStatus, ChannelFatalError, CoreSpec, MultipleAddrCacheSideChannel, SideChannelError,
     SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
-    calibrate_fixed_freq_2_thread, get_cache_slicing, get_vpn, only_flush, CalibrateOperation2T,
-    CalibrationOptions, HistParams, Verbosity, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE,
-    CFLUSH_NUM_ITER, PAGE_LEN,
+    accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, get_cache_slicing,
+    get_vpn, only_flush, only_reload, CalibrateOperation2T, CalibrationOptions, ErrorPredictions,
+    HistParams, HistogramCumSum, PotentialThresholds, Verbosity, ASVP, CFLUSH_BUCKET_NUMBER,
+    CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, PAGE_LEN, PAGE_SHIFT,
 };
 use cache_utils::calibration::{ErrorPrediction, Slice, Threshold, ThresholdError, AV, SP, VPN};
 use cache_utils::complex_addressing::CacheSlicing;
@@ -28,11 +29,13 @@ pub struct FlushAndFlush {
     slicing: CacheSlicing,
     attacker_core: usize,
     victim_core: usize,
+    preferred_address: HashMap<*const u8, *const u8>,
 }
 
 #[derive(Debug)]
 pub enum FlushAndFlushError {
     NoSlicing,
+    Nix(nix::Error),
 }
 
 #[derive(Debug)]
@@ -53,6 +56,16 @@ impl SingleFlushAndFlush {
     ) -> Result<(Self, CpuSet, usize, usize), FlushAndFlushError> {
         FlushAndFlush::new_any_two_core(distinct)
             .map(|(ff, old, attacker, victim)| (SingleFlushAndFlush(ff), old, attacker, victim))
+    }
+}
+
+impl CoreSpec for SingleFlushAndFlush {
+    fn main_core(&self) -> CpuSet {
+        self.0.main_core()
+    }
+
+    fn helper_core(&self) -> CpuSet {
+        self.0.helper_core()
     }
 }
 
@@ -90,6 +103,7 @@ impl FlushAndFlush {
                 slicing,
                 attacker_core,
                 victim_core,
+                preferred_address: Default::default(),
             };
             Ok(ret)
         } else {
@@ -126,6 +140,14 @@ impl FlushAndFlush {
 
         let mut calibrate_results2t_vec = Vec::new();
 
+        let slicing = match get_cache_slicing(core_per_socket) {
+            Some(s) => s,
+            None => {
+                return Err(FlushAndFlushError::NoSlicing);
+            }
+        };
+        let h = |addr: usize| slicing.hash(addr).unwrap();
+
         for page in pages {
             // FIXME Cache line size is magic
             let mut r = unsafe {
@@ -139,7 +161,7 @@ impl FlushAndFlush {
                         hist_params: HistParams {
                             bucket_number: CFLUSH_BUCKET_NUMBER,
                             bucket_size: CFLUSH_BUCKET_SIZE,
-                            iterations: CFLUSH_NUM_ITER << 1,
+                            iterations: CFLUSH_NUM_ITER,
                         },
                         verbosity: Verbosity::NoOutput,
                         optimised_addresses: true,
@@ -149,25 +171,68 @@ impl FlushAndFlush {
             };
             calibrate_results2t_vec.append(&mut r);
         }
-        unimplemented!();
+        let analysis: HashMap<ASVP, ThresholdError> = calibration_result_to_ASVP(
+            calibrate_results2t_vec,
+            |cal_1t_res| {
+                let e = ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
+                    cal_1t_res, HIT_INDEX, MISS_INDEX,
+                ));
+                PotentialThresholds::minimizing_total_error(e)
+                    .median()
+                    .unwrap()
+            },
+            &h,
+        )
+        .map_err(|e| FlushAndFlushError::Nix(e))?;
+
+        let asvp_best_av_errors: HashMap<AV, (ErrorPrediction, HashMap<SP, ThresholdError>)> =
+            accumulate(
+                analysis,
+                |asvp: ASVP| AV {
+                    attacker: asvp.attacker,
+                    victim: asvp.victim,
+                },
+                || (ErrorPrediction::default(), HashMap::new()),
+                |acc: &mut (ErrorPrediction, HashMap<SP, ThresholdError>),
+                 threshold_error,
+                 asvp: ASVP,
+                 av| {
+                    assert_eq!(av.attacker, asvp.attacker);
+                    assert_eq!(av.victim, asvp.victim);
+                    let sp = SP {
+                        slice: asvp.slice,
+                        page: asvp.page,
+                    };
+                    acc.0 += threshold_error.error;
+                    acc.1.insert(sp, threshold_error);
+                },
+            );
+        Ok(asvp_best_av_errors)
     }
 
     fn new_with_core_pairs(
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
     ) -> Result<(Self, usize, usize), FlushAndFlushError> {
-        let m = MMappedMemory::new(PAGE_LEN);
+        let m = MMappedMemory::new(PAGE_LEN, false);
         let array: &[u8] = m.slice();
 
-        let res = Self::calibration_for_core_pairs(core_pairs, vec![array].into_iter());
+        let mut res = Self::calibration_for_core_pairs(core_pairs, vec![array].into_iter())?;
 
-        // Call the calibration function on a local page sized buffer.
-
-        // Classical analysis flow to generate all ASVP, Threshold, Error.
-
-        // Reduction to determine average / max error for each core.
+        let mut best_error_rate = 1.0;
+        let mut best_av = Default::default();
 
         // Select the proper core
-        unimplemented!();
+
+        for (av, (global_error_pred, thresholds)) in res.iter() {
+            if global_error_pred.error_rate() < best_error_rate {
+                best_av = *av;
+                best_error_rate = global_error_pred.error_rate();
+            }
+        }
+        Self::new(best_av.attacker, best_av.victim)
+            .map(|this| (this, best_av.attacker, best_av.victim))
+
+        // Set no threshold as calibrated on local array that will get dropped.
     }
 
     pub fn new_any_single_core() -> Result<(Self, CpuSet, usize), FlushAndFlushError> {
@@ -224,7 +289,7 @@ impl FlushAndFlush {
         self.slicing.hash(addr as usize).unwrap()
     }
 
-    pub fn set_cores(&mut self, attacker: usize, victim: usize) -> Result<(), nix::Error> {
+    pub fn set_cores(&mut self, attacker: usize, victim: usize) -> Result<(), FlushAndFlushError> {
         let old_attacker = self.attacker_core;
         let old_victim = self.victim_core;
 
@@ -247,34 +312,41 @@ impl FlushAndFlush {
         }
     }
 
-    fn recalibrate(&mut self, pages: impl IntoIterator<Item = VPN>) -> Result<(), nix::Error> {
+    fn recalibrate(
+        &mut self,
+        pages: impl IntoIterator<Item = VPN>,
+    ) -> Result<(), FlushAndFlushError> {
         // unset readiness status.
         // Call calibration with core pairs with a single core pair
         // Use results \o/ (or error out)
 
-        unimplemented!();
+        self.addresses_ready.clear();
+
+        // Fixme refactor in depth core pairs to make explicit main vs helper.
+        let core_pairs = vec![(self.attacker_core, self.victim_core)];
+
+        let pages: HashSet<&[u8]> = self
+            .thresholds
+            .keys()
+            .map(|sp: &SP| unsafe { &*slice_from_raw_parts(sp.page as *const u8, PAGE_LEN) })
+            .collect();
+
+        let mut res = Self::calibration_for_core_pairs(core_pairs.into_iter(), pages.into_iter())?;
+        assert_eq!(res.keys().count(), 1);
+        self.thresholds = res
+            .remove(&AV {
+                attacker: self.attacker_core,
+                victim: self.victim_core,
+            })
+            .unwrap()
+            .1;
+        Ok(())
     }
-}
 
-impl Debug for FlushAndFlush {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FlushAndFlush")
-            .field("thresholds", &self.thresholds)
-            .field("addresses_ready", &self.addresses_ready)
-            .field("slicing", &self.slicing)
-            .finish()
-    }
-}
-
-use cache_utils::calibration::cum_sum;
-use cache_utils::mmap::MMappedMemory;
-
-impl MultipleAddrCacheSideChannel for FlushAndFlush {
-    const MAX_ADDR: u32 = 3;
-
-    unsafe fn test<'a, 'b, 'c>(
-        &'a mut self,
+    unsafe fn test_impl<'a, 'b, 'c>(
+        &'a self,
         addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
+        limit: u32,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
         let mut result = Vec::new();
         let mut tmp = Vec::new();
@@ -283,7 +355,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
             i += 1;
             let t = unsafe { only_flush(*addr) };
             tmp.push((addr, t));
-            if i == Self::MAX_ADDR {
+            if i == limit {
                 break;
             }
         }
@@ -304,9 +376,10 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         Ok(result)
     }
 
-    unsafe fn prepare<'a, 'b, 'c>(
+    unsafe fn prepare_impl<'a, 'b, 'c>(
         &'a mut self,
         addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
+        limit: u32,
     ) -> Result<(), SideChannelError> {
         use core::arch::x86_64 as arch_x86;
         let mut i = 0;
@@ -321,7 +394,7 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
             if !self.thresholds.contains_key(&SP { slice, page: vpn }) {
                 return Err(AddressNotCalibrated(*addr));
             }
-            if i == Self::MAX_ADDR {
+            if i == limit {
                 break;
             }
         }
@@ -329,13 +402,62 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         for addr in addresses {
             i += 1;
             unsafe { flush(*addr) };
+            //println!("{:p}", *addr);
             self.addresses_ready.insert(*addr);
-            if i == Self::MAX_ADDR {
+            if i == limit {
                 break;
             }
         }
         unsafe { arch_x86::_mm_mfence() };
         Ok(())
+    }
+}
+
+impl Debug for FlushAndFlush {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FlushAndFlush")
+            .field("thresholds", &self.thresholds)
+            .field("addresses_ready", &self.addresses_ready)
+            .field("slicing", &self.slicing)
+            .finish()
+    }
+}
+
+impl CoreSpec for FlushAndFlush {
+    fn main_core(&self) -> CpuSet {
+        let mut main = CpuSet::new();
+        main.set(self.attacker_core);
+        main
+    }
+
+    fn helper_core(&self) -> CpuSet {
+        let mut helper = CpuSet::new();
+        helper.set(self.victim_core);
+        helper
+    }
+}
+
+use cache_side_channel::CacheStatus::Hit;
+use cache_utils::calibration::cum_sum;
+use cache_utils::mmap::MMappedMemory;
+use covert_channels_evaluation::{BitIterator, CovertChannel};
+use std::ptr::slice_from_raw_parts;
+
+impl MultipleAddrCacheSideChannel for FlushAndFlush {
+    const MAX_ADDR: u32 = 3;
+
+    unsafe fn test<'a, 'b, 'c>(
+        &'a mut self,
+        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
+    ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
+        unsafe { self.test_impl(addresses, Self::MAX_ADDR) }
+    }
+
+    unsafe fn prepare<'a, 'b, 'c>(
+        &'a mut self,
+        addresses: &'b mut (impl Iterator<Item = &'c *const u8> + Clone),
+    ) -> Result<(), SideChannelError> {
+        unsafe { self.prepare_impl(addresses, Self::MAX_ADDR) }
     }
 
     fn victim(&mut self, operation: &dyn Fn()) {
@@ -357,251 +479,141 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<(), ChannelFatalError> {
-        unimplemented!()
-        /*
-        let mut pages = HashMap::<VPN, HashSet<*const u8>>::new();
-        for addr in addresses {
-            let page = get_vpn(addr);
-            pages.entry(page).or_insert_with(HashSet::new).insert(addr);
-        }
+        let core_pair = vec![(self.attacker_core, self.victim_core)];
 
-        let core_per_socket = find_core_per_socket();
+        let pages = addresses
+            .into_iter()
+            .map(|addr: *const u8| unsafe {
+                &*slice_from_raw_parts(get_vpn(addr) as *const u8, PAGE_LEN)
+            })
+            .collect::<HashSet<&[u8]>>();
 
-        let operations = [
-            CalibrateOperation2T {
-                prepare: maccess::<u8>,
-                op: only_flush,
-                name: "clflush_remote_hit",
-                display_name: "clflush remote hit",
-            },
-            CalibrateOperation2T {
-                prepare: noop::<u8>,
-                op: only_flush,
-                name: "clflush_miss",
-                display_name: "clflush miss",
-            },
-        ];
-        const HIT_INDEX: usize = 0;
-        const MISS_INDEX: usize = 1;
-
-        // Generate core iterator
-        let mut core_pairs: Vec<(usize, usize)> = Vec::new();
-
-        let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
-
-        for i in 0..CpuSet::count() {
-            if old.is_set(i).unwrap() {
-                core_pairs.push((i, i));
-            }
-        }
-
-        // Probably needs more metadata
-        let mut per_core: HashMap<usize, HashMap<VPN, HashMap<Slice, (Threshold, f32)>>> =
-            HashMap::new();
-
-        let mut core_averages: HashMap<usize, (f32, u32)> = HashMap::new();
-
-        for (page, _) in pages {
-            let p = page as *const u8;
-            let r = unsafe {
-                calibrate_fixed_freq_2_thread(
-                    p,
-                    64,                // FIXME : MAGIC
-                    PAGE_LEN as isize, // MAGIC
-                    &mut core_pairs.clone().into_iter(),
-                    &operations,
-                    CalibrationOptions {
-                        hist_params: HistParams {
-                            bucket_number: CFLUSH_BUCKET_NUMBER,
-                            bucket_size: CFLUSH_BUCKET_SIZE,
-                            iterations: CFLUSH_NUM_ITER << 1,
-                        },
-                        verbosity: Verbosity::NoOutput,
-                        optimised_addresses: true,
-                    },
-                    core_per_socket,
-                )
-            };
-
-            /* TODO refactor a good chunk of calibration result analysis to make thresholds in a separate function
-            Generating Cumulative Sums and then using that to compute error count for each possible threshold is a recurring joke.
-            It might be worth in a second time to refactor this to handle more generic strategies (such as double thresholds)
-            What about handling non attributes values (time values that are not attributed as hit or miss)
-            */
-
-            /*
-
-            Non Naive F+F flow
-            Vec<CalibrationResult2T> -> ASVP,Thresholds,Error Does not care as much. Can probably re-use functions to build a single one.
-            Add API to query predicted error rate, compare with covert channel result.
-            */
-
-            for result2t in r {
-                if result2t.main_core != result2t.helper_core {
-                    panic!("Unexpected core numbers");
+        let mut res =
+            match Self::calibration_for_core_pairs(core_pair.into_iter(), pages.into_iter()) {
+                Err(e) => {
+                    return Err(ChannelFatalError::Oops);
                 }
-                let core = result2t.main_core;
-                match result2t.res {
-                    Err(e) => panic!("Oops: {:#?}", e),
-                    Ok(results_1t) => {
-                        for r1t in results_1t {
-                            // This will be turned into map_values style functions + Calibration1T -> Reasonable Type
+                Ok(r) => r,
+            };
+        assert_eq!(res.keys().count(), 1);
+        let t = res
+            .remove(&AV {
+                attacker: self.attacker_core,
+                victim: self.victim_core,
+            })
+            .unwrap()
+            .1;
 
-                            // Already handled
-                            let offset = r1t.offset;
-                            let addr = unsafe { p.offset(offset) };
-                            let slice = self.get_slice(addr);
+        for (sp, threshold) in t {
+            //println!("Inserting sp: {:?} => Threshold: {:?}", sp, threshold);
+            self.thresholds.insert(sp, threshold);
+        }
 
-                            // To Raw histogram
-                            let miss_hist = &r1t.histogram[MISS_INDEX];
-                            let hit_hist = &r1t.histogram[HIT_INDEX];
-                            if miss_hist.len() != hit_hist.len() {
-                                panic!("Maformed results");
+        Ok(())
+    }
+}
+
+unsafe impl Send for FlushAndFlush {}
+unsafe impl Sync for FlushAndFlush {}
+
+impl CovertChannel for FlushAndFlush {
+    const BIT_PER_PAGE: usize = 1; //PAGE_SHIFT - 6; // FIXME MAGIC cache line size
+
+    unsafe fn transmit<'a>(&self, page: *const u8, bits: &mut BitIterator<'a>) {
+        let mut offset = 0;
+
+        if Self::BIT_PER_PAGE == 1 {
+            let page = self.preferred_address[&page];
+
+            if let Some(b) = bits.next() {
+                //println!("Transmitting {} on page {:p}", b, page);
+                if b {
+                    unsafe { only_reload(page) };
+                } else {
+                    unsafe { only_flush(page) };
+                }
+            }
+        } else {
+            for i in 0..Self::BIT_PER_PAGE {
+                if let Some(b) = bits.next() {
+                    if b {
+                        offset += 1 << i + 6; // Magic FIXME cache line size
+                    }
+                }
+            }
+            unsafe { maccess(page.offset(offset as isize)) };
+        }
+    }
+
+    unsafe fn receive(&self, page: *const u8) -> Vec<bool> {
+        if Self::BIT_PER_PAGE == 1 {
+            let addresses: Vec<*const u8> = vec![self.preferred_address[&page]];
+            let r = unsafe { self.test_impl(&mut addresses.iter(), u32::max_value()) };
+            match r {
+                Err(e) => panic!("{:?}", e),
+                Ok(status_vec) => {
+                    assert_eq!(status_vec.len(), 1);
+                    let received = status_vec[0].1 == Hit;
+                    //println!("Received {} on page {:p}", received, page);
+                    return vec![received];
+                }
+            }
+        } else {
+            let addresses = (0..PAGE_LEN)
+                .step_by(64)
+                .map(|o| unsafe { page.offset(o as isize) })
+                .collect::<HashSet<*const u8>>();
+            let r = unsafe { self.test_impl(&mut addresses.iter(), u32::max_value()) };
+            match r {
+                Err(e) => panic!("{:?}", e),
+                Ok(status_vec) => {
+                    for (addr, status) in status_vec {
+                        if status == Hit {
+                            let offset = unsafe { addr.offset_from(page) } >> 6; // Fixme cache line size magic
+                            let mut res = Vec::new();
+                            for i in 0..Self::BIT_PER_PAGE {
+                                res.push((offset & (1 << i)) != 0);
                             }
-                            let len = miss_hist.len();
-
-                            // Cum Sums
-                            let miss_cum_sum = cum_sum(miss_hist);
-                            let hit_cum_sum = cum_sum(hit_hist);
-                            let miss_total = miss_cum_sum[len - 1];
-                            let hit_total = hit_cum_sum[len - 1];
-
-                            // Error rate per threshold computations
-
-                            // Threshold is less than equal => miss, strictly greater than => hit
-                            let mut error_miss_less_than_hit = vec![0; len - 1];
-                            // Threshold is less than equal => hit, strictly greater than => miss
-                            let mut error_hit_less_than_miss = vec![0; len - 1];
-
-                            let mut min_error_hlm = u32::max_value();
-                            let mut min_error_mlh = u32::max_value();
-
-                            for i in 0..(len - 1) {
-                                error_hit_less_than_miss[i] =
-                                    miss_cum_sum[i] + (hit_total - hit_cum_sum[i]);
-                                error_miss_less_than_hit[i] =
-                                    hit_cum_sum[i] + (miss_total - miss_cum_sum[i]);
-
-                                if error_hit_less_than_miss[i] < min_error_hlm {
-                                    min_error_hlm = error_hit_less_than_miss[i];
-                                }
-                                if error_miss_less_than_hit[i] < min_error_mlh {
-                                    min_error_mlh = error_miss_less_than_hit[i];
-                                }
-                            }
-
-                            let hlm = min_error_hlm < min_error_mlh;
-
-                            let (errors, min_error) = if hlm {
-                                (&error_hit_less_than_miss, min_error_hlm)
-                            } else {
-                                (&error_miss_less_than_hit, min_error_mlh)
-                            };
-
-                            // Find the min -> gives potetial thresholds with info
-                            let mut potential_thresholds = Vec::new();
-
-                            for i in 0..errors.len() {
-                                if errors[i] == min_error {
-                                    let num_true_hit;
-                                    let num_false_hit;
-                                    let num_true_miss;
-                                    let num_false_miss;
-                                    if hlm {
-                                        num_true_hit = hit_cum_sum[i];
-                                        num_false_hit = miss_cum_sum[i];
-                                        num_true_miss = miss_total - num_false_hit;
-                                        num_false_miss = hit_total - num_true_hit;
-                                    } else {
-                                        num_true_miss = miss_cum_sum[i];
-                                        num_false_miss = hit_cum_sum[i];
-                                        num_true_hit = hit_total - num_false_miss;
-                                        num_false_hit = miss_total - num_true_miss;
-                                    }
-                                    potential_thresholds.push((
-                                        i,
-                                        num_true_hit,
-                                        num_false_hit,
-                                        num_true_miss,
-                                        num_false_miss,
-                                        min_error as f32 / (hit_total + miss_total) as f32,
-                                    ));
-                                }
-                            }
-
-                            let index = (potential_thresholds.len() - 1) / 2;
-                            let (threshold, _, _, _, _, error_rate) = potential_thresholds[index];
-                            // insert in per_core
-                            if per_core
-                                .entry(core)
-                                .or_insert_with(HashMap::new)
-                                .entry(page)
-                                .or_insert_with(HashMap::new)
-                                .insert(
-                                    slice,
-                                    (
-                                        Threshold {
-                                            bucket_index: threshold, // FIXME the bucket to time conversion
-                                            miss_faster_than_hit: !hlm,
-                                        },
-                                        error_rate,
-                                    ),
-                                )
-                                .is_some()
-                            {
-                                panic!("Duplicate slice result");
-                            }
-                            let core_average = core_averages.get(&core).unwrap_or(&(0.0, 0));
-                            let new_core_average =
-                                (core_average.0 + error_rate, core_average.1 + 1);
-                            core_averages.insert(core, new_core_average);
+                            return res;
                         }
                     }
                 }
             }
+            vec![false; Self::BIT_PER_PAGE]
         }
+    }
 
-        // We now get ASVP stuff with the correct core(in theory)
-
-        // We now have a HashMap associating stuffs to cores, iterate on it and select the best.
-        let mut best_core = 0;
-
-        let mut best_error_rate = {
-            let ca = core_averages[&0];
-            ca.0 / ca.1 as f32
-        };
-        for (core, average) in core_averages {
-            let error_rate = average.0 / average.1 as f32;
-            if error_rate < best_error_rate {
-                best_core = core;
-                best_error_rate = error_rate;
+    unsafe fn ready_page(&mut self, page: *const u8) {
+        let r = unsafe { self.calibrate(vec![page].into_iter()) }.unwrap();
+        if Self::BIT_PER_PAGE == 1 {
+            let mut best_error_rate = 1.0;
+            let mut best_slice = 0;
+            for (sp, threshold_error) in
+                self.thresholds.iter().filter(|kv| kv.0.page == page as VPN)
+            {
+                if threshold_error.error.error_rate() < best_error_rate {
+                    best_error_rate = threshold_error.error.error_rate();
+                    best_slice = sp.slice;
+                }
             }
-        }
-        let mut thresholds = HashMap::new();
-        println!("Best core: {}, rate: {}", best_core, best_error_rate);
-        let tmp = per_core.remove(&best_core).unwrap();
-        for (page, per_page) in tmp {
-            let page_entry = thresholds.entry(page).or_insert_with(HashMap::new);
-            for (slice, per_slice) in per_page {
-                println!(
-                    "page: {:x}, slice: {}, threshold: {:?}, error_rate: {}",
-                    page, slice, per_slice.0, per_slice.1
-                );
-                page_entry.insert(slice, per_slice.0);
+            for i in 0..PAGE_LEN {
+                let addr = unsafe { page.offset(i as isize) };
+                if self.get_slice(addr) == best_slice {
+                    self.preferred_address.insert(page, addr);
+                    let r = unsafe { self.prepare_impl(&mut vec![addr].iter(), u32::max_value()) }
+                        .unwrap();
+
+                    break;
+                }
             }
+        } else {
+            let addresses = (0..PAGE_LEN)
+                .step_by(64)
+                .map(|o| unsafe { page.offset(o as isize) })
+                .collect::<Vec<*const u8>>();
+            //println!("{:#?}", addresses);
+            let r = unsafe { self.prepare_impl(&mut addresses.iter(), u32::max_value()) }.unwrap();
         }
-        self.thresholds = thresholds;
-        println!("{:#?}", self.thresholds);
-
-        // TODO handle error better for affinity setting and other issues.
-
-        self.addresses_ready.clear();
-
-        let mut cpuset = CpuSet::new();
-        cpuset.set(best_core).unwrap();
-        sched_setaffinity(Pid::from_raw(0), &cpuset).unwrap();
-        Ok(())
-        */
     }
 }
 

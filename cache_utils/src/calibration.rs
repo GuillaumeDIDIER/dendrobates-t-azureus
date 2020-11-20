@@ -112,7 +112,8 @@ pub unsafe fn l3_and_reload(p: *const u8) -> u64 {
     only_reload(p)
 }
 
-pub const PAGE_LEN: usize = 1 << 12;
+pub const PAGE_SHIFT: usize = 12;
+pub const PAGE_LEN: usize = 1 << PAGE_SHIFT;
 
 pub fn get_vpn<T>(p: *const T) -> usize {
     (p as usize) & (!(PAGE_LEN - 1)) // FIXME
@@ -246,6 +247,7 @@ pub fn calibrate_flush(
 
 #[derive(Debug)]
 pub struct CalibrateResult {
+    pub page: VPN,
     pub offset: isize,
     pub histogram: Vec<Vec<u32>>,
     pub median: Vec<u64>,
@@ -383,6 +385,7 @@ fn calibrate_impl_fixed_freq(
 
         // TODO add some useful impl to CalibrateResults
         let mut calibrate_result = CalibrateResult {
+            page: get_vpn(pointer),
             offset: i,
             histogram: Vec::new(),
             median: vec![0; operations.len()],
@@ -646,12 +649,12 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                 "Calibration for main_core {}, helper {}.",
                 main_core, helper_core
             );
-        }
 
-        eprintln!(
-            "Calibration for main_core {}, helper {}.",
-            main_core, helper_core
-        );
+            eprintln!(
+                "Calibration for main_core {}, helper {}.",
+                main_core, helper_core
+            );
+        }
 
         let mut core = CpuSet::new();
         match core.set(main_core) {
@@ -716,6 +719,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
 
             // TODO add some useful impl to CalibrateResults
             let mut calibrate_result = CalibrateResult {
+                page: get_vpn(pointer),
                 offset: i,
                 histogram: Vec::new(),
                 median: vec![0; operations.len()],
@@ -1574,7 +1578,6 @@ impl Threshold {
 
 pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
     results: Vec<CalibrateResult2T>,
-    base: *const u8,
     analysis: Analysis,
     slicing: &impl Fn(usize) -> u8,
 ) -> Result<HashMap<ASVP, T>, nix::Error> {
@@ -1587,8 +1590,8 @@ pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
             Ok(calibrate_1t_results) => {
                 for result_1t in calibrate_1t_results {
                     let offset = result_1t.offset;
-                    let addr = unsafe { base.offset(offset) };
-                    let page = get_vpn(addr); //TODO
+                    let page = result_1t.page;
+                    let addr = page + offset as usize;
                     let slice = slicing(addr as usize);
                     let analysed = analysis(result_1t);
                     let asvp = ASVP {

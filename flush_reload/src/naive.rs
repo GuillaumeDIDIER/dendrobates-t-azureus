@@ -1,8 +1,11 @@
 use cache_side_channel::{
-    CacheStatus, ChannelFatalError, SideChannelError, SingleAddrCacheSideChannel,
+    CacheStatus, ChannelFatalError, CoreSpec, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::only_reload;
 use cache_utils::flush;
+use covert_channels_evaluation::{BitIterator, CovertChannel};
+use nix::sched::{sched_getaffinity, CpuSet};
+use nix::unistd::Pid;
 
 #[derive(Debug)]
 pub struct NaiveFlushAndReload {
@@ -56,5 +59,44 @@ impl SingleAddrCacheSideChannel for NaiveFlushAndReload {
         _addresses: impl IntoIterator<Item = *const u8>,
     ) -> Result<(), ChannelFatalError> {
         Ok(())
+    }
+}
+
+unsafe impl Send for NaiveFlushAndReload {}
+unsafe impl Sync for NaiveFlushAndReload {}
+
+impl CoreSpec for NaiveFlushAndReload {
+    fn main_core(&self) -> CpuSet {
+        sched_getaffinity(Pid::from_raw(0)).unwrap()
+    }
+
+    fn helper_core(&self) -> CpuSet {
+        sched_getaffinity(Pid::from_raw(0)).unwrap()
+    }
+}
+
+impl CovertChannel for NaiveFlushAndReload {
+    const BIT_PER_PAGE: usize = 1;
+
+    unsafe fn transmit<'a>(&self, page: *const u8, bits: &mut BitIterator<'a>) {
+        unimplemented!()
+    }
+
+    unsafe fn receive(&self, page: *const u8) -> Vec<bool> {
+        unimplemented!()
+        /*
+        let r = self.test_single(page);
+        match r {
+            Err(e) => unimplemented!(),
+            Ok(status) => match status {
+                CacheStatus::Hit => vec![true],
+                CacheStatus::Miss => vec![false],
+            },
+        }
+         */
+    }
+
+    unsafe fn ready_page(&mut self, page: *const u8) {
+        unimplemented!()
     }
 }
