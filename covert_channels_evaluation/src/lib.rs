@@ -43,7 +43,18 @@ pub struct CovertChannelBenchmarkResult {
     pub num_bit_errors: usize,
     pub error_rate: f64,
     pub time_rdtsc: u64,
-    //pub time_seconds: todo
+    pub time_seconds: std::time::Duration,
+}
+
+impl CovertChannelBenchmarkResult {
+    pub fn capacity(&self) -> f64 {
+        (self.num_bytes_transmitted * 8) as f64 / self.time_seconds.as_secs_f64()
+    }
+
+    pub fn true_capacity(&self) -> f64 {
+        let p = self.error_rate;
+        self.capacity() * (1.0 + ((1.0 - p) * f64::log2(1.0 - p) + p * f64::log2(p)))
+    }
 }
 
 pub struct BitIterator<'a> {
@@ -97,7 +108,7 @@ unsafe impl<T: 'static + CovertChannel + Send> Send for CovertChannelParams<T> {
 fn transmit_thread<T: CovertChannel>(
     num_bytes: usize,
     mut params: CovertChannelParams<T>,
-) -> (u64, Vec<u8>) {
+) -> (u64, std::time::Instant, Vec<u8>) {
     let old_affinity = set_affinity(&(*params.covert_channel).helper_core());
 
     let mut result = Vec::new();
@@ -109,6 +120,7 @@ fn transmit_thread<T: CovertChannel>(
 
     let mut bit_sent = 0;
     let mut bit_iter = BitIterator::new(&result);
+    let start_time = std::time::Instant::now();
     let start = unsafe { rdtsc_fence() };
     while !bit_iter.atEnd() {
         for page in params.pages.iter_mut() {
@@ -121,7 +133,7 @@ fn transmit_thread<T: CovertChannel>(
             }
         }
     }
-    (start, result)
+    (start, start_time, result)
 }
 
 pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
@@ -194,8 +206,9 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     }
 
     let stop = unsafe { rdtsc_fence() };
+    let stop_time = std::time::Instant::now();
     let r = helper.join();
-    let (start, sent_bytes) = match r {
+    let (start, start_time, sent_bytes) = match r {
         Ok(r) => r,
         Err(e) => panic!("Join Error: {:?#}"),
     };
@@ -216,6 +229,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
         num_bit_errors: num_bit_error,
         error_rate,
         time_rdtsc: stop - start,
+        time_seconds: stop_time - start_time,
     }
 }
 

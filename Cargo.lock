@@ -114,6 +114,7 @@ version = "0.1.0"
 dependencies = [
  "covert_channels_evaluation",
  "flush_flush",
+ "flush_reload",
 ]
 
 [[package]]

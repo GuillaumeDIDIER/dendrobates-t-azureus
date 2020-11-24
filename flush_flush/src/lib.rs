@@ -516,6 +516,67 @@ impl MultipleAddrCacheSideChannel for FlushAndFlush {
 unsafe impl Send for FlushAndFlush {}
 unsafe impl Sync for FlushAndFlush {}
 
+impl CovertChannel for SingleFlushAndFlush {
+    const BIT_PER_PAGE: usize = 1; //PAGE_SHIFT - 6; // FIXME MAGIC cache line size
+
+    unsafe fn transmit<'a>(&self, page: *const u8, bits: &mut BitIterator<'a>) {
+        let mut offset = 0;
+
+        let page = self.0.preferred_address[&page];
+
+        if let Some(b) = bits.next() {
+            //println!("Transmitting {} on page {:p}", b, page);
+            if b {
+                unsafe { only_reload(page) };
+            } else {
+                unsafe { only_flush(page) };
+            }
+        }
+    }
+
+    unsafe fn receive(&self, page: *const u8) -> Vec<bool> {
+        let addresses: Vec<*const u8> = vec![self.0.preferred_address[&page]];
+        let r = unsafe { self.0.test_impl(&mut addresses.iter(), u32::max_value()) };
+        match r {
+            Err(e) => panic!("{:?}", e),
+            Ok(status_vec) => {
+                assert_eq!(status_vec.len(), 1);
+                let received = status_vec[0].1 == Hit;
+                return vec![received];
+            }
+        }
+    }
+
+    unsafe fn ready_page(&mut self, page: *const u8) {
+        let r = unsafe { self.0.calibrate(vec![page].into_iter()) }.unwrap();
+        let mut best_error_rate = 1.0;
+        let mut best_slice = 0;
+        for (sp, threshold_error) in self
+            .0
+            .thresholds
+            .iter()
+            .filter(|kv| kv.0.page == page as VPN)
+        {
+            if threshold_error.error.error_rate() < best_error_rate {
+                best_error_rate = threshold_error.error.error_rate();
+                best_slice = sp.slice;
+            }
+        }
+        for i in 0..PAGE_LEN {
+            let addr = unsafe { page.offset(i as isize) };
+            if self.0.get_slice(addr) == best_slice {
+                self.0.preferred_address.insert(page, addr);
+                let r = unsafe {
+                    self.0
+                        .prepare_impl(&mut vec![addr].iter(), u32::max_value())
+                }
+                .unwrap();
+                break;
+            }
+        }
+    }
+}
+
 impl CovertChannel for FlushAndFlush {
     const BIT_PER_PAGE: usize = 1; //PAGE_SHIFT - 6; // FIXME MAGIC cache line size
 

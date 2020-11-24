@@ -1,0 +1,114 @@
+use cache_side_channel::{
+    CacheStatus, ChannelFatalError, CoreSpec, SideChannelError, SingleAddrCacheSideChannel,
+};
+use cache_utils::calibration::{get_vpn, only_flush, only_reload, VPN};
+use cache_utils::flush;
+use covert_channels_evaluation::{BitIterator, CovertChannel};
+use nix::sched::{sched_getaffinity, CpuSet};
+use nix::unistd::Pid;
+use std::collections::HashMap;
+use std::thread::current;
+
+#[derive(Debug)]
+pub struct NaiveFlushAndFlush {
+    pub threshold: u64,
+    current: HashMap<VPN, *const u8>,
+}
+
+impl NaiveFlushAndFlush {
+    pub fn from_threshold(threshold: u64) -> Self {
+        NaiveFlushAndFlush {
+            threshold,
+            current: Default::default(),
+        }
+    }
+    unsafe fn test_impl(&self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
+        let vpn = get_vpn(addr);
+        if self.current.get(&vpn) != Some(&addr) {
+            return Err(SideChannelError::AddressNotReady(addr));
+        }
+        let t = unsafe { only_flush(addr) };
+        if t < self.threshold {
+            Ok(CacheStatus::Miss)
+        } else {
+            Ok(CacheStatus::Hit)
+        }
+    }
+}
+
+impl SingleAddrCacheSideChannel for NaiveFlushAndFlush {
+    /// # Safety
+    ///
+    /// addr needs to be a valid pointer
+    unsafe fn test_single(&mut self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
+        unsafe { self.test_impl(addr) }
+    }
+
+    /// # Safety:
+    ///
+    /// addr needs to be a valid pointer
+    unsafe fn prepare_single(&mut self, addr: *const u8) -> Result<(), SideChannelError> {
+        unsafe { flush(addr) };
+        let vpn = get_vpn(addr);
+        self.current.insert(vpn, addr);
+        Ok(())
+    }
+
+    fn victim_single(&mut self, operation: &dyn Fn()) {
+        operation()
+    }
+
+    /// # Safety
+    ///
+    /// addr needs to be a valid pointer
+    unsafe fn calibrate_single(
+        &mut self,
+        _addresses: impl IntoIterator<Item = *const u8>,
+    ) -> Result<(), ChannelFatalError> {
+        Ok(())
+    }
+}
+
+unsafe impl Send for NaiveFlushAndFlush {}
+unsafe impl Sync for NaiveFlushAndFlush {}
+
+impl CoreSpec for NaiveFlushAndFlush {
+    fn main_core(&self) -> CpuSet {
+        sched_getaffinity(Pid::from_raw(0)).unwrap()
+    }
+
+    fn helper_core(&self) -> CpuSet {
+        sched_getaffinity(Pid::from_raw(0)).unwrap()
+    }
+}
+
+impl CovertChannel for NaiveFlushAndFlush {
+    const BIT_PER_PAGE: usize = 1;
+
+    unsafe fn transmit<'a>(&self, page: *const u8, bits: &mut BitIterator<'a>) {
+        let vpn = get_vpn(page);
+        let addr = self.current.get(&vpn).unwrap();
+        if let Some(b) = bits.next() {
+            if b {
+                unsafe { only_reload(*addr) };
+            } else {
+                unsafe { only_flush(*addr) };
+            }
+        }
+    }
+
+    unsafe fn receive(&self, page: *const u8) -> Vec<bool> {
+        let r = unsafe { self.test_impl(page) };
+        match r {
+            Err(e) => panic!(),
+            Ok(status) => match status {
+                CacheStatus::Hit => vec![true],
+                CacheStatus::Miss => vec![false],
+            },
+        }
+    }
+
+    unsafe fn ready_page(&mut self, page: *const u8) {
+        unsafe { self.prepare_single(page) };
+    }
+}
