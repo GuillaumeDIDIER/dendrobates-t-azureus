@@ -13,6 +13,8 @@ use std::thread::current;
 pub struct NaiveFlushAndFlush {
     pub threshold: u64,
     current: HashMap<VPN, *const u8>,
+    main_core: CpuSet,
+    helper_core: CpuSet,
 }
 
 impl NaiveFlushAndFlush {
@@ -20,6 +22,8 @@ impl NaiveFlushAndFlush {
         NaiveFlushAndFlush {
             threshold,
             current: Default::default(),
+            main_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
+            helper_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
         }
     }
     unsafe fn test_impl(&self, addr: *const u8) -> Result<CacheStatus, SideChannelError> {
@@ -33,6 +37,14 @@ impl NaiveFlushAndFlush {
         } else {
             Ok(CacheStatus::Hit)
         }
+    }
+
+    pub fn set_cores(&mut self, main_core: usize, helper_core: usize) {
+        self.main_core = CpuSet::new();
+        self.main_core.set(main_core).unwrap();
+
+        self.helper_core = CpuSet::new();
+        self.helper_core.set(helper_core).unwrap();
     }
 }
 
@@ -74,11 +86,11 @@ unsafe impl Sync for NaiveFlushAndFlush {}
 
 impl CoreSpec for NaiveFlushAndFlush {
     fn main_core(&self) -> CpuSet {
-        sched_getaffinity(Pid::from_raw(0)).unwrap()
+        self.main_core
     }
 
     fn helper_core(&self) -> CpuSet {
-        sched_getaffinity(Pid::from_raw(0)).unwrap()
+        self.helper_core
     }
 }
 

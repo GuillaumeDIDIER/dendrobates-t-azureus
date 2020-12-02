@@ -115,6 +115,7 @@ dependencies = [
  "covert_channels_evaluation",
  "flush_flush",
  "flush_reload",
+ "nix",
 ]
 
 [[package]]

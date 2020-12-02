@@ -10,3 +10,6 @@ edition = "2018"
 covert_channels_evaluation = { path = "../covert_channels_evaluation" }
 flush_flush = { path = "../flush_flush" }
 flush_reload = { path = "../flush_reload" }
+nix = "0.18.0"
+
+
