@@ -86,7 +86,7 @@ fn main() {
 
     println!("Number of cores per socket: {}", core_per_socket);
 
-    let m = MMappedMemory::new(SIZE);
+    let m = MMappedMemory::new(SIZE, true);
     let array = m.slice();
 
     let cache_line_size = 64;

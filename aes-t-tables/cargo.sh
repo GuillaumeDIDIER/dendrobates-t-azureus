@@ -1,5 +1,5 @@
 #/bin/bash
-export OPENSSL_DIR=$(readlink -f ../../../openssl)
+export OPENSSL_DIR=$(readlink -f ~/openssl)
 export X86_64_UNKNOWN_LINUX_GNU_OPENSSL_DIR=$OPENSSL_DIR
 export PKG_CONFIG_PATH=$OPENSSL_DIR
 export X86_64_UNKNOWN_LINUX_GNU_PKG_CONFIG_PATH=$OPENSSL_DIR

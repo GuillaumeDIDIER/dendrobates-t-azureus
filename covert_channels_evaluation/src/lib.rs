@@ -53,7 +53,19 @@ impl CovertChannelBenchmarkResult {
 
     pub fn true_capacity(&self) -> f64 {
         let p = self.error_rate;
-        self.capacity() * (1.0 + ((1.0 - p) * f64::log2(1.0 - p) + p * f64::log2(p)))
+        if p == 0.0 || p == 0.0 {
+            self.capacity()
+        } else {
+            self.capacity() * (1.0 + ((1.0 - p) * f64::log2(1.0 - p) + p * f64::log2(p)))
+        }
+    }
+
+    pub fn csv(&self) -> String {
+        format!("{},{},{},{},{}", self.num_bytes_transmitted, self.num_bit_errors, self.error_rate, self.time_rdtsc, self.time_seconds.as_nanos())
+    }
+
+    pub fn csv_header() -> String {
+        format!("bytes_transmitted,bits_error,error_rate,time_rdtsc,time_nanosec")
     }
 }
 

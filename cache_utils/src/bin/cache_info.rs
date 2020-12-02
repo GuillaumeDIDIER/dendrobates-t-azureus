@@ -27,6 +27,7 @@ pub fn main() {
 
     if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
+            println!("{:?}", uarch);
             let slicing = cache_slicing(
                 uarch,
                 core_per_socket,
