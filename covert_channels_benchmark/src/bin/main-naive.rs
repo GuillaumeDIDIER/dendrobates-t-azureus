@@ -61,6 +61,14 @@ fn run_benchmark<T: CovertChannel + 'static>(
     for result in results.iter() {
         println!("{:?}", result);
         println!("C: {}, T: {}", result.capacity(), result.true_capacity());
+        println!(
+            "Detailed:\"{}\",{},{},{},{}",
+            name,
+            num_pages,
+            result.csv(),
+            result.capacity(),
+            result.true_capacity()
+        );
         average_p += result.error_rate;
         average_C += result.capacity();
         average_T += result.true_capacity()
@@ -90,6 +98,11 @@ fn run_benchmark<T: CovertChannel + 'static>(
         "{} - {} Variance of p: {}, C: {}, T:{}",
         name, num_pages, var_p, var_C, var_T
     );
+    println!(
+        "CSV:\"{}\",{},{},{},{},{},{},{}",
+        name, num_pages, average_p, average_C, average_T, var_p, var_C, var_T
+    );
+
     BenchmarkStats {
         raw_res: results,
         average_p,
@@ -103,6 +116,11 @@ fn run_benchmark<T: CovertChannel + 'static>(
 
 fn main() {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+    println!(
+        "Detailed:Benchmark,Pages,{},C,T",
+        CovertChannelBenchmarkResult::csv_header()
+    );
+    println!("CSV:Benchmark,Pages,p,C,T,var_p,var_C,var_T");
 
     for num_pages in 1..=32 {
         let naive_ff = run_benchmark(
