@@ -35,18 +35,22 @@ fn run_benchmark<T: CovertChannel + 'static>(
     constructor: impl Fn(usize, usize) -> T,
     num_iter: usize,
     num_pages: usize,
+    old: CpuSet,
 ) -> BenchmarkStats {
     let mut results = Vec::new();
     print!("Benchmarking {} with {} pages", name, num_pages);
-    let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+    let mut count = 0;
     for i in 0..CpuSet::count() {
         for j in 0..CpuSet::count() {
-            for _ in 0..num_iter {
-                print!(".");
-                stdout().flush().expect("Failed to flush");
-                let channel = constructor(i, j);
-                let r = benchmark_channel(channel, num_pages, NUM_BYTES);
-                results.push(r);
+            if old.is_set(i).unwrap() && old.is_set(j).unwrap() && i != j {
+                for _ in 0..num_iter {
+                    count += 1;
+                    print!(".");
+                    stdout().flush().expect("Failed to flush");
+                    let channel = constructor(i, j);
+                    let r = benchmark_channel(channel, num_pages, NUM_BYTES);
+                    results.push(r);
+                }
             }
         }
     }
@@ -61,9 +65,9 @@ fn run_benchmark<T: CovertChannel + 'static>(
         average_C += result.capacity();
         average_T += result.true_capacity()
     }
-    average_p /= num_iter as f64;
-    average_C /= num_iter as f64;
-    average_T /= num_iter as f64;
+    average_p /= count as f64;
+    average_C /= count as f64;
+    average_T /= count as f64;
     println!(
         "{} - {} Average p: {} C: {}, T: {}",
         name, num_pages, average_p, average_C, average_T
@@ -79,9 +83,9 @@ fn run_benchmark<T: CovertChannel + 'static>(
         let T = result.true_capacity() - average_T;
         var_T += T * T;
     }
-    var_p /= num_iter as f64;
-    var_C /= num_iter as f64;
-    var_T /= num_iter as f64;
+    var_p /= count as f64;
+    var_C /= count as f64;
+    var_T /= count as f64;
     println!(
         "{} - {} Variance of p: {}, C: {}, T:{}",
         name, num_pages, var_p, var_C, var_T
@@ -98,6 +102,8 @@ fn run_benchmark<T: CovertChannel + 'static>(
 }
 
 fn main() {
+    let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+
     for num_pages in 1..=32 {
         let naive_ff = run_benchmark(
             "Naive F+F",
@@ -108,6 +114,7 @@ fn main() {
             },
             NUM_ITER,
             num_pages,
+            old,
         );
 
         let fr = run_benchmark(
@@ -119,6 +126,7 @@ fn main() {
             },
             NUM_ITER,
             num_pages,
+            old,
         );
     }
 }
