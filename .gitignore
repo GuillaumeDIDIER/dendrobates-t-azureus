@@ -11,3 +11,5 @@ kernel.sym
 bochsout.txt
 .idea/workspace.xml
 **/*.csv.bz2
+
+venv/

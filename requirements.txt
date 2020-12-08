@@ -1,5 +1,5 @@
 pandas==1.0.3
-seaborn==0.10.0
+seaborn~=0.11.0
 wquantiles==0.5
 
 matplotlib~=3.2.1

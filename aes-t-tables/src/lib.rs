@@ -57,6 +57,7 @@ const KEY_BYTE_TO_ATTACK: usize = 0;
 pub unsafe fn attack_t_tables_poc(
     side_channel: &mut impl TableCacheSideChannel,
     parameters: AESTTableParams,
+    name: &str,
 ) {
     let old_affinity = set_affinity(&side_channel.main_core());
 
@@ -128,12 +129,19 @@ pub unsafe fn attack_t_tables_poc(
         }
     }
     addresses.sort();
-    for probe in addresses {
+
+    for probe in addresses.iter() {
         print!("{:p}", probe);
         for b in (u8::min_value()..=u8::max_value()).step_by(16) {
-            print!(" {:4}", timings[&probe][&b]);
+            print!(" {:4}", timings[probe][&b]);
         }
         println!();
+    }
+
+    for probe in addresses {
+        for b in (u8::min_value()..=u8::max_value()).step_by(16) {
+            println!("CSV:{},{:p},{},{}", name, probe, b, timings[&probe][&b]);
+        }
     }
 
     restore_affinity(&old_affinity);
