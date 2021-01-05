@@ -4,7 +4,6 @@
 
 //fn execute_on_core(FnOnce)
 
-#![feature(vec_resize_default)]
 
 use cache_utils::calibration::calibrate_flush;
 use cache_utils::calibration::Verbosity;
@@ -35,7 +34,7 @@ struct Page {
 }
 */
 pub fn main() {
-    let m = MMappedMemory::new(SIZE);
+    let m = MMappedMemory::new(SIZE, true);
     let array = m.slice();
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();

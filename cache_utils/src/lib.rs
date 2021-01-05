@@ -21,6 +21,9 @@ pub mod prefetcher;
 
 pub mod frequency;
 
+#[cfg(feature = "use_std")]
+mod calibrate_2t;
+
 use core::arch::x86_64 as arch_x86;
 use core::ptr;
 
