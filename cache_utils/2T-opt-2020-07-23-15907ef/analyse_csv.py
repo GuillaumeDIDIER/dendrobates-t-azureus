@@ -79,16 +79,41 @@ print("graphing between {}, {}".format(graph_lower, graph_upper))
 df_main_core_0 = df[df["main_core"] == 0]
 #df_helper_core_0 = df[df["helper_core"] == 0]
 
-g = sns.FacetGrid(df_main_core_0, col="helper_core", row="hash", legend_out=True)
-g2 = sns.FacetGrid(df, col="main_core", row="hash", legend_out=True)
-
-
 colours = ["b", "r", "g", "y"]
 
 def custom_hist(x, *y, **kwargs):
     for (i, yi) in enumerate(y):
         kwargs["color"] = colours[i]
         sns.distplot(x, range(graph_lower, graph_upper), hist_kws={"weights": yi, "histtype":"step"}, kde=False, **kwargs)
+import tikzplotlib
+
+
+attacker = 0
+victim = 0
+slice = 0
+
+df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
+
+custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
+tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+plt.show()
+
+attacker = 0
+victim = 1
+slice = 0
+
+df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
+
+custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
+tikzplotlib.save("fig-hist-bad-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+plt.show()
+
+
+
+g = sns.FacetGrid(df_main_core_0, col="helper_core", row="hash", legend_out=True)
+g2 = sns.FacetGrid(df, col="main_core", row="hash", legend_out=True)
+
+
 
 # Color convention here :
 # Blue = miss
