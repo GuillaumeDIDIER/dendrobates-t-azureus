@@ -28,12 +28,13 @@ impl TurnLock {
     }
     pub fn next(&mut self) {
         assert_eq!(self.turn.load(Ordering::Relaxed), self.index);
-        let r = self.turn.compare_and_swap(
+        let r = self.turn.compare_exchange(
             self.index,
             (self.index + 1) % self.num_turns,
             Ordering::Release,
+            Ordering::Relaxed,
         );
-        if r != self.index {
+        if r.expect("Failed to release lock") != self.index {
             panic!("Released lock out of turn");
         }
     }
