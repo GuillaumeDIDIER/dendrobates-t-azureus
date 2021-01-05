@@ -1050,8 +1050,8 @@ impl AddAssign<&RawHistogram> for RawHistogram {
         assert_eq!(self.hit.len(), self.miss.len());
 
         for i in 0..self.hit.len() {
-            self.hit[i] + rhs.hit[i];
-            self.miss[i] + rhs.miss[i];
+            self.hit[i] += rhs.hit[i];
+            self.miss[i] += rhs.miss[i];
         }
     }
 }
