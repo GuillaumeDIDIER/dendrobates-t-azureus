@@ -61,7 +61,14 @@ impl CovertChannelBenchmarkResult {
     }
 
     pub fn csv(&self) -> String {
-        format!("{},{},{},{},{}", self.num_bytes_transmitted, self.num_bit_errors, self.error_rate, self.time_rdtsc, self.time_seconds.as_nanos())
+        format!(
+            "{},{},{},{},{}",
+            self.num_bytes_transmitted,
+            self.num_bit_errors,
+            self.error_rate,
+            self.time_rdtsc,
+            self.time_seconds.as_nanos()
+        )
     }
 
     pub fn csv_header() -> String {
