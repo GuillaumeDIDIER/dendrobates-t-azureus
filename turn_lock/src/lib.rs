@@ -100,14 +100,14 @@ impl<T> TurnHandle<T> {
         }
     }
 
-    pub fn wait(&self) -> TurnLockGuard<T> {
+    pub fn wait(&mut self) -> TurnLockGuard<T> {
         unsafe { self.raw.lock.wait(self.index) };
         // Safety: the turn lock is now held
         unsafe { self.guard() }
     }
 
-    unsafe fn next(&self) {
-        self.raw.lock.next(self.index);
+    fn next(&self) {
+        unsafe { self.raw.lock.next(self.index) };
     }
 }
 
@@ -118,19 +118,20 @@ pub struct TurnLockGuard<'a, T> {
 }
 
 impl<'a, T> TurnLockGuard<'a, T> {
-    pub fn next(self) {
+    /*pub fn next(self) {
         drop(self)
-    }
+    }*/
 
     pub fn handle(&self) -> &TurnHandle<T> {
         self.handle
     }
 }
+/*
 impl<'a, T> Drop for TurnLockGuard<'a, T> {
     fn drop(&mut self) {
-        unsafe { self.handle.next() };
+
     }
-}
+}*/
 
 impl<'a, T> Deref for TurnLockGuard<'a, T> {
     type Target = T;
@@ -158,15 +159,24 @@ mod tests {
 
     #[test]
     fn three_turns() {
-        let mut v = TurnHandle::<()>::new(3, ());
+        let mut v = TurnHandle::<i32>::new(3, 0);
         let t0 = v[0].wait();
         drop(t0);
+        v[0].next();
         let t1 = v[1].wait();
         drop(t1);
+        v[1].next();
         let t2 = v[2].wait();
         drop(t2);
-        let t0 = v[0].wait();
-        drop(t0);
+        v[2].next();
+        let mut t0 = v[0].wait();
+        //drop(t0);
         //assert_eq!(v[2].current(), 1);
+        //let t0_prime = v[0].wait();
+        //*t0 += 1;
+        //*t0_prime += 1;
+
+        //v[0].next();
+        //assert_eq!(*t0_prime, 2);
     }
 }
