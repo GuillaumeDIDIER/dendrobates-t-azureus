@@ -4,6 +4,9 @@ use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{spin_loop_hint, AtomicUsize, Ordering};
 use std::sync::Arc;
 
+// FIXME There may be significant unsafety if wait is called twice ?
+// Add some extra mutual exclusion ?
+
 pub struct RawTurnLock {
     turn: AtomicUsize,
     num_turns: usize,
@@ -90,14 +93,14 @@ impl<T> TurnHandle<T> {
         result
     }
 
-    unsafe fn guard(&mut self) -> TurnLockGuard<T> {
+    unsafe fn guard(&self) -> TurnLockGuard<T> {
         TurnLockGuard {
             handle: &*self,
             marker: PhantomData,
         }
     }
 
-    pub fn wait(&mut self) -> TurnLockGuard<T> {
+    pub fn wait(&self) -> TurnLockGuard<T> {
         unsafe { self.raw.lock.wait(self.index) };
         // Safety: the turn lock is now held
         unsafe { self.guard() }
@@ -143,6 +146,7 @@ impl<'a, T> DerefMut for TurnLockGuard<'a, T> {
     }
 }
 
+unsafe impl<T> Send for TurnHandle<T> {}
 #[cfg(test)]
 mod tests {
     use crate::TurnHandle;
@@ -156,13 +160,13 @@ mod tests {
     fn three_turns() {
         let mut v = TurnHandle::<()>::new(3, ());
         let t0 = v[0].wait();
-        t0.next();
+        drop(t0);
         let t1 = v[1].wait();
-        t1.next();
+        drop(t1);
         let t2 = v[2].wait();
-        t2.next();
+        drop(t2);
         let t0 = v[0].wait();
-        t0.next();
+        drop(t0);
         //assert_eq!(v[2].current(), 1);
     }
 }

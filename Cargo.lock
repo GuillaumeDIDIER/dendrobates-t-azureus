@@ -92,6 +92,7 @@ dependencies = [
  "nix",
  "polling_serial",
  "static_assertions",
+ "turn_lock",
  "vga_buffer",
  "x86_64",
 ]

@@ -27,14 +27,19 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::thread;
 
+/*  TODO : replace page with a handle type,
+    require exclusive handle access,
+    Handle protected by the turn lock
+*/
 /**
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
-pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
+pub trait CovertChnel: Send + Sync + CoreSpec + Debug {
+    type Handle;
     const BIT_PER_PAGE: usize;
-    unsafe fn transmit(&self, page: *const u8, bits: &mut BitIterator);
-    unsafe fn receive(&self, page: *const u8) -> Vec<bool>;
-    unsafe fn ready_page(&mut self, page: *const u8);
+    unsafe fn transmit(&self, handle: &mut Handle, bits: &mut BitIterator);
+    unsafe fn receive(&self, handle: &mut Handle) -> Vec<bool>;
+    unsafe fn ready_page(&mut self, page: *const u8) -> Handle;
 }
 
 #[derive(Debug)]
