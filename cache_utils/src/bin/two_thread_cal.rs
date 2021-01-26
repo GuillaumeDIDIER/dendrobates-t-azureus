@@ -66,6 +66,25 @@ struct Threshold {
     pub num_false_miss: u32,
 }
 
+unsafe fn only_flush_wrap(_: &(), addr: *const u8) -> u64 {
+    unsafe { only_flush(addr) }
+}
+
+unsafe fn only_reload_wrap(_: &(), addr: *const u8) -> u64 {
+    unsafe { only_reload(addr) }
+}
+
+unsafe fn load_and_flush_wrap(_: &(), addr: *const u8) -> u64 {
+    unsafe { load_and_flush(addr) }
+}
+unsafe fn flush_and_reload_wrap(_: &(), addr: *const u8) -> u64 {
+    unsafe { flush_and_reload(addr) }
+}
+
+unsafe fn reload_and_flush_wrap(_: &(), addr: *const u8) -> u64 {
+    unsafe { reload_and_flush(addr) }
+}
+
 fn main() {
     // Grab a slice of memory
 
@@ -117,63 +136,73 @@ fn main() {
     let operations = [
         CalibrateOperation2T {
             prepare: maccess::<u8>,
-            op: only_flush,
+            op: only_flush_wrap,
             name: "clflush_remote_hit",
             display_name: "clflush remote hit",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: maccess::<u8>,
-            op: load_and_flush,
+            op: load_and_flush_wrap,
             name: "clflush_shared_hit",
             display_name: "clflush shared hit",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: flush,
-            op: only_flush,
+            op: only_flush_wrap,
             name: "clflush_miss_f",
             display_name: "clflush miss - f",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: flush,
-            op: load_and_flush,
+            op: load_and_flush_wrap,
             name: "clflush_local_hit_f",
             display_name: "clflush local hit - f",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: only_flush,
+            op: only_flush_wrap,
             name: "clflush_miss_n",
             display_name: "clflush miss - n",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: load_and_flush,
+            op: load_and_flush_wrap,
             name: "clflush_local_hit_n",
             display_name: "clflush local hit - n",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: flush_and_reload,
+            op: flush_and_reload_wrap,
             name: "reload_miss",
             display_name: "reload miss",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: maccess::<u8>,
-            op: reload_and_flush,
+            op: reload_and_flush_wrap,
             name: "reload_remote_hit",
             display_name: "reload remote hit",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: maccess::<u8>,
-            op: only_reload,
+            op: only_reload_wrap,
             name: "reload_shared_hit",
             display_name: "reload shared hit",
+            t: &(),
         },
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: only_reload,
+            op: only_reload_wrap,
             name: "reload_local_hit",
             display_name: "reload local hit",
+            t: &(),
         },
     ];
 

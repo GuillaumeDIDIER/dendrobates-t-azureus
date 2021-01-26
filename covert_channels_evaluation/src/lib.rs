@@ -1,6 +1,6 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
-use turn_lock::TurnLock;
+use turn_lock::TurnHandle;
 
 const PAGE_SIZE: usize = 1 << 12; // FIXME Magic
 
@@ -34,12 +34,12 @@ use std::thread;
 /**
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
-pub trait CovertChnel: Send + Sync + CoreSpec + Debug {
+pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
     type Handle;
     const BIT_PER_PAGE: usize;
-    unsafe fn transmit(&self, handle: &mut Handle, bits: &mut BitIterator);
-    unsafe fn receive(&self, handle: &mut Handle) -> Vec<bool>;
-    unsafe fn ready_page(&mut self, page: *const u8) -> Handle;
+    unsafe fn transmit(&self, handle: &mut Self::Handle, bits: &mut BitIterator);
+    unsafe fn receive(&self, handle: &mut Self::Handle) -> Vec<bool>;
+    unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::Handle, ()>; // TODO Error Type
 }
 
 #[derive(Debug)]
@@ -117,13 +117,8 @@ impl Iterator for BitIterator<'_> {
     }
 }
 
-struct CovertChannelPage {
-    pub turn: TurnLock,
-    pub addr: *const u8,
-}
-
 struct CovertChannelParams<T: CovertChannel + Send> {
-    pages: Vec<CovertChannelPage>,
+    handles: Vec<TurnHandle<T::Handle>>,
     covert_channel: Arc<T>,
 }
 
@@ -147,11 +142,11 @@ fn transmit_thread<T: CovertChannel>(
     let start_time = std::time::Instant::now();
     let start = unsafe { rdtsc_fence() };
     while !bit_iter.atEnd() {
-        for page in params.pages.iter_mut() {
-            page.turn.wait();
-            unsafe { params.covert_channel.transmit(page.addr, &mut bit_iter) };
+        for page in params.handles.iter_mut() {
+            let mut handle = page.wait();
+            unsafe { params.covert_channel.transmit(&mut *handle, &mut bit_iter) };
             bit_sent += T::BIT_PER_PAGE;
-            page.turn.next();
+            page.next();
             if bit_iter.atEnd() {
                 break;
             }
@@ -171,34 +166,30 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
 
     let size = num_pages * PAGE_SIZE;
     let mut m = MMappedMemory::new(size, false);
-    let mut pages_transmit = Vec::new();
-    let mut pages_receive = Vec::new();
+    let mut receiver_turn_handles = Vec::new();
+    let mut transmit_turn_handles = Vec::new();
+
     for i in 0..num_pages {
         m.slice_mut()[i * PAGE_SIZE] = i as u8;
     }
     let array: &[u8] = m.slice();
     for i in 0..num_pages {
         let addr = &array[i * PAGE_SIZE] as *const u8;
-        let mut turns = TurnLock::new(2);
+        let handle = unsafe { channel.ready_page(addr) }.unwrap();
+        let mut turns = TurnHandle::new(2, handle);
         let mut t_iter = turns.drain(0..);
         let transmit_lock = t_iter.next().unwrap();
         let receive_lock = t_iter.next().unwrap();
 
         assert!(t_iter.next().is_none());
-        unsafe { channel.ready_page(addr) };
-        pages_transmit.push(CovertChannelPage {
-            turn: transmit_lock,
-            addr,
-        });
-        pages_receive.push(CovertChannelPage {
-            turn: receive_lock,
-            addr,
-        });
+
+        transmit_turn_handles.push(transmit_lock);
+        receiver_turn_handles.push(receive_lock);
     }
 
     let covert_channel_arc = Arc::new(channel);
     let params = CovertChannelParams {
-        pages: pages_transmit,
+        handles: transmit_turn_handles,
         covert_channel: covert_channel_arc.clone(),
     };
 
@@ -207,10 +198,10 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     let mut received_bytes: Vec<u8> = Vec::new();
     let mut received_bits = VecDeque::<bool>::new();
     while received_bytes.len() < num_bytes {
-        for page in pages_receive.iter_mut() {
-            page.turn.wait();
-            let mut bits = unsafe { covert_channel_arc.receive(page.addr) };
-            page.turn.next();
+        for handle in receiver_turn_handles.iter_mut() {
+            let mut page = handle.wait();
+            let mut bits = unsafe { covert_channel_arc.receive(&mut *page) };
+            handle.next();
             received_bits.extend(&mut bits.iter());
             while received_bits.len() >= u8::BIT_LENGTH {
                 let mut byte = 0;
@@ -268,7 +259,8 @@ mod tests {
 
     #[test]
     fn test_bit_vec() {
-        let bit_iter = BitIterator::new(vec![0x55, 0xf]);
+        let bits = vec![0x55, 0xf];
+        let bit_iter = BitIterator::new(&bits);
         let results = vec![
             false, true, false, true, false, true, false, true, false, false, false, false, true,
             true, true, true,

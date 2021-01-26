@@ -16,11 +16,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use turn_lock::TurnHandle;
 
-pub struct CalibrateOperation2T<'a> {
+pub struct CalibrateOperation2T<'a, T> {
     pub prepare: unsafe fn(*const u8) -> (),
-    pub op: unsafe fn(*const u8) -> u64,
+    pub op: unsafe fn(&T, *const u8) -> u64,
     pub name: &'a str,
     pub display_name: &'a str,
+    pub t: &'a T,
 }
 
 pub struct CalibrateResult2T {
@@ -31,12 +32,12 @@ pub struct CalibrateResult2T {
                                                        // TODO
 }
 
-pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>>(
+pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>, T>(
     p: *const u8,
     increment: usize,
     len: isize,
     cores: &mut I,
-    operations: &[CalibrateOperation2T],
+    operations: &[CalibrateOperation2T<T>],
     options: CalibrationOptions,
     core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
@@ -63,12 +64,12 @@ struct HelperThreadParams {
 // TODO : Modularisation / factorisation of some of the common code with the single threaded no_std version ?
 
 #[cfg(feature = "use_std")]
-fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
+fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     p: *const u8,
     increment: usize,
     len: isize,
     cores: &mut I,
-    operations: &[CalibrateOperation2T],
+    operations: &[CalibrateOperation2T<T>],
     mut options: CalibrationOptions,
     core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
@@ -248,16 +249,18 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
 
             if helper_core != main_core {
                 for op in operations {
+                    params = main_turn_handle.wait();
                     params.op = op.prepare;
                     let mut hist = vec![0; options.hist_params.bucket_number];
                     for _ in 0..options.hist_params.iterations {
+                        main_turn_handle.next();
                         params = main_turn_handle.wait();
-                        let _time = unsafe { (op.op)(pointer) };
+                        let _time = unsafe { (op.op)(op.t, pointer) };
                     }
                     for _ in 0..options.hist_params.iterations {
-                        //params.next();
+                        main_turn_handle.next();
                         params = main_turn_handle.wait();
-                        let time = unsafe { (op.op)(pointer) };
+                        let time = unsafe { (op.op)(op.t, pointer) };
                         let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
@@ -269,12 +272,12 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
                     for _ in 0..options.hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
-                        let _time = unsafe { (op.op)(pointer) };
+                        let _time = unsafe { (op.op)(op.t, pointer) };
                     }
                     for _ in 0..options.hist_params.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
-                        let time = unsafe { (op.op)(pointer) };
+                        let time = unsafe { (op.op)(op.t, pointer) };
                         let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
@@ -363,7 +366,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>>(
         if helper_core != main_core {
             // terminate the thread
             params.stop = true;
-            params.next();
+            main_turn_handle.next();
             params = main_turn_handle.wait();
             // join thread.
             helper_thread.unwrap().join();
@@ -390,15 +393,18 @@ fn calibrate_fixed_freq_2_thread_helper(
         Err(e) => {
             let mut params = turn_handle.wait();
             params.stop = true;
-            params.next();
+            turn_handle.next();
             return Err(e);
         }
     }
 
     match sched_setaffinity(Pid::from_raw(0), &core) {
         Ok(_) => {}
-        Err(_e) => {
-            unimplemented!();
+        Err(e) => {
+            let mut params = turn_handle.wait();
+            params.stop = true;
+            turn_handle.next();
+            return Err(e);
         }
     }
 
@@ -406,7 +412,7 @@ fn calibrate_fixed_freq_2_thread_helper(
         // grab lock
         let params = turn_handle.wait();
         if params.stop {
-            params.next();
+            turn_handle.next();
             return Ok(());
         }
         // get the relevant parameters
@@ -414,7 +420,7 @@ fn calibrate_fixed_freq_2_thread_helper(
         let op = params.op;
         unsafe { op(addr) };
         // release lock
-        params.next()
+        turn_handle.next();
     }
 }
 

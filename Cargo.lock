@@ -45,6 +45,12 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "basic_timing_cache_channel"
 version = "0.1.0"
+dependencies = [
+ "cache_side_channel",
+ "cache_utils",
+ "covert_channels_evaluation",
+ "nix",
+]
 
 [[package]]
 name = "bit_field"
@@ -163,6 +169,7 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 name = "flush_flush"
 version = "0.1.0"
 dependencies = [
+ "basic_timing_cache_channel",
  "cache_side_channel",
  "cache_utils",
  "covert_channels_evaluation",
@@ -173,6 +180,7 @@ dependencies = [
 name = "flush_reload"
 version = "0.1.0"
 dependencies = [
+ "basic_timing_cache_channel",
  "cache_side_channel",
  "cache_utils",
  "covert_channels_evaluation",

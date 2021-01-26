@@ -106,7 +106,7 @@ impl<T> TurnHandle<T> {
         unsafe { self.guard() }
     }
 
-    fn next(&self) {
+    pub fn next(&self) {
         unsafe { self.raw.lock.next(self.index) };
     }
 }
@@ -118,20 +118,10 @@ pub struct TurnLockGuard<'a, T> {
 }
 
 impl<'a, T> TurnLockGuard<'a, T> {
-    /*pub fn next(self) {
-        drop(self)
-    }*/
-
     pub fn handle(&self) -> &TurnHandle<T> {
         self.handle
     }
 }
-/*
-impl<'a, T> Drop for TurnLockGuard<'a, T> {
-    fn drop(&mut self) {
-
-    }
-}*/
 
 impl<'a, T> Deref for TurnLockGuard<'a, T> {
     type Target = T;
@@ -169,14 +159,6 @@ mod tests {
         let t2 = v[2].wait();
         drop(t2);
         v[2].next();
-        let mut t0 = v[0].wait();
-        //drop(t0);
-        //assert_eq!(v[2].current(), 1);
-        //let t0_prime = v[0].wait();
-        //*t0 += 1;
-        //*t0_prime += 1;
-
-        //v[0].next();
-        //assert_eq!(*t0_prime, 2);
+        let t0 = v[0].wait();
     }
 }
