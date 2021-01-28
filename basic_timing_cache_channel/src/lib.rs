@@ -9,7 +9,7 @@
 
 // Should be used by F+F and non Naive F+R
 
-use crate::naive::NaiveTimingChannelHandle;
+//use crate::naive::NaiveTimingChannelHandle;
 use cache_side_channel::SideChannelError::AddressNotReady;
 use cache_side_channel::{
     CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,

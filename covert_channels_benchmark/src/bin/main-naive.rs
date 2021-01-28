@@ -1,6 +1,6 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
-
+/*
 use std::io::{stdout, Write};
 
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
@@ -113,8 +113,9 @@ fn run_benchmark<T: CovertChannel + 'static>(
         var_T,
     }
 }
-
+*/
 fn main() {
+    /*
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     println!(
         "Detailed:Benchmark,Pages,{},C,T",
@@ -147,4 +148,6 @@ fn main() {
             old,
         );
     }
+
+     */
 }
