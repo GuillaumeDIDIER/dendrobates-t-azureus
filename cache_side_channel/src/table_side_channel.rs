@@ -33,10 +33,10 @@ pub trait TableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
     /// # Safety
     ///
     /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c>(
+    unsafe fn attack<'a, 'b, 'c, 'd>(
         &'a mut self,
-        addresses: impl Iterator<Item = &'c mut Handle> + Clone,
-        victim: &'b dyn Fn(),
+        addresses: &'b mut Vec<&'c mut Handle>,
+        victim: &'d dyn Fn(),
         num_iteration: u32,
     ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
     where
@@ -52,10 +52,10 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
     }
     //type ChannelFatalError = T::SingleChannelFatalError;
 
-    default unsafe fn attack<'a, 'b, 'c>(
+    default unsafe fn attack<'a, 'b, 'c, 'd>(
         &'a mut self,
-        addresses: impl Iterator<Item = &'c mut T::Handle> + Clone,
-        victim: &'b dyn Fn(),
+        addresses: &'b mut Vec<&'c mut T::Handle>,
+        victim: &'d dyn Fn(),
         num_iteration: u32,
     ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
     where
@@ -143,24 +143,25 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
     /// # Safety
     ///
     /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c>(
+    unsafe fn attack<'a, 'b, 'c, 'd>(
         &'a mut self,
-        mut addresses: impl Iterator<Item = &'c mut T::Handle> + Clone,
-        victim: &'b dyn Fn(),
+        mut addresses: &'b mut Vec<&'c mut T::Handle>,
+        victim: &'d dyn Fn(),
         num_iteration: u32,
     ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
     where
         T::Handle: 'c,
     {
+        let mut addr_iter = addresses.iter_mut();
         let mut v = Vec::new();
-        while let Some(addr) = addresses.next() {
+        while let Some(addr) = addr_iter.next() {
             let mut batch = Vec::new();
-            batch.push(addr);
+            batch.push(&mut **addr);
             let mut hits: HashMap<*const u8, u32> = HashMap::new();
             let mut misses: HashMap<*const u8, u32> = HashMap::new();
             for i in 1..T::MAX_ADDR {
-                if let Some(addr) = addresses.next() {
-                    batch.push(addr);
+                if let Some(addr) = addr_iter.next() {
+                    batch.push(&mut **addr);
                 } else {
                     break;
                 }

