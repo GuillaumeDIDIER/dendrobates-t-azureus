@@ -13,6 +13,7 @@ members = [
     "flush_flush",
     "basic_timing_cache_channel",
     "turn_lock",
+    "prefetcher_reverse",
 ]
 
 [package]
