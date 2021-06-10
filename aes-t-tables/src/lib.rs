@@ -59,7 +59,7 @@ pub unsafe fn attack_t_tables_poc<T: ChannelHandle>(
     parameters: AESTTableParams,
     name: &str,
 ) {
-    let old_affinity = set_affinity(&side_channel.main_core());
+    let old_affinity = set_affinity(&side_channel.main_core()).unwrap();
 
     // Note : This function doesn't handle the case where the address space is not shared. (Additionally you have the issue of complicated eviction sets due to complex addressing)
     // TODO
