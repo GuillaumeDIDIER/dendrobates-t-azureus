@@ -7,4 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cache_utils = { path = "../cache_utils"}
+cache_utils = { path = "../cache_utils" }
+cache_side_channel = { path = "../cache_side_channel" }
+flush_flush = { path = "../flush_flush" }
+basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
+nix = "0.20.0"
+rand = "0.8.3"
