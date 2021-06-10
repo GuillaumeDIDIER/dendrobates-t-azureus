@@ -35,11 +35,11 @@ use std::thread;
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
 pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
-    type Handle;
+    type CovertChannelHandle;
     const BIT_PER_PAGE: usize;
-    unsafe fn transmit(&self, handle: &mut Self::Handle, bits: &mut BitIterator);
-    unsafe fn receive(&self, handle: &mut Self::Handle) -> Vec<bool>;
-    unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::Handle, ()>; // TODO Error Type
+    unsafe fn transmit(&self, handle: &mut Self::CovertChannelHandle, bits: &mut BitIterator);
+    unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool>;
+    unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()>; // TODO Error Type
 }
 
 #[derive(Debug)]
@@ -118,7 +118,7 @@ impl Iterator for BitIterator<'_> {
 }
 
 struct CovertChannelParams<T: CovertChannel + Send> {
-    handles: Vec<TurnHandle<T::Handle>>,
+    handles: Vec<TurnHandle<T::CovertChannelHandle>>,
     covert_channel: Arc<T>,
 }
 
@@ -162,7 +162,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
 ) -> CovertChannelBenchmarkResult {
     // Allocate pages
 
-    let old_affinity = set_affinity(&channel.main_core());
+    let old_affinity = set_affinity(&channel.main_core()).unwrap();
 
     let size = num_pages * PAGE_SIZE;
     let mut m = MMappedMemory::new(size, false);
