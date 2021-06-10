@@ -28,9 +28,8 @@ use dendrobates_tinctoreus_azureus::memory;
 #[cfg(not(test))]
 use vga_buffer::{set_colors, Color, ForegroundColor};
 use x86_64::structures::paging::frame::PhysFrameRange;
-use x86_64::structures::paging::{
-    Mapper, MapperAllSizes, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB,
-};
+use x86_64::structures::paging::Translate;
+use x86_64::structures::paging::{Mapper, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
 use x86_64::VirtAddr;
 

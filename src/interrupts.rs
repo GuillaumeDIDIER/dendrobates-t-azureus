@@ -26,13 +26,13 @@ pub fn init_idt() {
 }
 
 // For now.
-extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut InterruptStackFrame) {
+extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     serial_println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
     println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
     x86_64::instructions::bochs_breakpoint();
 }
 
-extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: u64) -> ! {
+extern "x86-interrupt" fn double_fault_handler(mut sf: InterruptStackFrame, e: u64) -> ! {
     // LLVM bug causing misaligned stacks when error codes are present.
     // This code realigns the stack and then grabs the correct values by doing some pointer arithmetic
     let stack_frame: &mut InterruptStackFrame;
@@ -40,7 +40,7 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
 
     unsafe {
         llvm_asm!("push rax" :::: "intel");
-        let s = sf as *mut InterruptStackFrame;
+        let s = (&mut sf) as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const u64).offset(1);
     }
@@ -62,7 +62,7 @@ extern "x86-interrupt" fn double_fault_handler(sf: &mut InterruptStackFrame, e: 
 use x86_64::instructions::bochs_breakpoint;
 use x86_64::structures::idt::PageFaultErrorCode;
 
-extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: PageFaultErrorCode) {
+extern "x86-interrupt" fn page_fault_handler(mut sf: InterruptStackFrame, e: PageFaultErrorCode) {
     // LLVM bug causing misaligned stacks when error codes are present.
     // This code realigns the stack and then grabs the correct values by doing some pointer arithmetic
     let stack_frame: &mut InterruptStackFrame;
@@ -72,7 +72,7 @@ extern "x86-interrupt" fn page_fault_handler(sf: &mut InterruptStackFrame, e: Pa
 
     unsafe {
         llvm_asm!("push rax" :::: "intel");
-        let s = sf as *mut InterruptStackFrame;
+        let s = (&mut sf) as *mut InterruptStackFrame;
         stack_frame = &mut *((s as *mut u64).offset(1) as *mut InterruptStackFrame);
         error_code = *(&e as *const PageFaultErrorCode).offset(1) as PageFaultErrorCode;
     }
