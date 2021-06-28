@@ -56,6 +56,7 @@ pub trait SingleAddrCacheSideChannel: CoreSpec + Debug {
     unsafe fn test_single(
         &mut self,
         handle: &mut Self::Handle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError>;
     /// # Safety
     ///
@@ -80,6 +81,7 @@ pub trait MultipleAddrCacheSideChannel: CoreSpec + Debug {
     unsafe fn test<'a, 'b, 'c>(
         &'a mut self,
         addresses: &'b mut Vec<&'c mut Self::Handle>,
+        reset: bool,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError>
     where
         Self::Handle: 'c;
@@ -110,9 +112,10 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
     unsafe fn test_single(
         &mut self,
         handle: &mut Self::Handle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
         let mut handles = vec![handle];
-        unsafe { self.test(&mut handles) }.map(|v| v[0].1)
+        unsafe { self.test(&mut handles, reset) }.map(|v| v[0].1)
     }
 
     unsafe fn prepare_single(&mut self, handle: &mut Self::Handle) -> Result<(), SideChannelError> {

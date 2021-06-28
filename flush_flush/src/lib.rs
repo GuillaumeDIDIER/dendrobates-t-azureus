@@ -10,13 +10,14 @@ use basic_timing_cache_channel::{
 use cache_side_channel::MultipleAddrCacheSideChannel;
 use cache_utils::calibration::only_flush;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FFPrimitives {}
 
 impl TimingChannelPrimitives for FFPrimitives {
     unsafe fn attack(&self, addr: *const u8) -> u64 {
         unsafe { only_flush(addr) }
     }
+    const NEED_RESET: bool = false;
 }
 
 pub type FlushAndFlush = TopologyAwareTimingChannel<FFPrimitives>;

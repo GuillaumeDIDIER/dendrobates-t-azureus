@@ -10,6 +10,7 @@ edition = "2018"
 cache_utils = { path = "../cache_utils" }
 cache_side_channel = { path = "../cache_side_channel" }
 flush_flush = { path = "../flush_flush" }
+flush_reload = { path = "../flush_reload" }
 basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
 nix = "0.20.0"
 rand = "0.8.3"

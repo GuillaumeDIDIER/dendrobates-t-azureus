@@ -66,18 +66,18 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
         for addr in addresses {
             let mut hit = 0;
             let mut miss = 0;
+            match unsafe { self.prepare_single(addr) } {
+                Ok(_) => {}
+                Err(e) => match e {
+                    SideChannelError::NeedRecalibration => unimplemented!(),
+                    SideChannelError::FatalError(e) => return Err(e),
+                    SideChannelError::AddressNotReady(_addr) => panic!(),
+                    SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
+                },
+            }
             for iteration in 0..100 {
-                match unsafe { self.prepare_single(addr) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
-                    },
-                }
                 self.victim_single(victim);
-                let r = unsafe { self.test_single(addr) };
+                let r = unsafe { self.test_single(addr, true) };
                 match r {
                     Ok(status) => {}
                     Err(e) => match e {
@@ -90,17 +90,8 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
                 }
             }
             for _iteration in 0..num_iteration {
-                match unsafe { self.prepare_single(addr) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
-                    },
-                }
                 self.victim_single(victim);
-                let r = unsafe { self.test_single(addr) };
+                let r = unsafe { self.test_single(addr, true) };
                 match r {
                     Ok(status) => match status {
                         CacheStatus::Hit => {
@@ -169,26 +160,26 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
             for i in 0..100 {
                 // TODO Warmup
             }
-            for i in 0..num_iteration {
-                match unsafe { MultipleAddrCacheSideChannel::prepare(self, &mut batch) } {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        SideChannelError::NeedRecalibration => unimplemented!(),
-                        SideChannelError::FatalError(e) => return Err(e),
-                        SideChannelError::AddressNotReady(_addr) => panic!(),
-                        SideChannelError::AddressNotCalibrated(addr) => {
-                            eprintln!(
-                                "Addr: {:p}\n\
+            match unsafe { MultipleAddrCacheSideChannel::prepare(self, &mut batch) } {
+                Ok(_) => {}
+                Err(e) => match e {
+                    SideChannelError::NeedRecalibration => unimplemented!(),
+                    SideChannelError::FatalError(e) => return Err(e),
+                    SideChannelError::AddressNotReady(_addr) => panic!(),
+                    SideChannelError::AddressNotCalibrated(addr) => {
+                        eprintln!(
+                            "Addr: {:p}\n\
                             {:#?}",
-                                addr, self
-                            );
-                            unimplemented!()
-                        }
-                    },
-                }
+                            addr, self
+                        );
+                        unimplemented!()
+                    }
+                },
+            }
+            for i in 0..num_iteration {
                 MultipleAddrCacheSideChannel::victim(self, victim);
 
-                let r = unsafe { MultipleAddrCacheSideChannel::test(self, &mut batch) }; // Fixme error handling
+                let r = unsafe { MultipleAddrCacheSideChannel::test(self, &mut batch, true) }; // Fixme error handling
                 match r {
                     Err(e) => match e {
                         SideChannelError::NeedRecalibration => {

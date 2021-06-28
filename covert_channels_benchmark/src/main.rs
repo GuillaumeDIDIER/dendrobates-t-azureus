@@ -9,7 +9,8 @@ use cache_utils::calibration::Threshold;
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::naive::NaiveFlushAndFlush;
 use flush_flush::{FFPrimitives, FlushAndFlush, SingleFlushAndFlush};
-use flush_reload::naive::{NaiveFRPrimitives, NaiveFlushAndReload};
+use flush_reload::naive::NaiveFlushAndReload;
+use flush_reload::FRPrimitives;
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
@@ -138,13 +139,10 @@ fn main() {
         let naive_ff = run_benchmark(
             "Naive F+F",
             |i, j| {
-                let mut r = NaiveFlushAndFlush::new(
-                    Threshold {
-                        bucket_index: 202,
-                        miss_faster_than_hit: true,
-                    },
-                    FFPrimitives {},
-                );
+                let mut r = NaiveFlushAndFlush::new(Threshold {
+                    bucket_index: 202,
+                    miss_faster_than_hit: true,
+                });
                 r.set_cores(i, j);
                 (r, i, j)
             },
@@ -153,16 +151,13 @@ fn main() {
             old,
         );
 
-        let fr = run_benchmark(
-            "F+R",
+        let naive_fr = run_benchmark(
+            "Naive F+R",
             |i, j| {
-                let mut r = NaiveFlushAndReload::new(
-                    Threshold {
-                        bucket_index: 250,
-                        miss_faster_than_hit: false,
-                    },
-                    NaiveFRPrimitives {},
-                );
+                let mut r = NaiveFlushAndReload::new(Threshold {
+                    bucket_index: 250,
+                    miss_faster_than_hit: false,
+                });
                 r.set_cores(i, j);
                 (r, i, j)
             },
@@ -174,7 +169,25 @@ fn main() {
         let ff = run_benchmark(
             "Better F+F",
             |i, j| {
-                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true, FFPrimitives {}) {
+                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true) {
+                    Ok((channel, _old, main_core, helper_core)) => {
+                        (channel, main_core, helper_core)
+                    }
+                    Err(e) => {
+                        panic!("{:?}", e);
+                    }
+                };
+                (r, i, j)
+            },
+            1,
+            num_pages,
+            old,
+        );
+
+        let fr = run_benchmark(
+            "Better F+R",
+            |i, j| {
+                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true) {
                     Ok((channel, _old, main_core, helper_core)) => {
                         (channel, main_core, helper_core)
                     }
@@ -190,53 +203,3 @@ fn main() {
         );
     }
 }
-/*
-fn main() {
-      for num_pages in 1..=32 {
-        /*println!("Benchmarking F+F");
-        for _ in 0..16 {
-            // TODO Use the best possible ASV, not best possible AV
-            let (channel, old, receiver, sender) = match SingleFlushAndFlush::new_any_two_core(true) {
-                Err(e) => {
-                    panic!("{:?}", e);
-                }
-                Ok(r) => r,
-            };
-
-            let r = benchmark_channel(channel, NUM_PAGES, NUM_BYTES);
-            println!("{:?}", r);
-                    println!("C: {}, T: {}", r.capacity(), r.true_capacity());
-
-        }*/
-
-        let naive_ff = run_benchmark(
-            "Naive F+F",
-            || NaiveFlushAndFlush::from_threshold(202),
-            NUM_ITER << 4,
-            num_pages,
-        );
-
-        let better_ff = run_benchmark(
-            "Better F+F",
-            || {
-                match FlushAndFlush::new_any_two_core(true) {
-                    Err(e) => {
-                        panic!("{:?}", e);
-                    }
-                    Ok(r) => r,
-                }
-                .0
-            },
-            NUM_ITER,
-            num_pages,
-        );
-
-        let fr = run_benchmark(
-            "F+R",
-            || NaiveFlushAndReload::from_threshold(230),
-            NUM_ITER,
-            num_pages,
-        );
-    }
-}
-*/

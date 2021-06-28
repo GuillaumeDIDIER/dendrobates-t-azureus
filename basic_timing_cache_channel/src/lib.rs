@@ -36,8 +36,9 @@ use std::ptr::slice_from_raw_parts;
 
 pub mod naive;
 
-pub trait TimingChannelPrimitives: Debug + Send + Sync {
+pub trait TimingChannelPrimitives: Debug + Send + Sync + Default {
     unsafe fn attack(&self, addr: *const u8) -> u64;
+    const NEED_RESET: bool;
 }
 
 pub struct TopologyAwareTimingChannelHandle {
@@ -79,7 +80,7 @@ unsafe impl<T: TimingChannelPrimitives + Send> Send for TopologyAwareTimingChann
 unsafe impl<T: TimingChannelPrimitives + Sync> Sync for TopologyAwareTimingChannel<T> {}
 
 impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
-    pub fn new(main_core: usize, helper_core: usize, t: T) -> Result<Self, TopologyAwareError> {
+    pub fn new(main_core: usize, helper_core: usize) -> Result<Self, TopologyAwareError> {
         if let Some(slicing) = get_cache_slicing(find_core_per_socket()) {
             if !slicing.can_hash() {
                 return Err(TopologyAwareError::NoSlicing);
@@ -92,7 +93,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 main_core,
                 helper_core,
                 preferred_address: Default::default(),
-                t,
+                t: Default::default(),
                 calibration_epoch: 0,
             };
             Ok(ret)
@@ -205,10 +206,11 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
     fn new_with_core_pairs(
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
-        t: T,
     ) -> Result<(Self, usize, usize), TopologyAwareError> {
         let m = MMappedMemory::new(PAGE_LEN, false);
         let array: &[u8] = m.slice();
+
+        let t = Default::default();
 
         let mut res = Self::calibration_for_core_pairs(&t, core_pairs, vec![array].into_iter())?;
 
@@ -223,13 +225,13 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 best_error_rate = global_error_pred.error_rate();
             }
         }
-        Self::new(best_av.attacker, best_av.victim, t)
+        Self::new(best_av.attacker, best_av.victim)
             .map(|this| (this, best_av.attacker, best_av.victim))
 
         // Set no threshold as calibrated on local array that will get dropped.
     }
 
-    pub fn new_any_single_core(t: T) -> Result<(Self, CpuSet, usize), TopologyAwareError> {
+    pub fn new_any_single_core() -> Result<(Self, CpuSet, usize), TopologyAwareError> {
         // Generate core iterator
         let mut core_pairs: Vec<(usize, usize)> = Vec::new();
 
@@ -246,7 +248,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         // Call out to private constructor that takes a core pair list, determines best and makes the choice.
         // The private constructor will set the correct affinity for main (attacker thread)
 
-        Self::new_with_core_pairs(core_pairs.into_iter(), t).map(|(channel, attacker, victim)| {
+        Self::new_with_core_pairs(core_pairs.into_iter()).map(|(channel, attacker, victim)| {
             assert_eq!(attacker, victim);
             (channel, old, attacker)
         })
@@ -254,7 +256,6 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
     pub fn new_any_two_core(
         distinct: bool,
-        t: T,
     ) -> Result<(Self, CpuSet, usize, usize), TopologyAwareError> {
         let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
@@ -272,7 +273,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
             }
         }
 
-        Self::new_with_core_pairs(core_pairs.into_iter(), t).map(|(channel, attacker, victim)| {
+        Self::new_with_core_pairs(core_pairs.into_iter()).map(|(channel, attacker, victim)| {
             if distinct {
                 assert_ne!(attacker, victim);
             }
@@ -344,11 +345,15 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
     unsafe fn test_one_impl(
         &self,
         handle: &mut TopologyAwareTimingChannelHandle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
         if handle.calibration_epoch != self.calibration_epoch {
             return Err(SideChannelError::NeedRecalibration);
         }
         let time = unsafe { self.t.attack(handle.addr) };
+        if T::NEED_RESET && reset {
+            unsafe { flush(handle.addr) };
+        }
         if handle.threshold.is_hit(time) {
             Ok(CacheStatus::Hit)
         } else {
@@ -360,12 +365,13 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         &self,
         addresses: &mut Vec<&mut TopologyAwareTimingChannelHandle>,
         limit: u32,
+        reset: bool,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
         let mut result = Vec::new();
         let mut tmp = Vec::new();
         let mut i = 0;
         for addr in addresses {
-            let r = unsafe { self.test_one_impl(addr) };
+            let r = unsafe { self.test_one_impl(addr, false) };
             tmp.push((addr.to_const_u8_pointer(), r));
             i += 1;
             if i == limit {
@@ -380,6 +386,9 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 Err(e) => {
                     return Err(e);
                 }
+            }
+            if T::NEED_RESET && reset {
+                unsafe { flush(addr) };
             }
         }
         Ok(result)
@@ -456,11 +465,12 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
     unsafe fn test<'a>(
         &mut self,
         addresses: &mut Vec<&'a mut Self::Handle>,
+        reset: bool,
     ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError>
     where
         Self::Handle: 'a,
     {
-        unsafe { self.test_impl(addresses, Self::MAX_ADDR) }
+        unsafe { self.test_impl(addresses, Self::MAX_ADDR, reset) }
     }
 
     unsafe fn prepare<'a>(
@@ -558,12 +568,11 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
     }
 
     unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool> {
-        let r = unsafe { self.test_one_impl(&mut handle.0) };
+        let r = unsafe { self.test_one_impl(&mut handle.0, false) }; // transmit does the reload / flush as needed.
         match r {
             Err(e) => panic!("{:?}", e),
             Ok(status) => {
                 let received = status == CacheStatus::Hit;
-                //println!("Received {} on page {:p}", received, page);
                 return vec![received];
             }
         }
@@ -672,8 +681,9 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for SingleChann
     unsafe fn test_single(
         &mut self,
         handle: &mut Self::Handle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
-        unsafe { self.inner.test_single(handle) }
+        unsafe { self.inner.test_single(handle, reset) }
     }
 
     unsafe fn prepare_single(&mut self, handle: &mut Self::Handle) -> Result<(), SideChannelError> {

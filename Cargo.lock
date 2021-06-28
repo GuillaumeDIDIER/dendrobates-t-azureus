@@ -356,6 +356,7 @@ dependencies = [
  "cache_side_channel",
  "cache_utils",
  "flush_flush",
+ "flush_reload",
  "nix",
  "rand",
 ]

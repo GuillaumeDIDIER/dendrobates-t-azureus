@@ -36,13 +36,13 @@ unsafe impl<T: TimingChannelPrimitives + Send> Send for NaiveTimingChannel<T> {}
 unsafe impl<T: TimingChannelPrimitives + Sync> Sync for NaiveTimingChannel<T> {}
 
 impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
-    pub fn new(threshold: Threshold, t: T) -> Self {
+    pub fn new(threshold: Threshold) -> Self {
         Self {
             threshold,
             current: Default::default(),
             main_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
             helper_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
-            channel_primitive: t,
+            channel_primitive: Default::default(),
         }
     }
 
@@ -68,9 +68,13 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
     unsafe fn test_impl(
         &self,
         handle: &mut NaiveTimingChannelHandle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
         // This should be handled in prepare / unprepare
         let t = unsafe { self.channel_primitive.attack(handle.addr) };
+        if T::NEED_RESET && reset {
+            unsafe { flush(handle.addr) };
+        }
         if self.threshold.is_hit(t) {
             Ok(CacheStatus::Hit)
         } else {
@@ -121,7 +125,7 @@ impl<T: TimingChannelPrimitives + Send + Sync> CovertChannel for NaiveTimingChan
     }
 
     unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool> {
-        let r = unsafe { self.test_impl(handle) };
+        let r = unsafe { self.test_impl(handle, false) };
         match r {
             Err(e) => panic!(),
             Ok(status) => match status {
@@ -141,8 +145,9 @@ impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChann
     unsafe fn test_single(
         &mut self,
         handle: &mut Self::Handle,
+        reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
-        unsafe { self.test_impl(handle) }
+        unsafe { self.test_impl(handle, reset) }
     }
 
     unsafe fn prepare_single(&mut self, handle: &mut Self::Handle) -> Result<(), SideChannelError> {
