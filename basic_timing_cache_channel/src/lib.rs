@@ -123,7 +123,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 t: &t,
             },
             CalibrateOperation2T {
-                prepare: noop::<u8>,
+                prepare: flush,
                 op: T::attack,
                 name: "miss",
                 display_name: "miss",
