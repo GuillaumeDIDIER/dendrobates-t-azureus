@@ -22,7 +22,7 @@ pub struct NaiveTimingChannel<T: TimingChannelPrimitives> {
 }
 
 pub struct NaiveTimingChannelHandle {
-    vpn: VPN,
+    vpn: VPN, // what is this field used for
     addr: *const u8,
 }
 
@@ -82,6 +82,10 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
             Ok(CacheStatus::Miss)
         }
     }
+
+    // The former invariant of one handle per page has been removed
+    // Now tolerates as many handles per cache line as wanted
+    // should the invariant be fixed into one handle per cache line ?
 
     unsafe fn calibrate_impl(
         &mut self,

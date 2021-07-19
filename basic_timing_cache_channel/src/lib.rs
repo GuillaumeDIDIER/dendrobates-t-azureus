@@ -44,7 +44,7 @@ pub trait TimingChannelPrimitives: Debug + Send + Sync + Default {
 #[derive(Debug)]
 pub struct TopologyAwareTimingChannelHandle {
     threshold: Threshold,
-    vpn: VPN,
+    vpn: VPN, // what is this field used for
     addr: *const u8,
     ready: bool,
     calibration_epoch: usize,
@@ -488,6 +488,8 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
         operation(); // TODO use a different helper core ?
     }
 
+    // this function tolerates multiple handle on the same cache line
+    // should the invariant be fixed to one handle per line & calibration epoch ?
     unsafe fn calibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
