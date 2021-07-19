@@ -1,4 +1,3 @@
-#![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 use basic_timing_cache_channel::TopologyAwareError;
 use cache_side_channel::CacheStatus::Hit;
@@ -44,7 +43,7 @@ fn execute_pattern(
         unsafe { maccess(pointer) };
     }
 
-    let mut measures = unsafe { channel.test(page_handles, true) };
+    let measures = unsafe { channel.test(page_handles, true) };
 
     let mut res = vec![false; PAGE_CACHELINE_LEN];
 
@@ -65,12 +64,13 @@ fn execute_pattern_probe1(
         unsafe { maccess(pointer) };
     }
 
-    let mut measure = unsafe { channel.test_single(&mut page_handles[probe_offset], true) };
+    let measure = unsafe { channel.test_single(&mut page_handles[probe_offset], true) };
 
     measure.unwrap() == Hit
 }
 
 fn main() {
+    /*
     let mut vec = Vec::new();
     let mut handles = Vec::new();
     let (mut channel, cpuset, core) = FlushAndFlush::new_any_single_core().unwrap();
@@ -121,7 +121,7 @@ fn main() {
     let mut probe_all_result_first = [0; PAGE_CACHELINE_LEN];
     for _ in 0..NUM_ITERATION {
         let page_index = page_indexes.next().unwrap();
-        unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+        unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
         let res = execute_pattern(&mut channel, &mut handles_mutref[page_index], &pattern);
         for j in 0..PAGE_CACHELINE_LEN {
             if res[j] {
@@ -133,7 +133,7 @@ fn main() {
     for i in 0..PAGE_CACHELINE_LEN {
         for _ in 0..NUM_ITERATION {
             let page_index = page_indexes.next().unwrap();
-            unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+            unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
             let res =
                 execute_pattern_probe1(&mut channel, &mut handles_mutref[page_index], &pattern, i);
             if res {
@@ -144,7 +144,7 @@ fn main() {
     let mut probe_all_result = [0; PAGE_CACHELINE_LEN];
     for _ in 0..NUM_ITERATION {
         let page_index = page_indexes.next().unwrap();
-        unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+        unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
         let res = execute_pattern(&mut channel, &mut handles_mutref[page_index], &pattern);
         for j in 0..PAGE_CACHELINE_LEN {
             if res[j] {
@@ -165,7 +165,7 @@ fn main() {
     let mut probe_all_result_first = [0; PAGE_CACHELINE_LEN];
     for _ in 0..NUM_ITERATION {
         let page_index = page_indexes.next().unwrap();
-        unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+        unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
         let res = execute_pattern(&mut channel, &mut handles_mutref[page_index], &pattern);
         for j in 0..PAGE_CACHELINE_LEN {
             if res[j] {
@@ -177,7 +177,7 @@ fn main() {
     for i in 0..PAGE_CACHELINE_LEN {
         for _ in 0..NUM_ITERATION {
             let page_index = page_indexes.next().unwrap();
-            unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+            unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
             let res =
                 execute_pattern_probe1(&mut channel, &mut handles_mutref[page_index], &pattern, i);
             if res {
@@ -188,15 +188,24 @@ fn main() {
     let mut probe_all_result = [0; PAGE_CACHELINE_LEN];
     for _ in 0..NUM_ITERATION {
         let page_index = page_indexes.next().unwrap();
-        unsafe { channel.prepare(&mut handles_mutref[page_index]) };
+        unsafe { channel.prepare(&mut handles_mutref[page_index]) }.unwrap();
         let res = execute_pattern(&mut channel, &mut handles_mutref[page_index], &pattern);
         for j in 0..PAGE_CACHELINE_LEN {
             if res[j] {
                 probe_all_result[j] += 1;
             }
         }
-    }
+    }*/
 
+    let pattern = generate_pattern(0, 3, 12).unwrap();
+    let mut new_prober = Prober::new(63).unwrap();
+    let result = new_prober.full_page_probe(pattern.clone(), NUM_ITERATION as u32, 100);
+    println!("{}", result);
+    println!("{:#?}", result);
+
+    let result2 = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result2);
+    /*
     for i in 0..PAGE_CACHELINE_LEN {
         println!(
             "{:2} {:4} {:4} {:4}",
@@ -204,9 +213,9 @@ fn main() {
         );
     }
 
-    println!("Hello, world!");
     println!("{:?}", generate_pattern(0, 5, 1));
     println!("{:?}", generate_pattern(5, 0, 1));
     println!("{:?}", generate_pattern(1, 5, 5));
     println!("{:?}", generate_pattern(0, 16, 16));
+     */
 }
