@@ -1,7 +1,7 @@
 use crate::TimingChannelPrimitives;
 use cache_side_channel::{
-    CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, SideChannelError,
-    SingleAddrCacheSideChannel,
+    CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
+    SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{get_vpn, only_flush, only_reload, HashMap, Threshold, VPN};
 use cache_utils::flush;
@@ -58,16 +58,17 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         &mut self,
         handle: NaiveTimingChannelHandle,
     ) -> Result<*const u8, ChannelFatalError> {
-        if let Some(addr) = self.current.remove(&handle.vpn) {
-            Ok(addr)
-        } else {
-            Err(ChannelFatalError::Oops)
-        }
+        //if let Some(addr) = self.current.remove(&handle.vpn) {
+        Ok(addr)
+        //} else {
+        //    Err(ChannelFatalError::Oops)
+        //}
     }
 
     unsafe fn test_impl(
         &self,
         handle: &mut NaiveTimingChannelHandle,
+        //limit: u32,
         reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
         // This should be handled in prepare / unprepare
@@ -87,12 +88,12 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         addr: *const u8,
     ) -> Result<NaiveTimingChannelHandle, ChannelFatalError> {
         let vpn = get_vpn(addr);
-        if self.current.get(&vpn).is_some() {
+        /*if self.current.get(&vpn).is_some() {
             return Err(ChannelFatalError::Oops);
         } else {
-            self.current.insert(vpn, addr);
-            Ok(NaiveTimingChannelHandle { vpn, addr })
-        }
+            self.current.insert(vpn, addr);*/
+        Ok(NaiveTimingChannelHandle { vpn, addr })
+        //}
     }
 }
 
@@ -139,6 +140,7 @@ impl<T: TimingChannelPrimitives + Send + Sync> CovertChannel for NaiveTimingChan
         unsafe { self.calibrate_impl(page) }.map_err(|_| ())
     }
 }
+
 impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChannel<T> {
     type Handle = NaiveTimingChannelHandle;
 
@@ -178,7 +180,52 @@ impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChann
         Ok(result)
     }
 }
+/*
+impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for NaiveTimingChannel<T> {
+    type Handle = NaiveTimingChannelHandle;
+    const MAX_ADDR: u32 = 0;
 
+    unsafe fn test<'a>(
+        &mut self,
+        addresses: &mut Vec<&'a mut Self::Handle>,
+        reset: bool,
+    ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError>
+    where
+        Self::Handle: 'a,
+    {
+        unsafe { self.test_impl(addresses, Self::MAX_ADDR, reset) }
+    }
+
+    unsafe fn prepare<'a>(
+        &mut self,
+        addresses: &mut Vec<&'a mut Self::Handle>,
+    ) -> Result<(), SideChannelError>
+    where
+        Self::Handle: 'a,
+    {
+        unsafe { self.prepare_impl(addresses, Self::MAX_ADDR) }
+    }
+    fn victim(&mut self, operation: &dyn Fn()) {
+        operation()
+    }
+
+    unsafe fn calibrate(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<Self::Handle>, ChannelFatalError> {
+        let mut result = vec![];
+        for addr in addresses {
+            match unsafe { self.calibrate_impl(addr) } {
+                Ok(handle) => result.push(handle),
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(result)
+    }
+}
+*/
 // Include a helper code to get global threshold model ?
 
 // TODO

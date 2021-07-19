@@ -41,6 +41,7 @@ pub trait TimingChannelPrimitives: Debug + Send + Sync + Default {
     const NEED_RESET: bool;
 }
 
+#[derive(Debug)]
 pub struct TopologyAwareTimingChannelHandle {
     threshold: Threshold,
     vpn: VPN,
@@ -204,7 +205,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         Ok(asvp_best_av_errors)
     }
 
-    fn new_with_core_pairs(
+    pub fn new_with_core_pairs(
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
     ) -> Result<(Self, usize, usize), TopologyAwareError> {
         let m = MMappedMemory::new(PAGE_LEN, false);
