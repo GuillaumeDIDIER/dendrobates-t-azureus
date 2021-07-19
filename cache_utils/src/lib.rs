@@ -52,6 +52,7 @@ pub fn noop<T>(_: *const T) {}
 
 #[cfg(feature = "use_std")]
 pub fn find_core_per_socket() -> u8 {
+    // FIXME error handling
     use std::process::Command;
     use std::str::from_utf8;
 
@@ -66,7 +67,7 @@ pub fn find_core_per_socket() -> u8 {
 
     //println!("Number of cores per socket: {}", cps_str);
 
-    let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)]
+    let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)] // FIXME, for cases such as '   24  '
         .parse()
         .unwrap_or(0);
     core_per_socket
