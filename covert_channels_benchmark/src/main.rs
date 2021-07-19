@@ -40,22 +40,34 @@ fn run_benchmark<T: CovertChannel + 'static>(
     num_iter: usize,
     num_pages: usize,
     old: CpuSet,
+    iterate_cores: bool,
 ) -> BenchmarkStats {
     let mut results = Vec::new();
     print!("Benchmarking {} with {} pages", name, num_pages);
     let mut count = 0;
-    for i in 0..CpuSet::count() {
-        for j in 0..CpuSet::count() {
-            if old.is_set(i).unwrap() && old.is_set(j).unwrap() && i != j {
-                for _ in 0..num_iter {
-                    count += 1;
-                    print!(".");
-                    stdout().flush().expect("Failed to flush");
-                    let (channel, main_core, helper_core) = constructor(i, j);
-                    let r = benchmark_channel(channel, num_pages, NUM_BYTES);
-                    results.push((r, main_core, helper_core));
+    if iterate_cores {
+        for i in 0..CpuSet::count() {
+            for j in 0..CpuSet::count() {
+                if old.is_set(i).unwrap() && old.is_set(j).unwrap() && i != j {
+                    for _ in 0..num_iter {
+                        count += 1;
+                        print!(".");
+                        stdout().flush().expect("Failed to flush");
+                        let (channel, main_core, helper_core) = constructor(i, j);
+                        let r = benchmark_channel(channel, num_pages, NUM_BYTES);
+                        results.push((r, main_core, helper_core));
+                    }
                 }
             }
+        }
+    } else {
+        for _ in 0..num_iter {
+            count += 1;
+            print!(".");
+            stdout().flush().expect("Failed to flush");
+            let (channel, main_core, helper_core) = constructor(0, 0);
+            let r = benchmark_channel(channel, num_pages, NUM_BYTES);
+            results.push((r, main_core, helper_core));
         }
     }
     println!();
@@ -149,6 +161,7 @@ fn main() {
             NUM_ITER,
             num_pages,
             old,
+            true,
         );
 
         let naive_fr = run_benchmark(
@@ -158,12 +171,14 @@ fn main() {
                     bucket_index: 250,
                     miss_faster_than_hit: false,
                 });
+
                 r.set_cores(i, j);
                 (r, i, j)
             },
             NUM_ITER,
             num_pages,
             old,
+            true,
         );
 
         let ff = run_benchmark(
@@ -179,9 +194,10 @@ fn main() {
                 };
                 (r, i, j)
             },
-            1,
+            NUM_ITER,
             num_pages,
             old,
+            false,
         );
 
         let fr = run_benchmark(
@@ -197,9 +213,10 @@ fn main() {
                 };
                 (r, i, j)
             },
-            1,
+            NUM_ITER,
             num_pages,
             old,
+            false,
         );
     }
 }
