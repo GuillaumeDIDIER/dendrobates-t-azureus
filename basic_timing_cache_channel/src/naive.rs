@@ -59,7 +59,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         handle: NaiveTimingChannelHandle,
     ) -> Result<*const u8, ChannelFatalError> {
         //if let Some(addr) = self.current.remove(&handle.vpn) {
-        Ok(addr)
+        Ok(handle.addr)
         //} else {
         //    Err(ChannelFatalError::Oops)
         //}
