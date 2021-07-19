@@ -198,13 +198,40 @@ fn main() {
     }*/
 
     let pattern = generate_pattern(0, 3, 12).unwrap();
+    let pattern4 = generate_pattern(0, 4, 12).unwrap();
     let mut new_prober = Prober::new(63).unwrap();
     let result = new_prober.full_page_probe(pattern.clone(), NUM_ITERATION as u32, 100);
     println!("{}", result);
-    println!("{:#?}", result);
+    //println!("{:#?}", result);
 
     let result2 = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
     println!("{}", result2);
+    let result4 = new_prober.full_page_probe(pattern4, NUM_ITERATION as u32, 100);
+    println!("{}", result4);
+    let pattern5 = generate_pattern(0, 5, 8).unwrap();
+    let result5 = new_prober.full_page_probe(pattern5, NUM_ITERATION as u32, 100);
+    println!("{}", result5);
+
+    let pattern5 = generate_pattern(0, 5, 4).unwrap();
+    let result5 = new_prober.full_page_probe(pattern5, NUM_ITERATION as u32, 100);
+    println!("{}", result5);
+
+    let pattern = generate_pattern(0, 10, 4).unwrap();
+    let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result);
+
+    let pattern = generate_pattern(0, 6, 8).unwrap();
+    let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result);
+
+    let pattern = generate_pattern(2, 6, 0).unwrap();
+    let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result);
+
+    let pattern = vec![0, 0, 8, 8, 16, 16, 24, 24];
+    let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result);
+
     /*
     for i in 0..PAGE_CACHELINE_LEN {
         println!(
