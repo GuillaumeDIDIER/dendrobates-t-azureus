@@ -23,10 +23,12 @@ pub const PAGE_CACHELINE_LEN: usize = PAGE_LEN / CACHE_LINE_LEN;
 pub struct Prober {
     pages: Vec<MMappedMemory<u8>>,
     ff_handles: Vec<Vec<FFHandle>>,
-    fr_handles: Vec<Vec<NFRHandle>>,
+    fr_handles: Vec<Vec<FRHandle>>,
+    //fr_handles: Vec<Vec<NFRHandle>>,
     page_indexes: Peekable<Cycle<Range<usize>>>,
     ff_channel: FlushAndFlush,
-    fr_channel: NaiveFlushAndReload,
+    fr_channel: FlushAndReload,
+    //fr_channel: NaiveFlushAndReload,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,17 +145,16 @@ impl Prober {
             Ok(old) => old,
             Err(nixerr) => return Err(ProberError::Nix(nixerr)),
         };
-        let mut fr_channel = NaiveFlushAndReload::new(Threshold {
+        /*let mut fr_channel = NaiveFlushAndReload::new(Threshold {
             bucket_index: 250,
             miss_faster_than_hit: false,
-        });
-        /*
+        });*/
         let mut fr_channel = match FlushAndReload::new(core, core) {
             Ok(res) => res,
             Err(err) => {
                 return Err(ProberError::TopologyError(err));
             }
-        };*/
+        };
 
         for i in 0..num_pages {
             let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN, false) {
