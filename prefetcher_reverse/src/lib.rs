@@ -407,7 +407,18 @@ impl Display for FullPageDualProbeResults {
             indices[offset] = Some(i);
         }
         // Display header
-        let mut r = writeln!(f, "{:^3} {:^7} | {:^8} {:^8} {:^8} {:^8} | {:^8} {:^8} {:^8} {:^8} | {:^8} {:^8} {:^8} {:^8}",
+        let mut r = writeln!(
+            f,
+            "{:11} | {:^37} | {:^37} | {:^37}",
+            "", "Single Flush", "Single Load", "Full Flush"
+        );
+        match r {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(e);
+            }
+        }
+        let mut r = writeln!(f, "{:^3} {:>7} | {:>8} {:^9} {:>8} {:^9} | {:>8} {:^9} {:>8} {:^9} | {:>8} {:^9} {:>8} {:^9}",
                        "pat", "offset",
                "SF Ac H", "SF Ac HR", "SF Pr H", "SF Pr HR",
                "SR Ac H", "SR Ac HR", "SR Pr H", "SR Pr HR",
@@ -440,7 +451,7 @@ impl Display for FullPageDualProbeResults {
                         .map(|d| d.flush.pattern_result[index])
                         .sum();
                     let sf_ac_h = format!("{:8}", sf_ac);
-                    let sf_ac_hr = format!("{:8}", sf_ac as f32 / divider);
+                    let sf_ac_hr = format!("{:9.7}", sf_ac as f32 / divider);
 
                     let sr_ac: u32 = self
                         .single_probe_results
@@ -448,28 +459,28 @@ impl Display for FullPageDualProbeResults {
                         .map(|d| d.load.pattern_result[index])
                         .sum();
                     let sr_ac_h = format!("{:8}", sr_ac);
-                    let sr_ac_hr = format!("{:8}", sr_ac as f32 / divider);
+                    let sr_ac_hr = format!("{:9.7}", sr_ac as f32 / divider);
 
                     let ff_ac = self.full_flush_results.pattern_result[index];
                     let ff_ac_h = format!("{:8}", ff_ac);
-                    let ff_ac_hr = format!("{:8}", ff_ac as f32 / self.num_iteration as f32);
+                    let ff_ac_hr = format!("{:9.7}", ff_ac as f32 / self.num_iteration as f32);
                     (pat, sf_ac_h, sf_ac_hr, sr_ac_h, sr_ac_hr, ff_ac_h, ff_ac_hr)
                 }
             };
 
             let sf_pr = self.single_probe_results[i].flush.probe_result;
             let sf_pr_h = format!("{:8}", sf_pr);
-            let sf_pr_hr = format!("{:8}", sf_pr as f32 / self.num_iteration as f32);
+            let sf_pr_hr = format!("{:9.7}", sf_pr as f32 / self.num_iteration as f32);
 
             let sr_pr = self.single_probe_results[i].load.probe_result;
             let sr_pr_h = format!("{:8}", sr_pr);
-            let sr_pr_hr = format!("{:8}", sr_pr as f32 / self.num_iteration as f32);
+            let sr_pr_hr = format!("{:9.7}", sr_pr as f32 / self.num_iteration as f32);
 
             let ff_pr = self.full_flush_results.probe_result[i];
             let ff_pr_h = format!("{:8}", ff_pr);
-            let ff_pr_hr = format!("{:8}", ff_pr as f32 / self.num_iteration as f32);
+            let ff_pr_hr = format!("{:9.7}", ff_pr as f32 / self.num_iteration as f32);
 
-            r = writeln!(f, "{:>3} {:>7} | {:>8} {:^8} {:>8} {:^8} | {:>8} {:^8} {:>8} {:^8} | {:>8} {:^8} {:>8} {:^8}",
+            r = writeln!(f, "{:>3} {:>7} | {:>8} {:^9} {:>8} {:^9} | {:>8} {:^9} {:>8} {:^9} | {:>8} {:^9} {:>8} {:^9}",
                              pat, i,
                              sf_ac_h, sf_ac_hr, sf_pr_h, sf_pr_hr,
                              sr_ac_h, sr_ac_hr, sr_pr_h, sr_pr_hr,
