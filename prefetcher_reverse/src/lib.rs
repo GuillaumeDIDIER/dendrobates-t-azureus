@@ -1,11 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 use crate::Probe::{Flush, FullFlush, Load};
 use basic_timing_cache_channel::{TopologyAwareError, TopologyAwareTimingChannel};
-use cache_side_channel::CacheStatus::Hit;
+use cache_side_channel::CacheStatus::{Hit, Miss};
 use cache_side_channel::{
-    set_affinity, CacheStatus, CoreSpec, MultipleAddrCacheSideChannel, SingleAddrCacheSideChannel,
+    set_affinity, CacheStatus, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
+    SingleAddrCacheSideChannel,
 };
-use cache_utils::calibration::{Threshold, PAGE_LEN};
+use cache_utils::calibration::{only_reload, Threshold, PAGE_LEN};
 use cache_utils::mmap::MMappedMemory;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use flush_reload::naive::{NFRHandle, NaiveFlushAndReload};
@@ -234,6 +235,9 @@ impl Prober {
         for (i, offset) in pattern.pattern.iter().enumerate() {
             let h = &mut self.fr_handles[page_index][*offset];
             pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
+            //pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
+            //pattern_res[i] = Miss;
+            //unsafe { only_reload(h.to_const_u8_pointer()) };
         }
 
         let mut probe_out = match pattern.probe {
