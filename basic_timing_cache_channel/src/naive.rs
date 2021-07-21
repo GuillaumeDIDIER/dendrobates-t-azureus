@@ -1,4 +1,7 @@
 use crate::TimingChannelPrimitives;
+use cache_side_channel::table_side_channel::{
+    SingleTableCacheSideChannel, TableAttackResult, TableCacheSideChannel,
+};
 use cache_side_channel::{
     CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
     SideChannelError, SingleAddrCacheSideChannel,
@@ -65,7 +68,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         //}
     }
 
-    unsafe fn test_impl(
+    unsafe fn test_one_impl(
         &self,
         handle: &mut NaiveTimingChannelHandle,
         //limit: u32,
@@ -83,6 +86,39 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         }
     }
 
+    unsafe fn test_impl(
+        &self,
+        handles: &mut Vec<&mut NaiveTimingChannelHandle>,
+        limit: u32,
+        reset: bool,
+    ) -> Result<Vec<(*const u8, CacheStatus)>, SideChannelError> {
+        let mut result = Vec::new();
+        let mut tmp = Vec::new();
+        let mut i = 0;
+        for addr in handles {
+            let r = unsafe { self.test_one_impl(addr, false) };
+            tmp.push((addr.to_const_u8_pointer(), r));
+            i += 1;
+            if i == limit {
+                break;
+            }
+        }
+        for (addr, r) in tmp {
+            match r {
+                Ok(status) => {
+                    result.push((addr, status));
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+            if T::NEED_RESET && reset {
+                unsafe { flush(addr) };
+            }
+        }
+        Ok(result)
+    }
+
     // The former invariant of one handle per page has been removed
     // Now tolerates as many handles per cache line as wanted
     // should the invariant be fixed into one handle per cache line ?
@@ -98,6 +134,36 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
             self.current.insert(vpn, addr);*/
         Ok(NaiveTimingChannelHandle { vpn, addr })
         //}
+    }
+
+    unsafe fn prepare_one_impl(
+        &mut self,
+        handle: &mut NaiveTimingChannelHandle,
+    ) -> Result<(), SideChannelError> {
+        unsafe { flush(handle.addr) };
+        Ok(())
+    }
+
+    unsafe fn prepare_impl(
+        &mut self,
+        addresses: &mut Vec<&mut NaiveTimingChannelHandle>,
+        limit: u32,
+    ) -> Result<(), SideChannelError> {
+        // Iterate on addresse prparig them, error early exit
+        let mut i = 0;
+        for handle in addresses {
+            match unsafe { self.prepare_one_impl(handle) } {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+            i += 1;
+            if i == limit {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -130,7 +196,7 @@ impl<T: TimingChannelPrimitives + Send + Sync> CovertChannel for NaiveTimingChan
     }
 
     unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool> {
-        let r = unsafe { self.test_impl(handle, false) };
+        let r = unsafe { self.test_one_impl(handle, false) };
         match r {
             Err(e) => panic!(),
             Ok(status) => match status {
@@ -153,12 +219,11 @@ impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChann
         handle: &mut Self::Handle,
         reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
-        unsafe { self.test_impl(handle, reset) }
+        unsafe { self.test_one_impl(handle, reset) }
     }
 
     unsafe fn prepare_single(&mut self, handle: &mut Self::Handle) -> Result<(), SideChannelError> {
-        unsafe { flush(handle.addr) };
-        Ok(())
+        unsafe { self.prepare_one_impl(handle) }
     }
 
     fn victim_single(&mut self, operation: &dyn Fn()) {
@@ -184,10 +249,10 @@ impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChann
         Ok(result)
     }
 }
-/*
+
 impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for NaiveTimingChannel<T> {
     type Handle = NaiveTimingChannelHandle;
-    const MAX_ADDR: u32 = 0;
+    const MAX_ADDR: u32 = 1;
 
     unsafe fn test<'a>(
         &mut self,
@@ -229,7 +294,29 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for NaiveTimingCha
         Ok(result)
     }
 }
-*/
+
+impl<T: TimingChannelPrimitives> TableCacheSideChannel<NaiveTimingChannelHandle>
+    for NaiveTimingChannel<T>
+{
+    unsafe fn tcalibrate(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<NaiveTimingChannelHandle>, ChannelFatalError> {
+        unsafe { self.tcalibrate_single(addresses) }
+    }
+
+    unsafe fn attack<'a, 'b, 'c, 'd>(
+        &'a mut self,
+        addresses: &'b mut Vec<&'c mut NaiveTimingChannelHandle>,
+        victim: &'d dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
+    where
+        NaiveTimingChannelHandle: 'c,
+    {
+        unsafe { self.attack_single(addresses, victim, num_iteration) }
+    }
+}
 // Include a helper code to get global threshold model ?
 
 // TODO

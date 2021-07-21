@@ -106,6 +106,7 @@ pub trait MultipleAddrCacheSideChannel: CoreSpec + Debug {
     ) -> Result<Vec<Self::Handle>, ChannelFatalError>;
 }
 
+/*
 impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
     type Handle = <Self as MultipleAddrCacheSideChannel>::Handle;
 
@@ -134,6 +135,7 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
         unsafe { self.calibrate(addresses) }
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

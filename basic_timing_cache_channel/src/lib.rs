@@ -10,6 +10,10 @@
 // Should be used by F+F and non Naive F+R
 
 //use crate::naive::NaiveTimingChannelHandle;
+use cache_side_channel::table_side_channel::{
+    MultipleTableCacheSideChannel, SingleTableCacheSideChannel, TableAttackResult,
+    TableCacheSideChannel,
+};
 use cache_side_channel::SideChannelError::AddressNotReady;
 use cache_side_channel::{
     CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
@@ -550,6 +554,33 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
     }
 }
 
+impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for TopologyAwareTimingChannel<T> {
+    type Handle = TopologyAwareTimingChannelHandle;
+
+    unsafe fn test_single(
+        &mut self,
+        handle: &mut Self::Handle,
+        reset: bool,
+    ) -> Result<CacheStatus, SideChannelError> {
+        unsafe { self.test_one_impl(handle, reset) }
+    }
+
+    unsafe fn prepare_single(&mut self, handle: &mut Self::Handle) -> Result<(), SideChannelError> {
+        unsafe { self.prepare_one_impl(handle) }
+    }
+
+    fn victim_single(&mut self, operation: &dyn Fn()) {
+        self.victim(operation)
+    }
+
+    unsafe fn calibrate_single(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<Self::Handle>, ChannelFatalError> {
+        unsafe { self.calibrate(addresses) }
+    }
+}
+
 impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T> {
     type CovertChannelHandle = CovertChannelHandle<TopologyAwareTimingChannel<T>>;
     const BIT_PER_PAGE: usize = 1;
@@ -656,19 +687,42 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
     }
 }
 
+impl<T: TimingChannelPrimitives> TableCacheSideChannel<TopologyAwareTimingChannelHandle>
+    for TopologyAwareTimingChannel<T>
+{
+    unsafe fn tcalibrate(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<TopologyAwareTimingChannelHandle>, ChannelFatalError> {
+        unsafe { self.tcalibrate_multi(addresses) }
+    }
+
+    unsafe fn attack<'a, 'b, 'c, 'd>(
+        &'a mut self,
+        addresses: &'b mut Vec<&'c mut TopologyAwareTimingChannelHandle>,
+        victim: &'d dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
+    where
+        TopologyAwareTimingChannelHandle: 'c,
+    {
+        unsafe { self.attack_multi(addresses, victim, num_iteration) }
+    }
+}
+
 // Extra helper for single address per page variants.
 #[derive(Debug)]
-pub struct SingleChannel<T: MultipleAddrCacheSideChannel> {
+pub struct SingleChannel<T: SingleAddrCacheSideChannel> {
     inner: T,
 }
 
-impl<T: MultipleAddrCacheSideChannel> SingleChannel<T> {
+impl<T: SingleAddrCacheSideChannel> SingleChannel<T> {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
-impl<T: MultipleAddrCacheSideChannel> CoreSpec for SingleChannel<T> {
+impl<T: SingleAddrCacheSideChannel> CoreSpec for SingleChannel<T> {
     fn main_core(&self) -> CpuSet {
         self.inner.main_core()
     }
@@ -678,7 +732,7 @@ impl<T: MultipleAddrCacheSideChannel> CoreSpec for SingleChannel<T> {
     }
 }
 
-impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for SingleChannel<T> {
+impl<T: SingleAddrCacheSideChannel> SingleAddrCacheSideChannel for SingleChannel<T> {
     type Handle = T::Handle;
 
     unsafe fn test_single(
@@ -702,6 +756,31 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for SingleChann
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<Self::Handle>, ChannelFatalError> {
         unsafe { self.inner.calibrate_single(addresses) }
+    }
+}
+
+impl<T: SingleAddrCacheSideChannel>
+    TableCacheSideChannel<<SingleChannel<T> as SingleAddrCacheSideChannel>::Handle>
+    for SingleChannel<T>
+{
+    unsafe fn tcalibrate(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<<SingleChannel<T> as SingleAddrCacheSideChannel>::Handle>, ChannelFatalError>
+    {
+        unsafe { self.inner.tcalibrate_single(addresses) }
+    }
+
+    unsafe fn attack<'a, 'b, 'c, 'd>(
+        &'a mut self,
+        addresses: &'b mut Vec<&'c mut <SingleChannel<T> as SingleAddrCacheSideChannel>::Handle>,
+        victim: &'d dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
+    where
+        <SingleChannel<T> as SingleAddrCacheSideChannel>::Handle: 'c,
+    {
+        unsafe { self.inner.attack_single(addresses, victim, num_iteration) }
     }
 }
 

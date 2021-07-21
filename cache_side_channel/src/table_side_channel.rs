@@ -26,7 +26,7 @@ pub trait TableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
     /// # Safety
     ///
     /// addresses must contain only valid pointers to read.
-    unsafe fn calibrate(
+    unsafe fn tcalibrate(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<Handle>, ChannelFatalError>;
@@ -43,8 +43,51 @@ pub trait TableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
         Handle: 'c;
 }
 
-impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
-    default unsafe fn calibrate(
+pub trait SingleTableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
+    //type ChannelFatalError: Debug;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
+    unsafe fn tcalibrate_single(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<Handle>, ChannelFatalError>;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
+    unsafe fn attack_single<'a, 'b, 'c, 'd>(
+        &'a mut self,
+        addresses: &'b mut Vec<&'c mut Handle>,
+        victim: &'d dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
+    where
+        Handle: 'c;
+}
+pub trait MultipleTableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
+    //type ChannelFatalError: Debug;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
+    unsafe fn tcalibrate_multi(
+        &mut self,
+        addresses: impl IntoIterator<Item = *const u8> + Clone,
+    ) -> Result<Vec<Handle>, ChannelFatalError>;
+    /// # Safety
+    ///
+    /// addresses must contain only valid pointers to read.
+    unsafe fn attack_multi<'a, 'b, 'c, 'd>(
+        &'a mut self,
+        addresses: &'b mut Vec<&'c mut Handle>,
+        victim: &'d dyn Fn(),
+        num_iteration: u32,
+    ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
+    where
+        Handle: 'c;
+}
+
+impl<T: SingleAddrCacheSideChannel> SingleTableCacheSideChannel<T::Handle> for T {
+    default unsafe fn tcalibrate_single(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<T::Handle>, ChannelFatalError> {
@@ -52,7 +95,7 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
     }
     //type ChannelFatalError = T::SingleChannelFatalError;
 
-    default unsafe fn attack<'a, 'b, 'c, 'd>(
+    default unsafe fn attack_single<'a, 'b, 'c, 'd>(
         &'a mut self,
         addresses: &'b mut Vec<&'c mut T::Handle>,
         victim: &'d dyn Fn(),
@@ -122,8 +165,8 @@ impl<T: SingleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
 
 // TODO limit number of simultaneous tested address + randomise order ?
 
-impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
-    unsafe fn calibrate(
+impl<T: MultipleAddrCacheSideChannel> MultipleTableCacheSideChannel<T::Handle> for T {
+    unsafe fn tcalibrate_multi(
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<T::Handle>, ChannelFatalError> {
@@ -134,7 +177,7 @@ impl<T: MultipleAddrCacheSideChannel> TableCacheSideChannel<T::Handle> for T {
     /// # Safety
     ///
     /// addresses must contain only valid pointers to read.
-    unsafe fn attack<'a, 'b, 'c, 'd>(
+    unsafe fn attack_multi<'a, 'b, 'c, 'd>(
         &'a mut self,
         mut addresses: &'b mut Vec<&'c mut T::Handle>,
         victim: &'d dyn Fn(),

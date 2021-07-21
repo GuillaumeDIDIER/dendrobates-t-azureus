@@ -88,7 +88,7 @@ pub unsafe fn attack_t_tables_poc<T: ChannelHandle>(
 
     addresses.shuffle(&mut thread_rng());
 
-    let mut victims_handle = unsafe { side_channel.calibrate(addresses.clone()).unwrap() };
+    let mut victims_handle = unsafe { side_channel.tcalibrate(addresses.clone()).unwrap() };
 
     for addr in addresses.iter() {
         let mut timing = HashMap::new();
