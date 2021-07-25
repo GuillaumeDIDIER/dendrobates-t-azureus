@@ -16,6 +16,7 @@ use rand::seq::SliceRandom;
 use std::fmt::{Display, Error, Formatter};
 use std::iter::{Cycle, Peekable};
 use std::ops::Range;
+use std::{thread, time};
 
 // NB these may need to be changed / dynamically measured.
 pub const CACHE_LINE_LEN: usize = 64;
@@ -30,6 +31,7 @@ pub struct Prober {
     ff_channel: FlushAndFlush,
     fr_channel: FlushAndReload,
     //fr_channel: NaiveFlushAndReload,
+    delay: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,6 +135,9 @@ fn max_stride(offset: usize, len: usize) -> (isize, isize) {
 }
 
 impl Prober {
+    // turn page into page groups, which can vary in size.
+    // calibrate on all pages in a group with offsets within the groups.
+    // keep track of the max offset
     pub fn new(num_pages: usize) -> Result<Prober, ProberError> {
         let mut vec = Vec::new();
         let mut handles = Vec::new();
@@ -195,7 +200,12 @@ impl Prober {
             page_indexes,
             ff_channel,
             fr_channel,
+            delay: 0,
         })
+    }
+
+    pub fn set_delay(&mut self, delay: u64) {
+        self.delay = delay;
     }
 
     /*
@@ -234,7 +244,10 @@ impl Prober {
         let mut pattern_res = vec![CacheStatus::Miss; pattern.pattern.len()];
         for (i, offset) in pattern.pattern.iter().enumerate() {
             let h = &mut self.fr_handles[page_index][*offset];
-            pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
+            pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap();
+            if self.delay > 0 {
+                thread::sleep(time::Duration::from_nanos(self.delay)); // FIXME parameter magic
+            }
             //pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
             //pattern_res[i] = Miss;
             //unsafe { only_reload(h.to_const_u8_pointer()) };
@@ -499,4 +512,18 @@ impl Display for FullPageDualProbeResults {
         }
         write!(f, "Num_iteration: {}", self.num_iteration)
     }
+}
+
+pub fn reference_patterns() -> [(&'static str, Vec<usize>); 9] {
+    [
+        ("Pattern 1", vec![0, 1, 2, 3]),
+        ("Pattern 2", vec![0, 1]),
+        ("Pattern 3", vec![0, 19]),
+        ("Pattern 4 (I)", vec![0, 1, 2, 44]),
+        ("Pattern 4 (II)", vec![63, 62, 61, 19]),
+        ("Pattern 5 (I)", vec![0, 1, 2, 63, 62, 44]),
+        ("Pattern 5 (II)", vec![63, 62, 61, 0, 1, 2, 19]),
+        ("Pattern 5 (III)", vec![63, 62, 61, 0, 1, 2, 44]),
+        ("Pattern 5 (IV)", vec![0, 1, 2, 63, 62, 61, 19]),
+    ]
 }

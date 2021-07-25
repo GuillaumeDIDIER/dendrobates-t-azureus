@@ -149,7 +149,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         addresses: &mut Vec<&mut NaiveTimingChannelHandle>,
         limit: u32,
     ) -> Result<(), SideChannelError> {
-        // Iterate on addresse prparig them, error early exit
+        // Iterate on addresses preparing them, error early exit
         let mut i = 0;
         for handle in addresses {
             match unsafe { self.prepare_one_impl(handle) } {
