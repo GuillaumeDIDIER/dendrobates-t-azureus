@@ -20,8 +20,7 @@ pub const NUM_PAGES: usize = 256;
 
 fn exp(delay: u64) {
     for (name, pattern) in reference_patterns() {
-        let mut prober = Prober::new(63).unwrap();
-        prober.set_delay(delay);
+        let mut prober = Prober::<1>::new(63).unwrap();
 
         println!("{}", name);
         let result = prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);

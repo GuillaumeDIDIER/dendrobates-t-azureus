@@ -1,4 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![feature(const_generics)]
+#![feature(const_evaluatable_checked)]
+
 use crate::Probe::{Flush, FullFlush, Load};
 use basic_timing_cache_channel::{TopologyAwareError, TopologyAwareTimingChannel};
 use cache_side_channel::CacheStatus::{Hit, Miss};
@@ -22,7 +25,7 @@ use std::{thread, time};
 pub const CACHE_LINE_LEN: usize = 64;
 pub const PAGE_CACHELINE_LEN: usize = PAGE_LEN / CACHE_LINE_LEN;
 
-pub struct Prober {
+pub struct Prober<const GS: usize> {
     pages: Vec<MMappedMemory<u8>>,
     ff_handles: Vec<Vec<FFHandle>>,
     fr_handles: Vec<Vec<FRHandle>>,
@@ -110,7 +113,7 @@ pub struct SingleProbeResult {
 }
 
 #[derive(Debug)]
-pub struct FullPageSingleProbeResult {
+pub struct FullPageSingleProbeResult<const GS: usize> {
     pub pattern: Vec<usize>,
     pub probe_type: ProbeType,
     pub num_iteration: u32,
@@ -134,11 +137,11 @@ fn max_stride(offset: usize, len: usize) -> (isize, isize) {
     }
 }
 
-impl Prober {
+impl<const GS: usize> Prober<GS> {
     // turn page into page groups, which can vary in size.
     // calibrate on all pages in a group with offsets within the groups.
     // keep track of the max offset
-    pub fn new(num_pages: usize) -> Result<Prober, ProberError> {
+    pub fn new(num_pages: usize) -> Result<Prober<GS>, ProberError> {
         let mut vec = Vec::new();
         let mut handles = Vec::new();
         let (mut ff_channel, cpuset, core) = match FlushAndFlush::new_any_single_core() {
@@ -163,17 +166,17 @@ impl Prober {
         };
 
         for i in 0..num_pages {
-            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN, false) {
+            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false) {
                 Ok(p) => p,
                 Err(e) => {
                     return Err(ProberError::NoMem(e));
                 }
             };
-            for j in 0..PAGE_LEN {
+            for j in 0..(PAGE_LEN * GS) {
                 p[j] = (i * PAGE_CACHELINE_LEN + j) as u8;
             }
-            let page_addresses =
-                ((0..PAGE_LEN).step_by(CACHE_LINE_LEN)).map(|offset| &p[offset] as *const u8);
+            let page_addresses = ((0..(PAGE_LEN * GS)).step_by(CACHE_LINE_LEN))
+                .map(|offset| &p[offset] as *const u8);
             let ff_page_handles = unsafe { ff_channel.calibrate(page_addresses.clone()) }.unwrap();
             let fr_page_handles = unsafe { fr_channel.calibrate_single(page_addresses) }.unwrap();
 
@@ -207,22 +210,6 @@ impl Prober {
     pub fn set_delay(&mut self, delay: u64) {
         self.delay = delay;
     }
-
-    /*
-        fn probe(&mut self, probe_type: Probe, offset: usize) -> CacheStatus {
-            let page_index = self.page_indexes.peek().unwrap();
-            match probe_type {
-                Probe::Load => {
-                    let h = &mut self.handles[*page_index][offset].fr;
-                    unsafe { self.fr_channel.test_single(h, false) }.unwrap()
-                }
-                Probe::Flush => {
-                    let h = &mut self.handles[*page_index][offset].ff;
-                    unsafe { self.ff_channel.test_single(h, false) }.unwrap()
-                }
-            }
-        }
-    */
 
     fn probe_pattern_once(
         &mut self,
@@ -313,7 +300,7 @@ impl Prober {
             probe_result: match pattern.probe {
                 Load(_) => ProbeResult::Load(0),
                 Flush(_) => ProbeResult::Flush(0),
-                Probe::FullFlush => ProbeResult::FullFlush(vec![0; PAGE_CACHELINE_LEN]),
+                Probe::FullFlush => ProbeResult::FullFlush(vec![0; PAGE_CACHELINE_LEN * GS]),
             },
         };
         for _ in 0..warmup {
@@ -333,14 +320,14 @@ impl Prober {
         probe_type: ProbeType,
         num_iteration: u32,
         warmup: u32,
-    ) -> FullPageSingleProbeResult {
+    ) -> FullPageSingleProbeResult<GS> {
         let mut result = FullPageSingleProbeResult {
             pattern: pattern.pattern.clone(),
             probe_type,
             num_iteration,
             results: vec![],
         };
-        for offset in 0..PAGE_CACHELINE_LEN {
+        for offset in 0..(PAGE_CACHELINE_LEN * GS) {
             pattern.probe = match probe_type {
                 ProbeType::Load => Probe::Load(offset),
                 ProbeType::Flush => Probe::Flush(offset),
@@ -417,9 +404,9 @@ impl Prober {
 
 impl Display for FullPageDualProbeResults {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut indices = vec![None; PAGE_CACHELINE_LEN];
+        let mut indices = vec![None; self.single_probe_results.len()];
         let pat_len = self.pattern.len();
-        let divider = (PAGE_CACHELINE_LEN * self.num_iteration as usize) as f32;
+        let divider = (self.single_probe_results.len() * self.num_iteration as usize) as f32;
         for (i, &offset) in self.pattern.iter().enumerate() {
             indices[offset] = Some(i);
         }
@@ -447,7 +434,7 @@ impl Display for FullPageDualProbeResults {
             }
         }
 
-        for i in 0..PAGE_CACHELINE_LEN {
+        for i in 0..(self.single_probe_results.len()) {
             let index = indices[i];
 
             let (pat, sf_ac_h, sf_ac_hr, sr_ac_h, sr_ac_hr, ff_ac_h, ff_ac_hr) = match index {

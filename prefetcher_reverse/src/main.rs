@@ -199,7 +199,7 @@ fn main() {
 
     let pattern = generate_pattern(0, 3, 12).unwrap();
     let pattern4 = generate_pattern(0, 4, 12).unwrap();
-    let mut new_prober = Prober::new(63).unwrap();
+    let mut new_prober = Prober::<1>::new(63).unwrap();
     let result = new_prober.full_page_probe(pattern.clone(), NUM_ITERATION as u32, 100);
     println!("{}", result);
     //println!("{:#?}", result);

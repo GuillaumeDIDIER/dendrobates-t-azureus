@@ -504,13 +504,15 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
             .clone()
             .into_iter()
             .map(|addr: *const u8| unsafe {
-                &*slice_from_raw_parts(get_vpn(addr) as *const u8, PAGE_LEN)
+                let p = get_vpn(addr) as *const u8;
+                let ret = &*slice_from_raw_parts(p, PAGE_LEN);
+                (p, ret)
             })
-            .collect::<HashSet<&[u8]>>();
+            .collect::<HashMap<*const u8, &[u8]>>();
         let mut res = match Self::calibration_for_core_pairs(
             &self.t,
             core_pair.into_iter(),
-            pages.into_iter(),
+            pages.into_iter().map(|(k, v)| v),
         ) {
             Err(e) => {
                 return Err(ChannelFatalError::Oops);
