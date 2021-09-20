@@ -212,7 +212,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
     pub fn new_with_core_pairs(
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
     ) -> Result<(Self, usize, usize), TopologyAwareError> {
-        let m = MMappedMemory::new(PAGE_LEN, false);
+        let m = MMappedMemory::new(PAGE_LEN, false, |i| i as u8);
         let array: &[u8] = m.slice();
 
         let t = Default::default();

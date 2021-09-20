@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use cache_utils::cache_info::get_cache_info;
 use cache_utils::complex_addressing::cache_slicing;
 use cpuid::MicroArchitecture;

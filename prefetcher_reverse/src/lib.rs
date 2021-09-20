@@ -1,6 +1,4 @@
 #![deny(unsafe_op_in_unsafe_fn)]
-#![feature(const_generics)]
-#![feature(const_evaluatable_checked)]
 
 use crate::Probe::{Flush, FullFlush, Load};
 use basic_timing_cache_channel::{TopologyAwareError, TopologyAwareTimingChannel};
@@ -166,15 +164,14 @@ impl<const GS: usize> Prober<GS> {
         };
 
         for i in 0..num_pages {
-            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false) {
+            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false, |j| {
+                (j / CACHE_LINE_LEN + i * PAGE_CACHELINE_LEN) as u8
+            }) {
                 Ok(p) => p,
                 Err(e) => {
                     return Err(ProberError::NoMem(e));
                 }
             };
-            for j in 0..(PAGE_LEN * GS) {
-                p[j] = (i * PAGE_CACHELINE_LEN + j) as u8;
-            }
             let page_addresses = ((0..(PAGE_LEN * GS)).step_by(CACHE_LINE_LEN))
                 .map(|offset| &p[offset] as *const u8);
             let ff_page_handles = unsafe { ff_channel.calibrate(page_addresses.clone()) }.unwrap();

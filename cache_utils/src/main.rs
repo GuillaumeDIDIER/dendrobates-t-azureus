@@ -33,7 +33,7 @@ struct Page {
 }
 */
 pub fn main() {
-    let m = MMappedMemory::new(SIZE, true);
+    let m = MMappedMemory::new(SIZE, true, |i| i as u8);
     let array = m.slice();
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();

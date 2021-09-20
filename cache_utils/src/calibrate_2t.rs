@@ -10,10 +10,9 @@ use nix::unistd::Pid;
 use nix::Error;
 use std::cmp::min;
 use std::ptr::null_mut;
-//use std::sync::atomic::Ordering;
-use std::mem::forget;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::vec::Vec;
 use turn_lock::TurnHandle;
 
 pub struct CalibrateOperation2T<'a, T> {
@@ -111,7 +110,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         },
     );
 
-    let mut helper_turn_handle = Arc::new(Mutex::new(turn_handles.pop().unwrap()));
+    let helper_turn_handle = Arc::new(Mutex::new(turn_handles.pop().unwrap()));
     let mut main_turn_handle = turn_handles.pop().unwrap();
 
     let mut params = main_turn_handle.wait();

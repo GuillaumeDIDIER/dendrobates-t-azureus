@@ -10,17 +10,6 @@ use core::arch::x86_64 as arch_x86;
 use polling_serial::{serial_print as print, serial_println as println};
 
 #[cfg(feature = "use_std")]
-use nix::unistd::Pid;
-//#[cfg(feature = "use_std")]
-//use nix::Error::Sys;
-#[cfg(feature = "use_std")]
-use nix::Error;
-#[cfg(feature = "use_std")]
-use std::sync::Arc;
-#[cfg(feature = "use_std")]
-use std::thread;
-
-#[cfg(feature = "use_std")]
 pub use crate::calibrate_2t::*;
 
 extern crate alloc;
@@ -28,11 +17,8 @@ use crate::calibration::Verbosity::*;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::min;
-use core::ptr::null_mut;
-use core::sync::atomic::{spin_loop_hint, AtomicBool, AtomicPtr, Ordering};
 use itertools::Itertools;
 
-use atomic::Atomic;
 use core::hash::Hash;
 use core::ops::{Add, AddAssign};
 #[cfg(feature = "no_std")]
@@ -71,44 +57,52 @@ impl CalibrationOptions {
 }
 
 pub unsafe fn only_reload(p: *const u8) -> u64 {
-    let t = rdtsc_fence();
-    maccess(p);
-    rdtsc_fence() - t
+    let t = unsafe { rdtsc_fence() };
+    unsafe { maccess(p) };
+    (unsafe { rdtsc_fence() } - t)
 }
 
 pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
-    flush(p);
-    only_reload(p)
+    unsafe {
+        flush(p);
+        only_reload(p)
+    }
 }
 
 pub unsafe fn reload_and_flush(p: *const u8) -> u64 {
-    let r = only_reload(p);
-    flush(p);
+    let r = unsafe { only_reload(p) };
+    unsafe { flush(p) };
     r
 }
 
 pub unsafe fn only_flush(p: *const u8) -> u64 {
-    let t = rdtsc_fence();
-    flush(p);
-    rdtsc_fence() - t
+    let t = unsafe { rdtsc_fence() };
+    unsafe { flush(p) };
+    (unsafe { rdtsc_fence() } - t)
 }
 
 pub unsafe fn load_and_flush(p: *const u8) -> u64 {
-    maccess(p);
-    only_flush(p)
+    unsafe {
+        maccess(p);
+        only_flush(p)
+    }
 }
 
 pub unsafe fn flush_and_flush(p: *const u8) -> u64 {
-    flush(p);
-    only_flush(p)
+    unsafe {
+        flush(p);
+        only_flush(p)
+    }
 }
 
 pub unsafe fn l3_and_reload(p: *const u8) -> u64 {
-    flush(p);
-    arch_x86::_mm_mfence();
-    arch_x86::_mm_prefetch(p as *const i8, arch_x86::_MM_HINT_T2);
-    arch_x86::__cpuid_count(0, 0);
-    only_reload(p)
+    unsafe {
+        flush(p);
+        arch_x86::_mm_mfence();
+        arch_x86::_mm_prefetch::<{ arch_x86::_MM_HINT_T2 }>(p as *const i8);
+        arch_x86::__cpuid_count(0, 0);
+        only_reload(p)
+    }
 }
 
 pub const PAGE_SHIFT: usize = 12;

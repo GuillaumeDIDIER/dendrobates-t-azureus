@@ -165,13 +165,10 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     let old_affinity = set_affinity(&channel.main_core()).unwrap();
 
     let size = num_pages * PAGE_SIZE;
-    let mut m = MMappedMemory::new(size, false);
+    let mut m = MMappedMemory::new(size, false, |i| (i / PAGE_SIZE) as u8);
     let mut receiver_turn_handles = Vec::new();
     let mut transmit_turn_handles = Vec::new();
 
-    for i in 0..num_pages {
-        m.slice_mut()[i * PAGE_SIZE] = i as u8;
-    }
     let array: &[u8] = m.slice();
     for i in 0..num_pages {
         let addr = &array[i * PAGE_SIZE] as *const u8;

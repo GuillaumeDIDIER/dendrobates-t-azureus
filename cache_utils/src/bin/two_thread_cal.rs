@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, flush_and_reload,
     get_cache_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
@@ -18,15 +20,17 @@ use std::process::Command;
 use std::str::from_utf8;
 
 unsafe fn multiple_access(p: *const u8) {
-    maccess::<u8>(p);
-    maccess::<u8>(p);
-    arch_x86::_mm_mfence();
-    maccess::<u8>(p);
-    arch_x86::_mm_mfence();
-    maccess::<u8>(p);
-    arch_x86::_mm_mfence();
-    maccess::<u8>(p);
-    maccess::<u8>(p);
+    unsafe {
+        maccess::<u8>(p);
+        maccess::<u8>(p);
+        arch_x86::_mm_mfence();
+        maccess::<u8>(p);
+        arch_x86::_mm_mfence();
+        maccess::<u8>(p);
+        arch_x86::_mm_mfence();
+        maccess::<u8>(p);
+        maccess::<u8>(p);
+    }
 }
 
 const SIZE: usize = 2 << 20;
@@ -105,7 +109,7 @@ fn main() {
 
     println!("Number of cores per socket: {}", core_per_socket);
 
-    let m = MMappedMemory::new(SIZE, true);
+    let m = MMappedMemory::new(SIZE, true, |i: usize| i as u8);
     let array = m.slice();
 
     let cache_line_size = 64;

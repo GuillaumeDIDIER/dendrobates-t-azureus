@@ -1,3 +1,5 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use cache_utils::calibration::only_flush;
 use cache_utils::frequency::get_freq_cpufreq_kernel;
 use cache_utils::rdtsc_fence;
