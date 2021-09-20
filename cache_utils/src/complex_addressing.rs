@@ -120,8 +120,8 @@ pub fn cache_slicing(
     }
 }
 
-fn hash(addr: usize, mask: usize) -> u8 {
-    ((addr & mask).count_ones() & 1) as u8
+fn hash(addr: usize, mask: usize) -> usize {
+    ((addr & mask).count_ones() & 1) as usize
 }
 
 impl CacheSlicing {
@@ -140,7 +140,7 @@ impl CacheSlicing {
                     res <<= 1;
                     res |= hash(addr, *mask);
                 }
-                Some(res)
+                Some(res as u8)
             }
             _ => None,
         }
@@ -266,4 +266,47 @@ impl CacheSlicing {
             _ => None,
         }
     }
+}
+
+/**
+Type used to handle unsupported hash functions by using the Cache line addr as the Hash.
+*/
+#[derive(Debug, Copy, Clone)]
+pub enum CacheAttackSlicing {
+    Unsupported(usize),
+    ComplexAddressing(&'static [usize]),
+    SimpleAddressing(SimpleAddressingParams),
+    NoSlice,
+}
+
+// TODO
+impl CacheAttackSlicing {
+    pub fn from(cs: CacheSlicing, cache_line_length: usize) -> CacheAttackSlicing {
+        match cs {
+            Unsupported => CacheAttackSlicing::Unsupported(!((1 << cache_line_length) - 1)),
+            ComplexAddressing(ca) => CacheAttackSlicing::ComplexAddressing(ca),
+            SimpleAddressing(sa) => CacheAttackSlicing::SimpleAddressing(sa),
+            NoSlice => CacheAttackSlicing::NoSlice,
+        }
+    }
+
+    pub fn hash(&self, addr: usize) -> usize {
+        match self {
+            CacheAttackSlicing::Unsupported(mask) => addr & mask,
+            CacheAttackSlicing::SimpleAddressing(mask) => {
+                (addr >> mask.shift) & ((1 << mask.bits) - 1)
+            }
+            CacheAttackSlicing::ComplexAddressing(masks) => {
+                let mut res = 0;
+                for mask in *masks {
+                    res <<= 1;
+                    res |= hash(addr, *mask);
+                }
+                res
+            }
+            CacheAttackSlicing::NoSlice => 0usize,
+        }
+    }
+
+    // TODO
 }
