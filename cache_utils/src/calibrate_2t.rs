@@ -3,6 +3,7 @@ use crate::calibration::{
     get_cache_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
     SPURIOUS_THRESHOLD,
 };
+use crate::complex_addressing::CacheAttackSlicing;
 use core::arch::x86_64 as arch_x86;
 use itertools::Itertools;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
@@ -65,7 +66,7 @@ struct HelperThreadParams {
 #[cfg(feature = "use_std")]
 fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     p: *const u8,
-    increment: usize,
+    cache_line_length: usize,
     len: isize,
     cores: &mut I,
     operations: &[CalibrateOperation2T<T>],
@@ -89,15 +90,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
 
     let slicing = get_cache_slicing(core_per_socket);
 
-    let h = if let Some(s) = slicing {
-        if s.can_hash() {
-            Some(|addr: usize| -> u8 { slicing.unwrap().hash(addr).unwrap() })
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let cache_attack_slicing = CacheAttackSlicing::from(slicing.unwrap(), cache_line_length);
 
     let mut ret = Vec::new();
 
@@ -116,12 +109,8 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     let mut params = main_turn_handle.wait();
 
     if options.verbosity >= Thresholds {
-        print!("CSV: main_core, helper_core, address, ");
-        if h.is_some() {
-            print!("hash, ");
-        }
         println!(
-            "{} min, {} median, {} max",
+            "CSV: main_core, helper_core, address, hash, {} min, {} median, {} max",
             operations
                 .iter()
                 .map(|operation| operation.name)
@@ -138,12 +127,8 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     }
 
     if options.verbosity >= RawResult {
-        print!("RESULT:main_core,helper_core,address,");
-        if h.is_some() {
-            print!("hash,");
-        }
         println!(
-            "time,{}",
+            "RESULT:main_core,helper_core,address,hash,time,{}",
             operations
                 .iter()
                 .map(|operation| operation.name)
@@ -151,12 +136,13 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         );
     }
 
-    let image_antecedent = match slicing {
-        Some(s) => s.image_antecedent(len as usize - 1),
-        None => None,
-    };
-    if image_antecedent.is_some() {
-        options.hist_params.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
+    let image_antecedent = cache_attack_slicing.image_antecedent(len as usize - 1);
+
+    match cache_attack_slicing {
+        CacheAttackSlicing::ComplexAddressing(_) | CacheAttackSlicing::SimpleAddressing(_) => {
+            options.hist_params.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
+        }
+        _ => {}
     }
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
@@ -216,22 +202,23 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
+        let offsets = image_antecedent.values().copied();
+
+        /*
         let offsets: Box<dyn Iterator<Item = isize>> = match image_antecedent {
             Some(ref ima) => Box::new(ima.values().copied()),
-            None => Box::new((0..len as isize).step_by(increment)),
-        };
+            None => Box::new((0..len as isize).step_by(cache_line_length)),
+        };*/
 
         for i in offsets {
             let pointer = unsafe { p.offset(i) };
             params.address = pointer;
 
-            let hash = h.map(|h| h(pointer as usize));
+            let hash = cache_attack_slicing.hash(pointer as usize);
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);
-                if let Some(h) = hash {
-                    print!(" (hash: {:x})", h)
-                }
+                print!(" (hash: {:x})", hash);
                 println!();
             }
 
@@ -296,9 +283,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             for j in 0..options.hist_params.bucket_number - 1 {
                 if options.verbosity >= RawResult {
                     print!("RESULT:{},{},{:p},", main_core, helper_core, pointer);
-                    if let Some(h) = hash {
-                        print!("{:x},", h);
-                    }
+                    print!("{:x},", hash);
                     print!("{}", from_bucket(j));
                 }
                 // ignore the last bucket : spurious context switches etc.
@@ -343,9 +328,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
                     );
                 }
                 print!("CSV: {},{},{:p}, ", main_core, helper_core, pointer);
-                if let Some(h) = hash {
-                    print!("{:x}, ", h)
-                }
+                print!("{:x}, ", hash);
                 println!(
                     "{}, {}, {}",
                     calibrate_result.min.iter().format(", "),

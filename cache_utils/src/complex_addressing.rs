@@ -228,6 +228,8 @@ impl CacheSlicing {
         }
     }
 
+    // This gives a basis of the kernel complement (n elements)
+
     pub fn kernel_compl_basis(&self, mask: usize) -> Option<HashMap<u8, isize>> {
         match self {
             ComplexAddressing(_functions) => {
@@ -244,6 +246,9 @@ impl CacheSlicing {
             _ => None,
         }
     }
+
+    // This gives a set that covers all possible values of the image. (All combination of basis elements on {0,1})
+    // 2^n elements
     pub fn image_antecedent(&self, mask: usize) -> Option<HashMap<u8, isize>> {
         match self {
             ComplexAddressing(_functions) => {
@@ -308,5 +313,146 @@ impl CacheAttackSlicing {
         }
     }
 
-    // TODO
+    // Only works for Complex Addressing rn
+    // May work in the future for simple.
+    fn pivot(&self, mask: isize) -> Vec<(usize, isize)> {
+        match self {
+            CacheAttackSlicing::ComplexAddressing(_)
+            | CacheAttackSlicing::SimpleAddressing(_)
+            | CacheAttackSlicing::Unsupported(_) => {
+                let mut matrix = Vec::new();
+
+                let mut i = 1;
+                let mut hashspace = 0;
+                while i != 0 {
+                    if i & mask != 0 {
+                        let h = self.hash(i as usize);
+
+                        hashspace |= h;
+                        matrix.push((h, i));
+                    }
+                    i <<= 1;
+                }
+
+                let mut i = 0; // current line in the matrix.
+                let mut bit = 1;
+                while bit != 0 {
+                    if bit & hashspace != 0 {
+                        let mut found_pivot = false;
+                        for j in i..matrix.len() {
+                            if matrix[j].0 & bit != 0 {
+                                found_pivot = true;
+                                if j != i {
+                                    let mi = matrix[i];
+                                    let mj = matrix[j];
+                                    matrix[i] = mj;
+                                    matrix[j] = mi;
+                                }
+                                break;
+                            }
+                        }
+                        if found_pivot {
+                            for j in 0..matrix.len() {
+                                if j != i && bit & matrix[j].0 != 0 {
+                                    matrix[j].0 ^= matrix[i].0;
+                                    matrix[j].1 ^= matrix[i].1;
+                                }
+                            }
+                            i += 1;
+                        }
+                    }
+                    bit <<= 1;
+                }
+                while i < matrix.len() {
+                    if matrix[i].0 != 0 {
+                        panic!("Something went wrong with the pivot algorithm")
+                    }
+                    i += 1;
+                }
+
+                matrix
+            }
+            _ => panic!("Should not be called"),
+        }
+    }
+
+    pub fn image(&self, mask: usize) -> HashSet<usize> {
+        match self {
+            CacheAttackSlicing::ComplexAddressing(_)
+            | CacheAttackSlicing::SimpleAddressing(_)
+            | CacheAttackSlicing::Unsupported(_) => {
+                let matrix = self.pivot(mask as isize);
+
+                let mut result = HashSet::<usize>::new();
+                result.insert(0);
+
+                for (u, _) in matrix {
+                    let mut tmp = HashSet::new();
+                    for v in &result {
+                        tmp.insert(v ^ u);
+                    }
+                    result.extend(tmp);
+                }
+                result
+            }
+            _ => {
+                let mut r = HashSet::new();
+                r.insert(0);
+                r
+            }
+        }
+    }
+
+    // This gives a basis of the kernel complement (n elements)
+
+    pub fn kernel_compl_basis(&self, mask: usize) -> HashMap<usize, isize> {
+        let mut result = HashMap::new();
+        match self {
+            CacheAttackSlicing::ComplexAddressing(_)
+            | CacheAttackSlicing::SimpleAddressing(_)
+            | CacheAttackSlicing::Unsupported(_) => {
+                let matrix = self.pivot(mask as isize);
+
+                for (slice, addr) in matrix {
+                    if slice != 0 {
+                        result.insert(slice, addr);
+                    }
+                }
+            }
+            _ => {
+                result.insert(0, 0);
+            }
+        }
+        result
+    }
+
+    // This gives a set that covers all possible values of the image. (All combination of basis elements on {0,1})
+    // 2^n elements
+    pub fn image_antecedent(&self, mask: usize) -> HashMap<usize, isize> {
+        let mut result = HashMap::<usize, isize>::new();
+
+        match self {
+            CacheAttackSlicing::ComplexAddressing(_)
+            | CacheAttackSlicing::SimpleAddressing(_)
+            | CacheAttackSlicing::Unsupported(_) => {
+                let matrix = self.pivot(mask as isize);
+
+                result.insert(0, 0);
+
+                for (slice_u, addr_u) in matrix {
+                    if slice_u != 0 {
+                        let mut tmp = HashMap::new();
+                        for (slice_v, addr_v) in &result {
+                            tmp.insert(slice_v ^ slice_u, addr_v ^ addr_u);
+                        }
+                        result.extend(tmp);
+                    }
+                }
+            }
+            _ => {
+                result.insert(0, 0);
+            }
+        }
+        result
+    }
 }
