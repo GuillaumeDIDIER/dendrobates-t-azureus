@@ -2,10 +2,11 @@
 
 use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, flush_and_reload,
-    get_cache_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
-    reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    ErrorPredictions, HistParams, HistogramCumSum, PotentialThresholds, ThresholdError, Verbosity,
-    ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
+    get_cache_attack_slicing, get_cache_slicing, load_and_flush, map_values, only_flush,
+    only_reload, reduce, reload_and_flush, CalibrateOperation2T, CalibrateResult2T,
+    CalibrationOptions, ErrorPrediction, ErrorPredictions, HistParams, HistogramCumSum,
+    PotentialThresholds, ThresholdError, Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER,
+    CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop};
@@ -244,14 +245,10 @@ fn main() {
         .position(|op| op.name == hit_name)
         .unwrap();
 
-    let slicing = get_cache_slicing(core_per_socket);
+    let slicing = get_cache_attack_slicing(core_per_socket);
 
     let h = if let Some(s) = slicing {
-        if s.can_hash() {
-            |addr: usize| -> u8 { slicing.unwrap().hash(addr).unwrap() }
-        } else {
-            panic!("No slicing function known");
-        }
+        |addr: usize| -> usize { slicing.unwrap().hash(addr) }
     } else {
         panic!("No slicing function known");
     };

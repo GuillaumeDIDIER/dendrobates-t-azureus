@@ -1,6 +1,6 @@
 use crate::calibration::Verbosity::{RawResult, Thresholds};
 use crate::calibration::{
-    get_cache_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
+    get_cache_attack_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
     SPURIOUS_THRESHOLD,
 };
 use crate::complex_addressing::CacheAttackSlicing;
@@ -88,9 +88,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
 
-    let slicing = get_cache_slicing(core_per_socket);
-
-    let cache_attack_slicing = CacheAttackSlicing::from(slicing.unwrap(), cache_line_length);
+    let slicing = get_cache_attack_slicing(core_per_socket).unwrap();
 
     let mut ret = Vec::new();
 
@@ -136,9 +134,9 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         );
     }
 
-    let image_antecedent = cache_attack_slicing.image_antecedent(len as usize - 1);
+    let image_antecedent = slicing.image_antecedent(len as usize - 1);
 
-    match cache_attack_slicing {
+    match slicing {
         CacheAttackSlicing::ComplexAddressing(_) | CacheAttackSlicing::SimpleAddressing(_) => {
             options.hist_params.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
         }
@@ -214,7 +212,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             let pointer = unsafe { p.offset(i) };
             params.address = pointer;
 
-            let hash = cache_attack_slicing.hash(pointer as usize);
+            let hash = slicing.hash(pointer as usize);
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);
@@ -411,7 +409,7 @@ fn calibrate_fixed_freq_2_thread_helper(
 pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
     results: Vec<CalibrateResult2T>,
     analysis: Analysis,
-    slicing: &impl Fn(usize) -> u8,
+    slicing: &impl Fn(usize) -> usize,
 ) -> Result<HashMap<ASVP, T>, nix::Error> {
     let mut analysis_result: HashMap<ASVP, T> = HashMap::new();
     for calibrate_2t_result in results {

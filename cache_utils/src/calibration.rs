@@ -1,6 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
 
-use crate::complex_addressing::{cache_slicing, CacheSlicing};
+use crate::complex_addressing::{cache_slicing, CacheAttackSlicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
 
 use cpuid::MicroArchitecture;
@@ -470,7 +470,7 @@ fn calibrate_impl_fixed_freq(
     ret
 }
 
-pub fn get_cache_slicing(core_per_socket: u8) -> Option<CacheSlicing> {
+fn get_cache_slicing(core_per_socket: u8) -> Option<CacheSlicing> {
     if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
             Some(cache_slicing(
@@ -480,6 +480,27 @@ pub fn get_cache_slicing(core_per_socket: u8) -> Option<CacheSlicing> {
                 vendor_family_model_stepping.1,
                 vendor_family_model_stepping.2,
             ))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+pub fn get_cache_attack_slicing(core_per_socket: u8) -> Option<CacheAttackSlicing> {
+    if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
+        if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
+            Some(CacheAttackSlicing::from(
+                cache_slicing(
+                    uarch,
+                    core_per_socket,
+                    vendor_family_model_stepping.0,
+                    vendor_family_model_stepping.1,
+                    vendor_family_model_stepping.2,
+                ),
+                64,
+            )) // FIXME Cache length magic number
         } else {
             None
         }
@@ -525,7 +546,7 @@ pub fn calibrate_L3_miss_hit(
 */
 
 pub type VPN = usize;
-pub type Slice = u8;
+pub type Slice = usize;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
 pub struct ASVP {

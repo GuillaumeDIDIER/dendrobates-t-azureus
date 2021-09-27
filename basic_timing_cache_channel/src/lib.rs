@@ -20,13 +20,13 @@ use cache_side_channel::{
     SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, get_cache_slicing,
-    get_vpn, only_flush, only_reload, CalibrateOperation2T, CalibrationOptions, ErrorPrediction,
-    ErrorPredictions, HashMap, HistParams, HistogramCumSum, PotentialThresholds, Slice, Threshold,
-    ThresholdError, Verbosity, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER,
-    PAGE_LEN, SP, VPN,
+    accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP,
+    get_cache_attack_slicing, get_vpn, only_flush, only_reload, CalibrateOperation2T,
+    CalibrationOptions, ErrorPrediction, ErrorPredictions, HashMap, HistParams, HistogramCumSum,
+    PotentialThresholds, Slice, Threshold, ThresholdError, Verbosity, ASVP, AV,
+    CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, PAGE_LEN, SP, VPN,
 };
-use cache_utils::complex_addressing::CacheSlicing;
+use cache_utils::complex_addressing::{CacheAttackSlicing, CacheSlicing};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{find_core_per_socket, flush, maccess, noop};
 use covert_channels_evaluation::{BitIterator, CovertChannel};
@@ -71,9 +71,9 @@ pub enum TopologyAwareError {
 
 pub struct TopologyAwareTimingChannel<T: TimingChannelPrimitives> {
     // TODO
-    slicing: CacheSlicing, // TODO : include fallback option (with per address thresholds ?)
-    main_core: usize,      // aka attacker
-    helper_core: usize,    // aka victim
+    slicing: CacheAttackSlicing, // TODO : include fallback option (with per address thresholds ?)
+    main_core: usize,            // aka attacker
+    helper_core: usize,          // aka victim
     t: T,
     thresholds: HashMap<SP, ThresholdError>,
     addresses: HashSet<*const u8>,
@@ -86,11 +86,7 @@ unsafe impl<T: TimingChannelPrimitives + Sync> Sync for TopologyAwareTimingChann
 
 impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
     pub fn new(main_core: usize, helper_core: usize) -> Result<Self, TopologyAwareError> {
-        if let Some(slicing) = get_cache_slicing(find_core_per_socket()) {
-            if !slicing.can_hash() {
-                return Err(TopologyAwareError::NoSlicing);
-            }
-
+        if let Some(slicing) = get_cache_attack_slicing(find_core_per_socket()) {
             let ret = Self {
                 thresholds: Default::default(),
                 addresses: Default::default(),
@@ -139,13 +135,13 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
         let mut calibrate_results2t_vec = Vec::new();
 
-        let slicing = match get_cache_slicing(core_per_socket) {
+        let slicing = match get_cache_attack_slicing(core_per_socket) {
             Some(s) => s,
             None => {
                 return Err(TopologyAwareError::NoSlicing);
             }
         };
-        let h = |addr: usize| slicing.hash(addr).unwrap();
+        let h = |addr: usize| slicing.hash(addr);
 
         for page in pages {
             // FIXME Cache line size is magic
@@ -288,7 +284,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
     fn get_slice(&self, addr: *const u8) -> Slice {
         // This will not work well if slicing is not known FIXME
-        self.slicing.hash(addr as usize).unwrap()
+        self.slicing.hash(addr as usize)
     }
 
     pub fn set_cores(&mut self, main: usize, helper: usize) -> Result<(), TopologyAwareError> {
@@ -537,7 +533,7 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
 
         for addr in addresses {
             let vpn = get_vpn(addr);
-            let slice = self.slicing.hash(addr as usize).unwrap();
+            let slice = self.slicing.hash(addr as usize);
             let handle = TopologyAwareTimingChannelHandle {
                 threshold: self
                     .thresholds
