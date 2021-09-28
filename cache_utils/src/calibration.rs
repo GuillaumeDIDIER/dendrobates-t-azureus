@@ -488,7 +488,10 @@ fn get_cache_slicing(core_per_socket: u8) -> Option<CacheSlicing> {
     }
 }
 
-pub fn get_cache_attack_slicing(core_per_socket: u8) -> Option<CacheAttackSlicing> {
+pub fn get_cache_attack_slicing(
+    core_per_socket: u8,
+    cache_line_length: usize,
+) -> Option<CacheAttackSlicing> {
     if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
         if let Some(vendor_family_model_stepping) = MicroArchitecture::get_family_model_stepping() {
             Some(CacheAttackSlicing::from(
@@ -499,7 +502,7 @@ pub fn get_cache_attack_slicing(core_per_socket: u8) -> Option<CacheAttackSlicin
                     vendor_family_model_stepping.1,
                     vendor_family_model_stepping.2,
                 ),
-                64,
+                cache_line_length,
             )) // FIXME Cache length magic number
         } else {
             None

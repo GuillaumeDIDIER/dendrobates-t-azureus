@@ -40,6 +40,8 @@ use std::ptr::slice_from_raw_parts;
 
 pub mod naive;
 
+const CACHE_LINE_LENGTH: usize = 64; // FIXME MAGIC to be autodetected.
+
 pub trait TimingChannelPrimitives: Debug + Send + Sync + Default {
     unsafe fn attack(&self, addr: *const u8) -> u64;
     const NEED_RESET: bool;
@@ -86,7 +88,7 @@ unsafe impl<T: TimingChannelPrimitives + Sync> Sync for TopologyAwareTimingChann
 
 impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
     pub fn new(main_core: usize, helper_core: usize) -> Result<Self, TopologyAwareError> {
-        if let Some(slicing) = get_cache_attack_slicing(find_core_per_socket()) {
+        if let Some(slicing) = get_cache_attack_slicing(find_core_per_socket(), CACHE_LINE_LENGTH) {
             let ret = Self {
                 thresholds: Default::default(),
                 addresses: Default::default(),
@@ -135,7 +137,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
         let mut calibrate_results2t_vec = Vec::new();
 
-        let slicing = match get_cache_attack_slicing(core_per_socket) {
+        let slicing = match get_cache_attack_slicing(core_per_socket, CACHE_LINE_LENGTH) {
             Some(s) => s,
             None => {
                 return Err(TopologyAwareError::NoSlicing);
@@ -148,7 +150,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
             let mut r = unsafe {
                 calibrate_fixed_freq_2_thread(
                     &page[0] as *const u8,
-                    64,
+                    CACHE_LINE_LENGTH,
                     page.len() as isize,
                     &mut core_pairs.clone(),
                     &operations,
