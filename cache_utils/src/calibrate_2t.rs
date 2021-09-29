@@ -201,6 +201,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         let mut calibrate_result_vec = Vec::new();
 
         let offsets = image_antecedent.values().copied();
+        eprintln!("Number of offsets: {}", offsets.len());
 
         /*
         let offsets: Box<dyn Iterator<Item = isize>> = match image_antecedent {

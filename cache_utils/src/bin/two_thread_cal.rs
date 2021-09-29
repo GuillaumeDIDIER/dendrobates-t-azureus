@@ -14,6 +14,7 @@ use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
+use core::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::process::Command;
@@ -34,6 +35,7 @@ unsafe fn multiple_access(p: *const u8) {
 }
 
 const SIZE: usize = 2 << 20;
+const MAX_SEQUENCE: usize = 2048 * 64;
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug)]
 struct ASV {
@@ -213,15 +215,15 @@ fn main() {
     let r = unsafe {
         calibrate_fixed_freq_2_thread(
             pointer,
-            64,                        // FIXME : MAGIC
-            array.len() as isize >> 3, // MAGIC
+            64,                                      // FIXME : MAGIC
+            min(array.len(), MAX_SEQUENCE) as isize, // MAGIC
             &mut core_pairs.into_iter(),
             &operations,
             CalibrationOptions {
                 hist_params: HistParams {
                     bucket_number: CFLUSH_BUCKET_NUMBER,
                     bucket_size: CFLUSH_BUCKET_SIZE,
-                    iterations: CFLUSH_NUM_ITER << 4,
+                    iterations: CFLUSH_NUM_ITER,
                 },
                 verbosity: verbose_level,
                 optimised_addresses: true,
