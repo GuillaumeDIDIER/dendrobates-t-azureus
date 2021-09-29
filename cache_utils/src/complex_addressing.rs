@@ -288,7 +288,7 @@ pub enum CacheAttackSlicing {
 impl CacheAttackSlicing {
     pub fn from(cs: CacheSlicing, cache_line_length: usize) -> CacheAttackSlicing {
         match cs {
-            Unsupported => CacheAttackSlicing::Unsupported(!((1 << cache_line_length) - 1)),
+            Unsupported => CacheAttackSlicing::Unsupported(!dbg!(dbg!(cache_line_length) - 1)),
             ComplexAddressing(ca) => CacheAttackSlicing::ComplexAddressing(ca),
             SimpleAddressing(sa) => CacheAttackSlicing::SimpleAddressing(sa),
             NoSlice => CacheAttackSlicing::NoSlice,
