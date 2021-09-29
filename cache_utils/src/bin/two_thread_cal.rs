@@ -154,7 +154,7 @@ fn main() {
             display_name: "clflush shared hit",
             t: &(),
         },
-        CalibrateOperation2T {
+/*        CalibrateOperation2T {
             prepare: flush,
             op: only_flush_wrap,
             name: "clflush_miss_f",
@@ -167,7 +167,7 @@ fn main() {
             name: "clflush_local_hit_f",
             display_name: "clflush local hit - f",
             t: &(),
-        },
+        },*/
         CalibrateOperation2T {
             prepare: noop::<u8>,
             op: only_flush_wrap,
@@ -182,7 +182,7 @@ fn main() {
             display_name: "clflush local hit - n",
             t: &(),
         },
-        CalibrateOperation2T {
+/*        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: flush_and_reload_wrap,
             name: "reload_miss",
@@ -209,7 +209,7 @@ fn main() {
             name: "reload_local_hit",
             display_name: "reload local hit",
             t: &(),
-        },
+        },*/
     ];
 
     let r = unsafe {
