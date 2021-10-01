@@ -147,7 +147,7 @@ fn main() {
             display_name: "clflush remote hit",
             t: &(),
         },
-        CalibrateOperation2T {
+/*        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_shared_hit",
@@ -167,7 +167,7 @@ fn main() {
             name: "clflush_local_hit_f",
             display_name: "clflush local hit - f",
             t: &(),
-        },
+        },*/
         CalibrateOperation2T {
             prepare: noop::<u8>,
             op: only_flush_wrap,
@@ -175,7 +175,7 @@ fn main() {
             display_name: "clflush miss - n",
             t: &(),
         },
-        CalibrateOperation2T {
+/*        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_local_hit_n",
@@ -209,7 +209,7 @@ fn main() {
             name: "reload_local_hit",
             display_name: "reload local hit",
             t: &(),
-        },
+        },*/
     ];
 
     let r = unsafe {
@@ -298,13 +298,13 @@ fn main() {
         Err(e) => panic!("Error: {}", e),
     };
 
-    asvp_analysis[&ASVP {
+/*    asvp_analysis[&ASVP {
         attacker: 0,
         slice: 0,
         victim: 0,
         page: pointer as usize,
     }]
-        .debug();
+        .debug();*/
 
     let asp_analysis = accumulate(
         asvp_analysis.clone(),
