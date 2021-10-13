@@ -91,7 +91,7 @@ pub unsafe fn attack_t_tables_poc<T: ChannelHandle>(
 
     for addr in addresses.iter() {
         let mut timing = HashMap::new();
-        for b in (u8::min_value()..=u8::max_value()).step_by(16) {
+        for b in (u8::MIN..=u8::MAX).step_by(16) {
             timing.insert(b, 0);
         }
         timings.insert(*addr, timing);
@@ -99,7 +99,7 @@ pub unsafe fn attack_t_tables_poc<T: ChannelHandle>(
 
     let mut victim_handles_ref = victims_handle.iter_mut().collect();
 
-    for b in (u8::min_value()..=u8::max_value()).step_by(16) {
+    for b in (u8::MIN..=u8::MAX).step_by(16) {
         eprintln!("Probing with b = {:x}", b);
         // fixme magic numbers
 
