@@ -1,3 +1,4 @@
+#![feature(global_asm)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::Probe::{Flush, FullFlush, Load};
