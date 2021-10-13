@@ -4,7 +4,9 @@
 use std::io::{stdout, Write};
 
 //use basic_timing_cache_channel::{naive::NaiveTimingChannel, TopologyAwareTimingChannel};
-use basic_timing_cache_channel::{TopologyAwareError, TopologyAwareTimingChannel};
+use basic_timing_cache_channel::{
+    CalibrationStrategy, TopologyAwareError, TopologyAwareTimingChannel,
+};
 use cache_utils::calibration::Threshold;
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::naive::NaiveFlushAndFlush;
@@ -23,6 +25,8 @@ const NUM_PAGES_2: usize = 4;
 const NUM_PAGE_MAX: usize = 32;
 
 const NUM_ITER: usize = 16;
+
+const CALIBRATION_STRAT: CalibrationStrategy = CalibrationStrategy::ASVP;
 
 struct BenchmarkStats {
     raw_res: Vec<(CovertChannelBenchmarkResult, usize, usize)>,
@@ -184,7 +188,7 @@ fn main() {
         let ff = run_benchmark(
             "Better F+F",
             |i, j| {
-                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true) {
+                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true, CALIBRATION_STRAT) {
                     Ok((channel, _old, main_core, helper_core)) => {
                         (channel, main_core, helper_core)
                     }
@@ -203,7 +207,7 @@ fn main() {
         let fr = run_benchmark(
             "Better F+R",
             |i, j| {
-                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true) {
+                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true, CALIBRATION_STRAT) {
                     Ok((channel, _old, main_core, helper_core)) => {
                         (channel, main_core, helper_core)
                     }

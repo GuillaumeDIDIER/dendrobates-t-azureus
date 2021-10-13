@@ -1,7 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::Probe::{Flush, FullFlush, Load};
-use basic_timing_cache_channel::{TopologyAwareError, TopologyAwareTimingChannel};
+use basic_timing_cache_channel::{
+    CalibrationStrategy, TopologyAwareError, TopologyAwareTimingChannel,
+};
 use cache_side_channel::CacheStatus::{Hit, Miss};
 use cache_side_channel::{
     set_affinity, CacheStatus, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
@@ -24,6 +26,8 @@ pub mod ip_tool;
 // NB these may need to be changed / dynamically measured.
 pub const CACHE_LINE_LEN: usize = 64;
 pub const PAGE_CACHELINE_LEN: usize = PAGE_LEN / CACHE_LINE_LEN;
+
+pub const CALIBRATION_STRAT: CalibrationStrategy = CalibrationStrategy::ASVP;
 
 pub struct Prober<const GS: usize> {
     pages: Vec<MMappedMemory<u8>>,
@@ -158,7 +162,7 @@ impl<const GS: usize> Prober<GS> {
             bucket_index: 250,
             miss_faster_than_hit: false,
         });*/
-        let mut fr_channel = match FlushAndReload::new(core, core) {
+        let mut fr_channel = match FlushAndReload::new(core, core, CALIBRATION_STRAT) {
             Ok(res) => res,
             Err(err) => {
                 return Err(ProberError::TopologyError(err));
