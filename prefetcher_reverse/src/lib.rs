@@ -19,6 +19,8 @@ use std::iter::{Cycle, Peekable};
 use std::ops::Range;
 use std::{thread, time};
 
+pub mod ip_tool;
+
 // NB these may need to be changed / dynamically measured.
 pub const CACHE_LINE_LEN: usize = 64;
 pub const PAGE_CACHELINE_LEN: usize = PAGE_LEN / CACHE_LINE_LEN;
