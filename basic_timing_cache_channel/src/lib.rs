@@ -1,4 +1,3 @@
-#![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 // TODO
@@ -21,10 +20,11 @@ use cache_side_channel::{
 };
 use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP,
-    get_cache_attack_slicing, get_vpn, only_flush, only_reload, CalibrateOperation2T,
+    get_cache_attack_slicing, get_vpn, map_values, only_flush, only_reload, CalibrateOperation2T,
     CalibrationOptions, ErrorPrediction, ErrorPredictions, HashMap, HistParams, HistogramCumSum,
     PotentialThresholds, Slice, Threshold, ThresholdError, Verbosity, ASVP, AV,
-    CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, PAGE_LEN, SP, VPN,
+    CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, CLFLUSH_NUM_ITERATION_AV, PAGE_LEN,
+    SP, VPN,
 };
 use cache_utils::complex_addressing::{CacheAttackSlicing, CacheSlicing};
 use cache_utils::mmap::MMappedMemory;
@@ -71,26 +71,48 @@ pub enum TopologyAwareError {
     NeedRecalibration,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum CalibrationStrategy {
+    ASVP,
+    AV,
+    AVSockets,
+}
+
+#[derive(Debug)]
+enum ThresholdStrat {
+    ASVP(HashMap<SP, ThresholdError>),
+    AV(ThresholdError),
+    AVSockets(ThresholdError),
+}
+
 pub struct TopologyAwareTimingChannel<T: TimingChannelPrimitives> {
-    // TODO
-    slicing: CacheAttackSlicing, // TODO : include fallback option (with per address thresholds ?)
-    main_core: usize,            // aka attacker
-    helper_core: usize,          // aka victim
+    slicing: CacheAttackSlicing,
+    main_core: usize,   // aka attacker
+    helper_core: usize, // aka victim
     t: T,
-    thresholds: HashMap<SP, ThresholdError>,
+    thresholds: ThresholdStrat,
     addresses: HashSet<*const u8>,
     preferred_address: HashMap<VPN, *const u8>,
     calibration_epoch: usize,
+    calibration_strategy: CalibrationStrategy,
 }
 
 unsafe impl<T: TimingChannelPrimitives + Send> Send for TopologyAwareTimingChannel<T> {}
 unsafe impl<T: TimingChannelPrimitives + Sync> Sync for TopologyAwareTimingChannel<T> {}
 
 impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
-    pub fn new(main_core: usize, helper_core: usize) -> Result<Self, TopologyAwareError> {
+    pub fn new(
+        main_core: usize,
+        helper_core: usize,
+        strat: CalibrationStrategy,
+    ) -> Result<Self, TopologyAwareError> {
         if let Some(slicing) = get_cache_attack_slicing(find_core_per_socket(), CACHE_LINE_LENGTH) {
             let ret = Self {
-                thresholds: Default::default(),
+                thresholds: match strat {
+                    CalibrationStrategy::ASVP => ThresholdStrat::ASVP(Default::default()),
+                    CalibrationStrategy::AV => ThresholdStrat::AV(Default::default()),
+                    CalibrationStrategy::AVSockets => ThresholdStrat::AVSockets(Default::default()),
+                },
                 addresses: Default::default(),
                 slicing,
                 main_core,
@@ -98,6 +120,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 preferred_address: Default::default(),
                 t: Default::default(),
                 calibration_epoch: 0,
+                calibration_strategy: strat,
             };
             Ok(ret)
         } else {
@@ -112,8 +135,8 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         t: &T,
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
         pages: impl Iterator<Item = &'a [u8]>,
-    ) -> Result<HashMap<AV, (ErrorPrediction, HashMap<SP, ThresholdError>)>, TopologyAwareError>
-    {
+        strat: CalibrationStrategy,
+    ) -> Result<HashMap<AV, (ErrorPrediction, ThresholdStrat)>, TopologyAwareError> {
         let core_per_socket = find_core_per_socket();
 
         let operations = [
@@ -158,7 +181,11 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                         hist_params: HistParams {
                             bucket_number: CFLUSH_BUCKET_NUMBER,
                             bucket_size: CFLUSH_BUCKET_SIZE,
-                            iterations: CFLUSH_NUM_ITER,
+                            iterations: match strat {
+                                CalibrationStrategy::ASVP => CFLUSH_NUM_ITER,
+                                CalibrationStrategy::AV => CLFLUSH_NUM_ITERATION_AV,
+                                CalibrationStrategy::AVSockets => CLFLUSH_NUM_ITERATION_AV >> 1,
+                            },
                         },
                         verbosity: Verbosity::NoOutput,
                         optimised_addresses: true,
@@ -168,54 +195,120 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
             };
             calibrate_results2t_vec.append(&mut r);
         }
-        let analysis: HashMap<ASVP, ThresholdError> = calibration_result_to_ASVP(
-            calibrate_results2t_vec,
-            |cal_1t_res| {
-                let e = ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
-                    cal_1t_res, HIT_INDEX, MISS_INDEX,
-                ));
-                PotentialThresholds::minimizing_total_error(e)
-                    .median()
-                    .unwrap()
-            },
-            &h,
-        )
-        .map_err(|e| TopologyAwareError::Nix(e))?;
+        // FIXME analysis for various strategies
 
-        let asvp_best_av_errors: HashMap<AV, (ErrorPrediction, HashMap<SP, ThresholdError>)> =
-            accumulate(
-                analysis,
-                |asvp: ASVP| AV {
-                    attacker: asvp.attacker,
-                    victim: asvp.victim,
-                },
-                || (ErrorPrediction::default(), HashMap::new()),
-                |acc: &mut (ErrorPrediction, HashMap<SP, ThresholdError>),
-                 threshold_error,
-                 asvp: ASVP,
-                 av| {
-                    assert_eq!(av.attacker, asvp.attacker);
-                    assert_eq!(av.victim, asvp.victim);
-                    let sp = SP {
-                        slice: asvp.slice,
-                        page: asvp.page,
-                    };
-                    acc.0 += threshold_error.error;
-                    acc.1.insert(sp, threshold_error);
-                },
-            );
-        Ok(asvp_best_av_errors)
+        match strat {
+            CalibrationStrategy::ASVP => {
+                let analysis: HashMap<ASVP, ThresholdError> = calibration_result_to_ASVP(
+                    calibrate_results2t_vec,
+                    |cal_1t_res| {
+                        let e = ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
+                            cal_1t_res, HIT_INDEX, MISS_INDEX,
+                        ));
+                        PotentialThresholds::minimizing_total_error(e)
+                            .median()
+                            .unwrap()
+                    },
+                    &h,
+                )
+                .map_err(|e| TopologyAwareError::Nix(e))?;
+                let asvp_best_av_errors: HashMap<AV, (ErrorPrediction, ThresholdStrat)> =
+                    accumulate(
+                        analysis,
+                        |asvp: ASVP| AV {
+                            attacker: asvp.attacker,
+                            victim: asvp.victim,
+                        },
+                        || {
+                            (
+                                ErrorPrediction::default(),
+                                ThresholdStrat::ASVP(HashMap::new()),
+                            )
+                        },
+                        |acc: &mut (ErrorPrediction, ThresholdStrat),
+                         threshold_error,
+                         asvp: ASVP,
+                         av: AV| {
+                            assert_eq!(av.attacker, asvp.attacker);
+                            assert_eq!(av.victim, asvp.victim);
+                            let sp = SP {
+                                slice: asvp.slice,
+                                page: asvp.page,
+                            };
+                            acc.0 += threshold_error.error;
+                            if let ThresholdStrat::ASVP(hashmap) = &mut acc.1 {
+                                hashmap.insert(sp, threshold_error);
+                            }
+                        },
+                    );
+                Ok(asvp_best_av_errors)
+            }
+            CalibrationStrategy::AV => {
+                let analysis: HashMap<ASVP, ErrorPredictions> = calibration_result_to_ASVP(
+                    calibrate_results2t_vec,
+                    |cal_1t_res| {
+                        let e = ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
+                            cal_1t_res, HIT_INDEX, MISS_INDEX,
+                        ));
+                        e
+                    },
+                    &h,
+                )
+                .map_err(|e| TopologyAwareError::Nix(e))?;
+                let av_analysis = accumulate(
+                    analysis,
+                    |asvp: ASVP| AV {
+                        attacker: asvp.attacker,
+                        victim: asvp.victim,
+                    },
+                    || ErrorPredictions::empty(CFLUSH_BUCKET_NUMBER),
+                    |accumulator: &mut ErrorPredictions,
+                     error_preds: ErrorPredictions,
+                     _key,
+                     _rkey| {
+                        *accumulator += error_preds;
+                    },
+                );
+                let av_threshold_errors: HashMap<AV, (ErrorPrediction, ThresholdStrat)> =
+                    map_values(av_analysis, |error_predictions: ErrorPredictions, _| {
+                        let threshold_error =
+                            PotentialThresholds::minimizing_total_error(error_predictions)
+                                .median()
+                                .unwrap();
+                        (threshold_error.error, ThresholdStrat::AV(threshold_error))
+                    });
+                Ok(av_threshold_errors)
+                // Now consolidate over all slices.
+                // The accumulator is ErrorPredictions ? (Check if it can be summed, otherwise revert to histograms, accumulate and then predict errors)
+                // For each AV : build the generic Threshold + error, (using max ?) then determine the best core.
+            }
+            CalibrationStrategy::AVSockets => {
+                let analysis: HashMap<ASVP, ErrorPredictions> = calibration_result_to_ASVP(
+                    calibrate_results2t_vec,
+                    |cal_1t_res| {
+                        let e = ErrorPredictions::predict_errors(HistogramCumSum::from_calibrate(
+                            cal_1t_res, HIT_INDEX, MISS_INDEX,
+                        ));
+                        e
+                    },
+                    &h,
+                )
+                .map_err(|e| TopologyAwareError::Nix(e))?;
+                unimplemented!("Requires socket identification support") // Will stay unimplemented for now (10/10/2021)
+            }
+        }
     }
 
     pub fn new_with_core_pairs(
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
+        strat: CalibrationStrategy,
     ) -> Result<(Self, usize, usize), TopologyAwareError> {
         let m = MMappedMemory::new(PAGE_LEN, false, |i| i as u8);
         let array: &[u8] = m.slice();
 
         let t = Default::default();
 
-        let mut res = Self::calibration_for_core_pairs(&t, core_pairs, vec![array].into_iter())?;
+        let res = Self::calibration_for_core_pairs(&t, core_pairs, vec![array].into_iter(), strat)?;
 
         let mut best_error_rate = 1.0;
         let mut best_av = Default::default();
@@ -228,7 +321,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 best_error_rate = global_error_pred.error_rate();
             }
         }
-        Self::new(best_av.attacker, best_av.victim)
+        Self::new(best_av.attacker, best_av.victim, strat)
             .map(|this| (this, best_av.attacker, best_av.victim))
 
         // Set no threshold as calibrated on local array that will get dropped.
@@ -251,14 +344,17 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         // Call out to private constructor that takes a core pair list, determines best and makes the choice.
         // The private constructor will set the correct affinity for main (attacker thread)
 
-        Self::new_with_core_pairs(core_pairs.into_iter()).map(|(channel, attacker, victim)| {
-            assert_eq!(attacker, victim);
-            (channel, old, attacker)
-        })
+        Self::new_with_core_pairs(core_pairs.into_iter(), CalibrationStrategy::ASVP).map(
+            |(channel, attacker, victim)| {
+                assert_eq!(attacker, victim);
+                (channel, old, attacker)
+            },
+        )
     }
 
     pub fn new_any_two_core(
         distinct: bool,
+        strat: CalibrationStrategy,
     ) -> Result<(Self, CpuSet, usize, usize), TopologyAwareError> {
         let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
@@ -276,12 +372,14 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
             }
         }
 
-        Self::new_with_core_pairs(core_pairs.into_iter()).map(|(channel, attacker, victim)| {
-            if distinct {
-                assert_ne!(attacker, victim);
-            }
-            (channel, old, attacker, victim)
-        })
+        Self::new_with_core_pairs(core_pairs.into_iter(), strat).map(
+            |(channel, attacker, victim)| {
+                if distinct {
+                    assert_ne!(attacker, victim);
+                }
+                (channel, old, attacker, victim)
+            },
+        )
     }
 
     fn get_slice(&self, addr: *const u8) -> Slice {
@@ -296,13 +394,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         self.main_core = main;
         self.helper_core = helper;
 
-        let pages: Vec<VPN> = self
-            .thresholds
-            .keys()
-            .map(|sp: &SP| sp.page)
-            //.copied()
-            .collect();
-        match self.recalibrate(pages) {
+        match self.recalibrate(self.calibration_strategy) {
             Ok(()) => Ok(()),
             Err(e) => {
                 self.main_core = old_main;
@@ -312,28 +404,47 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         }
     }
 
-    fn recalibrate(
-        &mut self,
-        pages: impl IntoIterator<Item = VPN>,
-    ) -> Result<(), TopologyAwareError> {
+    fn recalibrate(&mut self, strat: CalibrationStrategy) -> Result<(), TopologyAwareError> {
         // unset readiness status.
         // Call calibration with core pairs with a single core pair
         // Use results \o/ (or error out)
 
         self.addresses.clear();
 
-        // Fixme refactor in depth core pairs to make explicit main vs helper.
         let core_pairs = vec![(self.main_core, self.helper_core)];
 
-        let pages: HashSet<&[u8]> = self
-            .thresholds
-            .keys()
-            .map(|sp: &SP| unsafe { &*slice_from_raw_parts(sp.page as *const u8, PAGE_LEN) })
-            .collect();
+        let mut res = match &self.thresholds {
+            ThresholdStrat::ASVP(thresholds_asvp) => {
+                let pages: HashSet<&[u8]> = thresholds_asvp
+                    .keys()
+                    .map(|sp: &SP| unsafe {
+                        &*slice_from_raw_parts(sp.page as *const u8, PAGE_LEN)
+                    })
+                    .collect();
+                Self::calibration_for_core_pairs(
+                    &self.t,
+                    core_pairs.into_iter(),
+                    pages.into_iter(),
+                    strat,
+                )?
+            }
+            ThresholdStrat::AV(_) | ThresholdStrat::AVSockets(_) => {
+                let m = MMappedMemory::new(PAGE_LEN, false, |i| i as u8);
+                let array: &[u8] = m.slice();
+                let mut hashset = HashSet::new();
+                hashset.insert(array);
+                let pages = hashset;
+                Self::calibration_for_core_pairs(
+                    &self.t,
+                    core_pairs.into_iter(),
+                    pages.into_iter(),
+                    strat,
+                )?
+            }
+        }; // TODO add the ability to switch calibration strategy.
+           // This allows selecting core using non SP strategies, and switching to better strategies later on.
 
-        let mut res =
-            Self::calibration_for_core_pairs(&self.t, core_pairs.into_iter(), pages.into_iter())?;
-        assert_eq!(res.keys().count(), 1);
+        self.calibration_strategy = strat;
         self.thresholds = res
             .remove(&AV {
                 attacker: self.main_core,
@@ -450,13 +561,13 @@ impl<T: TimingChannelPrimitives> Debug for TopologyAwareTimingChannel<T> {
 impl<T: TimingChannelPrimitives> CoreSpec for TopologyAwareTimingChannel<T> {
     fn main_core(&self) -> CpuSet {
         let mut main = CpuSet::new();
-        main.set(self.main_core);
+        main.set(self.main_core).unwrap();
         main
     }
 
     fn helper_core(&self) -> CpuSet {
         let mut helper = CpuSet::new();
-        helper.set(self.helper_core);
+        helper.set(self.helper_core).unwrap();
         helper
     }
 }
@@ -498,50 +609,65 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
     ) -> Result<Vec<Self::Handle>, ChannelFatalError> {
         let core_pair = vec![(self.main_core, self.helper_core)];
 
-        let pages = addresses
-            .clone()
-            .into_iter()
-            .map(|addr: *const u8| unsafe {
-                let p = get_vpn(addr) as *const u8;
-                let ret = &*slice_from_raw_parts(p, PAGE_LEN);
-                (p, ret)
-            })
-            .collect::<HashMap<*const u8, &[u8]>>();
-        let mut res = match Self::calibration_for_core_pairs(
-            &self.t,
-            core_pair.into_iter(),
-            pages.into_iter().map(|(k, v)| v),
-        ) {
-            Err(e) => {
-                return Err(ChannelFatalError::Oops);
+        match &mut self.thresholds {
+            ThresholdStrat::ASVP(thresholds_asvp) => {
+                let pages = addresses
+                    .clone()
+                    .into_iter()
+                    .map(|addr: *const u8| unsafe {
+                        let p = get_vpn(addr) as *const u8;
+                        let ret = &*slice_from_raw_parts(p, PAGE_LEN);
+                        (p, ret)
+                    })
+                    .collect::<HashMap<*const u8, &[u8]>>();
+                let mut res = match Self::calibration_for_core_pairs(
+                    &self.t,
+                    core_pair.into_iter(),
+                    pages.into_iter().map(|(k, v)| v),
+                    self.calibration_strategy,
+                ) {
+                    Err(e) => {
+                        return Err(ChannelFatalError::Oops);
+                    }
+                    Ok(r) => r,
+                };
+
+                assert_eq!(res.keys().count(), 1);
+
+                let t = match res
+                    .remove(&AV {
+                        attacker: self.main_core,
+                        victim: self.helper_core,
+                    })
+                    .unwrap()
+                    .1
+                {
+                    ThresholdStrat::ASVP(t) => t,
+                    _ => {
+                        unreachable!()
+                    }
+                };
+
+                for (sp, threshold) in t {
+                    thresholds_asvp.insert(sp, threshold);
+                }
             }
-            Ok(r) => r,
-        };
-        assert_eq!(res.keys().count(), 1);
-
-        let t = res
-            .remove(&AV {
-                attacker: self.main_core,
-                victim: self.helper_core,
-            })
-            .unwrap()
-            .1;
-
-        for (sp, threshold) in t {
-            self.thresholds.insert(sp, threshold);
+            ThresholdStrat::AV(_) | ThresholdStrat::AVSockets(_) => {}
         }
-
         let mut result = vec![];
-
         for addr in addresses {
             let vpn = get_vpn(addr);
             let slice = self.slicing.hash(addr as usize);
             let handle = TopologyAwareTimingChannelHandle {
-                threshold: self
-                    .thresholds
-                    .get(&SP { slice, page: vpn })
-                    .unwrap()
-                    .threshold,
+                threshold: match &self.thresholds {
+                    ThresholdStrat::ASVP(thresholds_asvp) => {
+                        thresholds_asvp
+                            .get(&SP { slice, page: vpn })
+                            .unwrap()
+                            .threshold
+                    }
+                    ThresholdStrat::AV(te) | ThresholdStrat::AVSockets(te) => te.threshold,
+                },
                 vpn,
                 addr,
                 ready: false,
@@ -618,44 +744,65 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
         if let Some(preferred) = self.preferred_address.get(&vpn) {
             return Err(());
         }
-        if self.thresholds.iter().filter(|kv| kv.0.page == vpn).count() == 0 {
-            // ensure calibration
-            let core_pair = vec![(self.main_core, self.helper_core)];
 
-            let as_slice = unsafe { &*slice_from_raw_parts(vpn as *const u8, PAGE_LEN) };
-            let pages = vec![as_slice];
-            let mut res = match Self::calibration_for_core_pairs(
-                &self.t,
-                core_pair.into_iter(),
-                pages.into_iter(),
-            ) {
-                Err(e) => {
-                    return Err(());
+        let (best_slice, te) = match &mut self.thresholds {
+            ThresholdStrat::ASVP(thresholds_asvp) => {
+                if thresholds_asvp.iter().filter(|kv| kv.0.page == vpn).count() == 0 {
+                    // ensure calibration
+                    let core_pair = vec![(self.main_core, self.helper_core)];
+
+                    let as_slice = unsafe { &*slice_from_raw_parts(vpn as *const u8, PAGE_LEN) };
+                    let pages = vec![as_slice];
+                    let mut res = match Self::calibration_for_core_pairs(
+                        &self.t,
+                        core_pair.into_iter(),
+                        pages.into_iter(),
+                        self.calibration_strategy,
+                    ) {
+                        Err(e) => {
+                            return Err(());
+                        }
+                        Ok(r) => r,
+                    };
+                    assert_eq!(res.keys().count(), 1);
+
+                    let t = match res
+                        .remove(&AV {
+                            attacker: self.main_core,
+                            victim: self.helper_core,
+                        })
+                        .unwrap()
+                        .1
+                    {
+                        ThresholdStrat::ASVP(t) => t,
+                        _ => {
+                            unreachable!()
+                        }
+                    };
+
+                    for (sp, threshold) in t {
+                        thresholds_asvp.insert(sp, threshold);
+                    }
                 }
-                Ok(r) => r,
-            };
-            assert_eq!(res.keys().count(), 1);
-
-            let t = res
-                .remove(&AV {
-                    attacker: self.main_core,
-                    victim: self.helper_core,
-                })
-                .unwrap()
-                .1;
-
-            for (sp, threshold) in t {
-                self.thresholds.insert(sp, threshold);
+                let mut best_slice = 0;
+                let mut te = None;
+                //self.thresholds = ThresholdStrat::ASVP(thresholds_asvp);
+                let mut best_error_rate = 1.0;
+                for (sp, threshold_error) in thresholds_asvp.iter().filter(|kv| kv.0.page == vpn) {
+                    if threshold_error.error.error_rate() < best_error_rate {
+                        best_error_rate = threshold_error.error.error_rate();
+                        best_slice = sp.slice;
+                        te = Some(threshold_error)
+                    }
+                }
+                (best_slice, te.unwrap().clone())
             }
-        }
-        let mut best_error_rate = 1.0;
-        let mut best_slice = 0;
-        for (sp, threshold_error) in self.thresholds.iter().filter(|kv| kv.0.page == vpn) {
-            if threshold_error.error.error_rate() < best_error_rate {
-                best_error_rate = threshold_error.error.error_rate();
-                best_slice = sp.slice;
+            ThresholdStrat::AV(te) | ThresholdStrat::AVSockets(te) => {
+                let te = te.clone();
+                (self.get_slice(page), te)
             }
-        }
+        };
+
         for i in 0..PAGE_LEN {
             let addr = unsafe { page.offset(i as isize) };
             if self.get_slice(addr) == best_slice {
@@ -663,14 +810,7 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
                 // Create the right handle
                 let mut handle = Self::CovertChannelHandle {
                     0: TopologyAwareTimingChannelHandle {
-                        threshold: self
-                            .thresholds
-                            .get(&SP {
-                                slice: best_slice,
-                                page: vpn,
-                            })
-                            .unwrap()
-                            .threshold,
+                        threshold: te.threshold,
                         vpn,
                         addr,
                         ready: false,

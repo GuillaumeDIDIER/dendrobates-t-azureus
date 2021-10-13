@@ -200,7 +200,8 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
 pub const CFLUSH_BUCKET_SIZE: usize = 1;
 pub const CFLUSH_BUCKET_NUMBER: usize = 500;
 
-pub const CFLUSH_NUM_ITER: u32 = 1 << 11;
+pub const CFLUSH_NUM_ITER: u32 = 1 << 10;
+pub const CLFLUSH_NUM_ITERATION_AV: u32 = 1 << 8;
 
 pub fn calibrate_flush(
     array: &[u8],
