@@ -1,10 +1,11 @@
+use bitvec::prelude::*;
 use cache_utils::mmap::MMappedMemory;
 use lazy_static::lazy_static;
 use std::collections::LinkedList;
 use std::sync::Mutex;
 
 struct WXRange {
-    bitmap: Vec<bool>, // fixme bit vector
+    bitmap: BitVec, // fixme bit vector
     pages: Vec<MMappedMemory<u8>>,
 }
 
@@ -27,6 +28,13 @@ pub struct FunctionTemplate {
     ip: *const u8,
     end: *const u8,
 }
+
+pub struct Function {
+    fun: unsafe extern "C" fn(*const u8) -> u64,
+    ip: *const u8,
+    end: *const u8,
+    size: usize,
+}
 lazy_static! {
     static ref wx_allocator: Mutex<WXAllocator> = Mutex::new(WXAllocator::new());
 }
@@ -41,6 +49,10 @@ const TIMED_CLFLUSH: FunctionTemplate = FunctionTemplate {
     ip: timed_clflush_template_ip as *const u8,
     end: timed_clflush_template_end as *const u8,
 };
+
+pub fn allocate_function(align: usize, template: FunctionTemplate) -> Function {
+    unimplemented!()
+}
 
 global_asm!(
     ".global timed_maccess_template",

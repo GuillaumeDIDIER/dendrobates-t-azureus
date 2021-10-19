@@ -15,3 +15,4 @@ basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
 nix = "0.20.0"
 rand = "0.8.3"
 lazy_static = "1.4.0"
+bitvec = "0.22.3"
