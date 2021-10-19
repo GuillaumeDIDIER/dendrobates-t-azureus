@@ -14,3 +14,4 @@ flush_reload = { path = "../flush_reload" }
 basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
 nix = "0.20.0"
 rand = "0.8.3"
+lazy_static = "1.4.0"
