@@ -13,7 +13,6 @@ use nix::Error;
 use prefetcher_reverse::{Prober, CACHE_LINE_LEN, PAGE_CACHELINE_LEN};
 use rand::seq::SliceRandom;
 use std::iter::Cycle;
-use std::ops::Range;
 
 pub const NUM_ITERATION: usize = 1 << 10;
 pub const NUM_PAGES: usize = 256;
@@ -48,7 +47,7 @@ fn execute_pattern(
     let mut res = vec![false; PAGE_CACHELINE_LEN];
 
     for (i, status) in measures.unwrap().into_iter().enumerate() {
-        res[i] = (status.1 == Hit)
+        res[i] = status.1 == Hit;
     }
     res
 }
