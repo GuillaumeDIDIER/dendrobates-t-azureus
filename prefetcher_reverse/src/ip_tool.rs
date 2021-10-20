@@ -197,6 +197,7 @@ impl Function {
 
         let p = unsafe { allocator.allocate(align, real_offset, length) }?;
         unsafe { copy_nonoverlapping(template.start as *const u8, p, length) };
+        unsafe { std::arch::x86_64::__cpuid(0) };
         let res = Function {
             fun: unsafe {
                 std::mem::transmute::<*mut u8, unsafe extern "C" fn(*const u8) -> u64>(p)
