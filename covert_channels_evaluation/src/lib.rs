@@ -165,7 +165,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     let old_affinity = set_affinity(&channel.main_core()).unwrap();
 
     let size = num_pages * PAGE_SIZE;
-    let mut m = MMappedMemory::new(size, false, |i| (i / PAGE_SIZE) as u8);
+    let mut m = MMappedMemory::new(size, false, false, |i| (i / PAGE_SIZE) as u8);
     let mut receiver_turn_handles = Vec::new();
     let mut transmit_turn_handles = Vec::new();
 

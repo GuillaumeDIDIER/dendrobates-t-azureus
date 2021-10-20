@@ -30,6 +30,7 @@ impl<T> MMappedMemory<T> {
     pub fn try_new(
         size: usize,
         huge: bool,
+        executable: bool,
         initializer: impl Fn(usize) -> T,
     ) -> Result<MMappedMemory<T>, nix::Error> {
         assert_ne!(size_of::<T>(), 0);
@@ -37,7 +38,13 @@ impl<T> MMappedMemory<T> {
             let p = mman::mmap(
                 null_mut(),
                 size * size_of::<T>(),
-                mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
+                mman::ProtFlags::PROT_READ
+                    | mman::ProtFlags::PROT_WRITE
+                    | if executable {
+                        mman::ProtFlags::PROT_EXEC
+                    } else {
+                        mman::ProtFlags::PROT_READ
+                    },
                 mman::MapFlags::MAP_PRIVATE
                     | mman::MapFlags::MAP_ANONYMOUS
                     | if huge {
@@ -91,8 +98,13 @@ impl<T> MMappedMemory<T> {
             }
         }
     */
-    pub fn new(size: usize, huge: bool, init: impl Fn(usize) -> T) -> MMappedMemory<T> {
-        Self::try_new(size, huge, init).unwrap()
+    pub fn new(
+        size: usize,
+        huge: bool,
+        executable: bool,
+        init: impl Fn(usize) -> T,
+    ) -> MMappedMemory<T> {
+        Self::try_new(size, huge, executable, init).unwrap()
     }
 
     pub fn slice(&self) -> &[T] {

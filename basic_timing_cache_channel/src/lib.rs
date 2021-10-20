@@ -303,7 +303,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
         core_pairs: impl Iterator<Item = (usize, usize)> + Clone,
         strat: CalibrationStrategy,
     ) -> Result<(Self, usize, usize), TopologyAwareError> {
-        let m = MMappedMemory::new(PAGE_LEN, false, |i| i as u8);
+        let m = MMappedMemory::new(PAGE_LEN, false, false, |i| i as u8);
         let array: &[u8] = m.slice();
 
         let t = Default::default();
@@ -429,7 +429,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
                 )?
             }
             ThresholdStrat::AV(_) | ThresholdStrat::AVSockets(_) => {
-                let m = MMappedMemory::new(PAGE_LEN, false, |i| i as u8);
+                let m = MMappedMemory::new(PAGE_LEN, false, false, |i| i as u8);
                 let array: &[u8] = m.slice();
                 let mut hashset = HashSet::new();
                 hashset.insert(array);

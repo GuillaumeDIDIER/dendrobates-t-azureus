@@ -1,4 +1,5 @@
 #![feature(global_asm)]
+#![feature(linked_list_cursors)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::Probe::{Flush, FullFlush, Load};
@@ -171,7 +172,7 @@ impl<const GS: usize> Prober<GS> {
         };
 
         for i in 0..num_pages {
-            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false, |j| {
+            let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false, false, |j| {
                 (j / CACHE_LINE_LEN + i * PAGE_CACHELINE_LEN) as u8
             }) {
                 Ok(p) => p,

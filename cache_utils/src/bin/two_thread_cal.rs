@@ -111,7 +111,7 @@ fn main() {
 
     println!("Number of cores per socket: {}", core_per_socket);
 
-    let m = MMappedMemory::new(SIZE, true, |i: usize| i as u8);
+    let m = MMappedMemory::new(SIZE, true, false, |i: usize| i as u8);
     let array = m.slice();
 
     let cache_line_size = 64;
@@ -147,7 +147,7 @@ fn main() {
             display_name: "clflush remote hit",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_shared_hit",
@@ -175,7 +175,7 @@ fn main() {
             display_name: "clflush miss - n",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_local_hit_n",
@@ -298,7 +298,7 @@ fn main() {
         Err(e) => panic!("Error: {}", e),
     };
 
-/*    asvp_analysis[&ASVP {
+    /*    asvp_analysis[&ASVP {
         attacker: 0,
         slice: 0,
         victim: 0,
