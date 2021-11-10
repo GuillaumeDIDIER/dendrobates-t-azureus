@@ -1,0 +1,34 @@
+use prefetcher_reverse::{Prober, PAGE_CACHELINE_LEN};
+
+pub const NUM_ITERATION: usize = 1 << 10;
+
+fn exp(stride: usize, num_steps: i32, delay: u64) {
+    let mut prober = Prober::<2>::new(63).unwrap();
+    prober.set_delay(delay);
+    let limit = if num_steps < 0 {
+        PAGE_CACHELINE_LEN + stride + 2
+    } else {
+        stride * num_steps as usize
+    };
+    let pattern = (2usize..limit).step_by(stride).collect::<Vec<_>>();
+    let result = prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
+    println!("{}", result);
+}
+
+fn main() {
+    for stride in [3, 4] {
+        for delay_shift in [5, 12] {
+            let limit = ((PAGE_CACHELINE_LEN + 32) / stride) as i32;
+            //for num_steps in -1..limit {
+            let num_steps = limit;
+            println!(
+                "Stride: {}, Limit: {}, Delay: {}",
+                stride,
+                num_steps,
+                1 << delay_shift
+            );
+            exp(stride, num_steps, 1 << delay_shift);
+            //}
+        }
+    }
+}

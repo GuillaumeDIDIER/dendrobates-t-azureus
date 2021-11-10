@@ -165,6 +165,23 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         }
         Ok(())
     }
+
+    pub unsafe fn test_debug(
+        &self,
+        handle: &mut NaiveTimingChannelHandle,
+        reset: bool,
+    ) -> Result<(CacheStatus, u64), SideChannelError> {
+        // This should be handled in prepare / unprepare
+        let t = unsafe { self.channel_primitive.attack(handle.addr) };
+        if T::NEED_RESET && reset {
+            unsafe { flush(handle.addr) };
+        }
+        if self.threshold.is_hit(t) {
+            Ok((CacheStatus::Hit, t))
+        } else {
+            Ok((CacheStatus::Miss, t))
+        }
+    }
 }
 
 impl<T: TimingChannelPrimitives> CoreSpec for NaiveTimingChannel<T> {

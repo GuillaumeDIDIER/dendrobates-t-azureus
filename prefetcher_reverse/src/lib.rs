@@ -13,6 +13,7 @@ use cache_side_channel::{
 };
 use cache_utils::calibration::{only_reload, Threshold, PAGE_LEN};
 use cache_utils::mmap::MMappedMemory;
+use cache_utils::rdtsc_nofence;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use flush_reload::naive::{NFRHandle, NaiveFlushAndReload};
 use flush_reload::{FRHandle, FRPrimitives, FlushAndReload};
@@ -34,12 +35,12 @@ pub const CALIBRATION_STRAT: CalibrationStrategy = CalibrationStrategy::ASVP;
 pub struct Prober<const GS: usize> {
     pages: Vec<MMappedMemory<u8>>,
     ff_handles: Vec<Vec<FFHandle>>,
-    fr_handles: Vec<Vec<FRHandle>>,
-    //fr_handles: Vec<Vec<NFRHandle>>,
+    //fr_handles: Vec<Vec<FRHandle>>,
+    fr_handles: Vec<Vec<NFRHandle>>,
     page_indexes: Peekable<Cycle<Range<usize>>>,
     ff_channel: FlushAndFlush,
-    fr_channel: FlushAndReload,
-    //fr_channel: NaiveFlushAndReload,
+    //fr_channel: FlushAndReload,
+    fr_channel: NaiveFlushAndReload,
     delay: u64,
 }
 
@@ -73,8 +74,8 @@ pub enum ProberError {
 /**
 Result of running a probe pattern num_iteration times,
 */
-pub type SinglePR = u32;
-pub type FullPR = Vec<u32>;
+pub type SinglePR = u64;
+pub type FullPR = Vec<u64>;
 
 #[derive(Debug)]
 pub enum ProbeResult {
@@ -86,13 +87,13 @@ pub enum ProbeResult {
 #[derive(Debug)]
 pub struct ProbePatternResult {
     pub num_iteration: u32,
-    pub pattern_result: Vec<u32>,
+    pub pattern_result: Vec<u64>,
     pub probe_result: ProbeResult,
 }
 
 #[derive(Debug)]
 pub struct DPRItem<PR> {
-    pub pattern_result: Vec<u32>,
+    pub pattern_result: Vec<u64>,
     pub probe_result: PR,
 }
 
@@ -114,8 +115,8 @@ pub struct FullPageDualProbeResults {
 #[derive(Debug)]
 pub struct SingleProbeResult {
     pub probe_offset: usize,
-    pub pattern_result: Vec<u32>,
-    pub probe_result: u32,
+    pub pattern_result: Vec<u64>,
+    pub probe_result: u64,
 }
 
 #[derive(Debug)]
@@ -124,6 +125,14 @@ pub struct FullPageSingleProbeResult<const GS: usize> {
     pub probe_type: ProbeType,
     pub num_iteration: u32,
     pub results: Vec<SingleProbeResult>,
+}
+
+fn delay(d: u64) {
+    let mut t = unsafe { rdtsc_nofence() };
+    let end = t + d;
+    while t < end {
+        t = unsafe { rdtsc_nofence() };
+    }
 }
 
 // Helper function
@@ -160,16 +169,16 @@ impl<const GS: usize> Prober<GS> {
             Ok(old) => old,
             Err(nixerr) => return Err(ProberError::Nix(nixerr)),
         };
-        /*let mut fr_channel = NaiveFlushAndReload::new(Threshold {
-            bucket_index: 250,
+        let mut fr_channel = NaiveFlushAndReload::new(Threshold {
+            bucket_index: 315,
             miss_faster_than_hit: false,
-        });*/
-        let mut fr_channel = match FlushAndReload::new(core, core, CALIBRATION_STRAT) {
+        });
+        /*let mut fr_channel = match FlushAndReload::new(core, core, CALIBRATION_STRAT) {
             Ok(res) => res,
             Err(err) => {
                 return Err(ProberError::TopologyError(err));
             }
-        };
+        };*/
 
         for i in 0..num_pages {
             let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false, false, |j| {
@@ -233,13 +242,14 @@ impl<const GS: usize> Prober<GS> {
 
         unsafe { self.ff_channel.prepare(&mut ff_handles) };
 
-        let mut pattern_res = vec![CacheStatus::Miss; pattern.pattern.len()];
+        let mut pattern_res = vec![0; pattern.pattern.len()];
         for (i, offset) in pattern.pattern.iter().enumerate() {
             let h = &mut self.fr_handles[page_index][*offset];
-            pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap();
-            if self.delay > 0 {
+            pattern_res[i] = unsafe { self.fr_channel.test_debug(h, false) }.unwrap().1;
+            delay(self.delay);
+            /*if self.delay > 0 {
                 thread::sleep(time::Duration::from_nanos(self.delay)); // FIXME parameter magic
-            }
+            }*/
             //pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
             //pattern_res[i] = Miss;
             //unsafe { only_reload(h.to_const_u8_pointer()) };
@@ -286,9 +296,9 @@ impl<const GS: usize> Prober<GS> {
             }
 
             for (i, res) in pattern_res.into_iter().enumerate() {
-                if res == Hit {
-                    result_ref.pattern_result[i] += 1
-                }
+                //if res == Hit {
+                result_ref.pattern_result[i] += res;
+                //}
             }
         }
     }
@@ -454,7 +464,7 @@ impl Display for FullPageDualProbeResults {
                 ),
                 Some(index) => {
                     let pat = format!("{:3}", index);
-                    let sf_ac: u32 = self
+                    let sf_ac: u64 = self
                         .single_probe_results
                         .iter()
                         .map(|d| d.flush.pattern_result[index])
@@ -462,7 +472,7 @@ impl Display for FullPageDualProbeResults {
                     let sf_ac_h = format!("{:8}", sf_ac);
                     let sf_ac_hr = format!("{:9.7}", sf_ac as f32 / divider);
 
-                    let sr_ac: u32 = self
+                    let sr_ac: u64 = self
                         .single_probe_results
                         .iter()
                         .map(|d| d.load.pattern_result[index])
