@@ -32,22 +32,25 @@ pub struct FunctionTemplate {
     end: *const u8,
 }
 
+// Note those fields should not be public
+// We need a way to also take care of non allocated functions.
+#[derive(Debug)]
 pub struct Function {
-    fun: unsafe extern "C" fn(*const u8) -> u64,
-    ip: *const u8,
-    end: *const u8,
-    size: usize,
+    pub fun: unsafe extern "C" fn(*const u8) -> u64,
+    pub ip: *const u8,
+    pub end: *const u8,
+    pub size: usize,
 }
 lazy_static! {
     static ref wx_allocator: Mutex<WXAllocator> = Mutex::new(WXAllocator::new());
 }
-const TIMED_MACCESS: FunctionTemplate = FunctionTemplate {
+pub const TIMED_MACCESS: FunctionTemplate = FunctionTemplate {
     start: timed_maccess_template,
     ip: timed_maccess_template_ip as *const u8,
     end: timed_maccess_template_end as *const u8,
 };
 
-const TIMED_CLFLUSH: FunctionTemplate = FunctionTemplate {
+pub const TIMED_CLFLUSH: FunctionTemplate = FunctionTemplate {
     start: timed_clflush_template,
     ip: timed_clflush_template_ip as *const u8,
     end: timed_clflush_template_end as *const u8,

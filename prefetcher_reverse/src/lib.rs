@@ -26,6 +26,8 @@ use std::{thread, time};
 
 pub mod ip_tool;
 
+use ip_tool::Function;
+
 // NB these may need to be changed / dynamically measured.
 pub const CACHE_LINE_LEN: usize = 64;
 pub const PAGE_CACHELINE_LEN: usize = PAGE_LEN / CACHE_LINE_LEN;
@@ -58,9 +60,15 @@ pub enum ProbeType {
     FullFlush,
 }
 
+#[derive(Debug, Clone)]
+pub struct PatternAccess<'a> {
+    pub function: &'a Function,
+    pub offset: usize,
+}
+
 #[derive(Debug)]
-pub struct ProbePattern {
-    pub pattern: Vec<usize>,
+pub struct ProbePattern<'a> {
+    pub pattern: Vec<PatternAccess<'a>>,
     pub probe: Probe,
 }
 
@@ -105,8 +113,8 @@ pub struct DualProbeResult {
 }
 
 #[derive(Debug)]
-pub struct FullPageDualProbeResults {
-    pub pattern: Vec<usize>,
+pub struct FullPageDualProbeResults<'a> {
+    pub pattern: Vec<PatternAccess<'a>>,
     pub num_iteration: u32,
     pub single_probe_results: Vec<DualProbeResult>,
     pub full_flush_results: DPRItem<FullPR>,
@@ -120,8 +128,8 @@ pub struct SingleProbeResult {
 }
 
 #[derive(Debug)]
-pub struct FullPageSingleProbeResult<const GS: usize> {
-    pub pattern: Vec<usize>,
+pub struct FullPageSingleProbeResult<'a, const GS: usize> {
+    pub pattern: Vec<PatternAccess<'a>>,
     pub probe_type: ProbeType,
     pub num_iteration: u32,
     pub results: Vec<SingleProbeResult>,
@@ -243,15 +251,14 @@ impl<const GS: usize> Prober<GS> {
         unsafe { self.ff_channel.prepare(&mut ff_handles) };
 
         let mut pattern_res = vec![0; pattern.pattern.len()];
-        for (i, offset) in pattern.pattern.iter().enumerate() {
-            let h = &mut self.fr_handles[page_index][*offset];
-            pattern_res[i] = unsafe { self.fr_channel.test_debug(h, false) }.unwrap().1;
+        for (i, access) in pattern.pattern.iter().enumerate() {
+            let h = &mut self.fr_handles[page_index][access.offset];
+            let pointer: *const u8 = h.to_const_u8_pointer();
+            pattern_res[i] = unsafe { (access.function.fun)(pointer) };
+            // TODO IP : This is where the pattern access need to be done using pattern.function instead.
+            //pattern_res[i] = unsafe { self.fr_channel.test_debug(h, false) }.unwrap().1;
             delay(self.delay);
-            /*if self.delay > 0 {
-                thread::sleep(time::Duration::from_nanos(self.delay)); // FIXME parameter magic
-            }*/
-            //pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap()
-            //pattern_res[i] = Miss;
+            //pattern_res[i] = unsafe { self.fr_channel.test_single(h, false) }.unwrap();
             //unsafe { only_reload(h.to_const_u8_pointer()) };
         }
 
@@ -329,13 +336,13 @@ impl<const GS: usize> Prober<GS> {
         result
     }
 
-    fn full_page_probe_helper(
+    fn full_page_probe_helper<'a>(
         &mut self,
-        pattern: &mut ProbePattern,
+        pattern: &mut ProbePattern<'a>,
         probe_type: ProbeType,
         num_iteration: u32,
         warmup: u32,
-    ) -> FullPageSingleProbeResult<GS> {
+    ) -> FullPageSingleProbeResult<'a, GS> {
         let mut result = FullPageSingleProbeResult {
             pattern: pattern.pattern.clone(),
             probe_type,
@@ -362,12 +369,12 @@ impl<const GS: usize> Prober<GS> {
         result
     }
 
-    pub fn full_page_probe(
+    pub fn full_page_probe<'a>(
         &mut self,
-        pattern: Vec<usize>,
+        pattern: Vec<PatternAccess<'a>>,
         num_iteration: u32,
         warmup: u32,
-    ) -> FullPageDualProbeResults {
+    ) -> FullPageDualProbeResults<'a> {
         let mut probe_pattern = ProbePattern {
             pattern: pattern,
             probe: Probe::FullFlush,
@@ -417,13 +424,13 @@ impl<const GS: usize> Prober<GS> {
     }
 }
 
-impl Display for FullPageDualProbeResults {
+impl<'a> Display for FullPageDualProbeResults<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut indices = vec![None; self.single_probe_results.len()];
         let pat_len = self.pattern.len();
         let divider = (self.single_probe_results.len() * self.num_iteration as usize) as f32;
-        for (i, &offset) in self.pattern.iter().enumerate() {
-            indices[offset] = Some(i);
+        for (i, access) in self.pattern.iter().enumerate() {
+            indices[access.offset] = Some(i);
         }
         // Display header
         let mut r = writeln!(
@@ -528,4 +535,14 @@ pub fn reference_patterns() -> [(&'static str, Vec<usize>); 9] {
         ("Pattern 5 (III)", vec![63, 62, 61, 0, 1, 2, 44]),
         ("Pattern 5 (IV)", vec![0, 1, 2, 63, 62, 61, 19]),
     ]
+}
+
+pub fn pattern_helper<'a>(offsets: Vec<usize>, function: &'a Function) -> Vec<PatternAccess<'a>> {
+    offsets
+        .into_iter()
+        .map(|i| PatternAccess {
+            function,
+            offset: i,
+        })
+        .collect()
 }
