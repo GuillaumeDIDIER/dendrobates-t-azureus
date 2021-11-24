@@ -1,9 +1,10 @@
+use crate::mmap::MMappedMemory;
 use bitvec::prelude::*;
-use cache_utils::mmap::MMappedMemory;
 use lazy_static::lazy_static;
 use std::collections::LinkedList;
 use std::ptr::copy_nonoverlapping;
 use std::sync::Mutex;
+use std::vec::Vec;
 
 struct WXRange {
     start: usize,
@@ -54,6 +55,12 @@ pub const TIMED_CLFLUSH: FunctionTemplate = FunctionTemplate {
     start: timed_clflush_template,
     ip: timed_clflush_template_ip as *const u8,
     end: timed_clflush_template_end as *const u8,
+};
+
+pub const TIMED_NOP: FunctionTemplate = FunctionTemplate {
+    start: timed_nop_template,
+    ip: timed_nop_template_ip as *const u8,
+    end: timed_nop_template_end as *const u8,
 };
 
 impl WXRange {
@@ -274,6 +281,31 @@ global_asm!(
     ".global timed_clflush_template_end",
     "timed_clflush_template_end:",
     "nop",
+    ".global timed_nop_template",
+    "timed_nop_template:",
+    "mfence",
+    "lfence",
+    "rdtsc",
+    "shl rdx, 32",
+    "mov rsi, rdx",
+    "add rsi, rax",
+    "mfence",
+    "lfence",
+    ".global timed_nop_template_ip",
+    "timed_nop_template_ip:",
+    "nop",
+    "mfence",
+    "lfence",
+    "rdtsc",
+    "shl rdx, 32",
+    "add rax, rdx",
+    "mfence",
+    "lfence",
+    "sub rax, rsi",
+    "ret",
+    ".global timed_nop_template_end",
+    "timed_nop_template_end:",
+    "nop",
 );
 
 extern "C" {
@@ -283,6 +315,9 @@ extern "C" {
     fn timed_clflush_template(pointer: *const u8) -> u64;
     fn timed_clflush_template_ip();
     fn timed_clflush_template_end();
+    fn timed_nop_template(pointer: *const u8) -> u64;
+    fn timed_nop_template_ip();
+    fn timed_nop_template_end();
 }
 
 pub fn tmp_test() {

@@ -14,6 +14,7 @@ use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
+use cache_utils::ip_tool::Function;
 use core::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -52,6 +53,53 @@ use std::str::from_utf8;
    - [ ] Output the Median CSV
    - [ ] Make the plots
 */
+
+unsafe fn function_call(f: &Function, addr: *const u8) -> u64 {
+    unsafe { (f.fun)(addr) }
+}
+
+unsafe fn prepare_RAM(p: *const u8) {
+    unsafe { flush(p) };
+}
+
+unsafe fn prepare_pL3(p: *const u8) {
+    unsafe { maccess(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { flush(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { arch_x86::_mm_prefetch::<{ arch_x86::_MM_HINT_T2 }>(p as *const i8) };
+    unsafe { arch_x86::__cpuid_count(0, 0) };
+}
+
+unsafe fn prepare_pL2(p: *const u8) {
+    unsafe { maccess(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { flush(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { arch_x86::_mm_prefetch::<{ arch_x86::_MM_HINT_T1 }>(p as *const i8) };
+    unsafe { arch_x86::__cpuid_count(0, 0) };
+}
+
+unsafe fn prepare_pL1(p: *const u8) {
+    unsafe { maccess(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { flush(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { arch_x86::_mm_prefetch::<{ arch_x86::_MM_HINT_T0 }>(p as *const i8) };
+    unsafe { arch_x86::__cpuid_count(0, 0) };
+}
+
+unsafe fn prepare_L1(p: *const u8) {
+    unsafe { only_reload(p) };
+}
+
+unsafe fn prepare_eL2(p: *const u8) {
+    unimplemented!()
+}
+
+unsafe fn prepare_eL3(p: *const u8) {
+    unimplemented!()
+}
 
 unsafe fn multiple_access(p: *const u8) {
     unsafe {
@@ -105,26 +153,11 @@ struct Threshold {
     pub num_false_miss: u32,
 }
 
-unsafe fn only_flush_wrap(_: &(), addr: *const u8) -> u64 {
-    unsafe { only_flush(addr) }
-}
-
-unsafe fn only_reload_wrap(_: &(), addr: *const u8) -> u64 {
-    unsafe { only_reload(addr) }
-}
-
-unsafe fn load_and_flush_wrap(_: &(), addr: *const u8) -> u64 {
-    unsafe { load_and_flush(addr) }
-}
-unsafe fn flush_and_reload_wrap(_: &(), addr: *const u8) -> u64 {
-    unsafe { flush_and_reload(addr) }
-}
-
-unsafe fn reload_and_flush_wrap(_: &(), addr: *const u8) -> u64 {
-    unsafe { reload_and_flush(addr) }
-}
-
 fn main() {
+    let measure_reload =
+        cache_utils::ip_tool::Function::try_new(1, 0, cache_utils::ip_tool::TIMED_MACCESS).unwrap();
+    let measure_nop =
+        cache_utils::ip_tool::Function::try_new(1, 0, cache_utils::ip_tool::TIMED_NOP).unwrap();
     // Grab a slice of memory
 
     let core_per_socket_out = Command::new("sh")
@@ -172,13 +205,50 @@ fn main() {
         panic!("not aligned nicely");
     }
 
-    let operations = [CalibrateOperation2T {
-        prepare: maccess::<u8>,
-        op: only_flush_wrap,
-        name: "clflush_remote_hit",
-        display_name: "clflush remote hit",
-        t: &(),
-    }];
+    let operations = [
+        CalibrateOperation2T {
+            prepare: prepare_RAM,
+            op: function_call,
+            name: "RAM_load",
+            display_name: "Load from RAM",
+            t: &measure_reload,
+        },
+        CalibrateOperation2T {
+            prepare: prepare_pL3,
+            op: function_call,
+            name: "pL3_load",
+            display_name: "Load from L3 (prefetch)",
+            t: &measure_reload,
+        },
+        CalibrateOperation2T {
+            prepare: prepare_pL2,
+            op: function_call,
+            name: "pL2_load",
+            display_name: "Load from L2 (prefetch)",
+            t: &measure_reload,
+        },
+        CalibrateOperation2T {
+            prepare: prepare_pL1,
+            op: function_call,
+            name: "pL1_load",
+            display_name: "Load from L1 (prefetch)",
+            t: &measure_reload,
+        },
+        CalibrateOperation2T {
+            prepare: prepare_L1,
+            op: function_call,
+            name: "L1_load",
+            display_name: "Load from L1 (Reload)",
+            t: &measure_reload,
+        },
+        CalibrateOperation2T {
+            prepare: noop::<u8>,
+            op: function_call,
+            name: "pL3_load",
+            display_name: "Load from L3 (prefetch)",
+            t: &measure_nop,
+        },
+    ];
 
     let r = unsafe {
         calibrate_fixed_freq_2_thread(

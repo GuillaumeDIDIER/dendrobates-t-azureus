@@ -1,7 +1,12 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![feature(ptr_internals)]
+#![feature(linked_list_cursors)]
+#![feature(global_asm)]
 #![allow(clippy::missing_safety_doc)]
 #![deny(unsafe_op_in_unsafe_fn)]
+
+use core::arch::x86_64 as arch_x86;
+use core::ptr;
 
 use static_assertions::assert_cfg;
 
@@ -25,8 +30,8 @@ pub mod frequency;
 #[cfg(feature = "use_std")]
 mod calibrate_2t;
 
-use core::arch::x86_64 as arch_x86;
-use core::ptr;
+#[cfg(feature = "use_std")]
+pub mod ip_tool;
 
 // rdtsc no fence
 pub unsafe fn rdtsc_nofence() -> u64 {
