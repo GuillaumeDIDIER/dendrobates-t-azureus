@@ -1,5 +1,5 @@
+use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use cache_utils::{flush, maccess};
-use prefetcher_reverse::ip_tool::{Function, TIMED_MACCESS};
 use prefetcher_reverse::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
 use std::arch::x86_64 as arch_x86;
 
@@ -44,7 +44,7 @@ fn exp(stride: usize, num_steps: i32, delay: u64, reload: &Function) {
         stride * num_steps as usize
     };
     let pattern = (2usize..limit).step_by(stride).collect::<Vec<_>>();
-    let p = pattern_helper(pattern, reload);
+    let p = pattern_helper(&pattern, reload);
 
     let pl2 = Function {
         fun: prefetch_l2,
@@ -67,13 +67,13 @@ fn exp(stride: usize, num_steps: i32, delay: u64, reload: &Function) {
         size: 0,
     };
 
-    let mut pattern_pl2 = pattern_helper((0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl2);
+    let mut pattern_pl2 = pattern_helper(&(0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl2);
     pattern_pl2.extend(p.iter().cloned());
 
-    let mut pattern_pl3 = pattern_helper((0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl3);
+    let mut pattern_pl3 = pattern_helper(&(0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl3);
     pattern_pl3.extend(p.iter().cloned());
 
-    let mut pattern_pl1 = pattern_helper((0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl1);
+    let mut pattern_pl1 = pattern_helper(&(0..(2 * PAGE_CACHELINE_LEN)).collect(), &pl1);
     pattern_pl1.extend(p.iter().cloned());
 
     println!("With no sw prefetch");

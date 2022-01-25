@@ -1,4 +1,4 @@
-use prefetcher_reverse::ip_tool::{Function, TIMED_MACCESS};
+use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use prefetcher_reverse::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
 
 pub const NUM_ITERATION: usize = 1 << 10;
@@ -12,7 +12,7 @@ fn exp(stride: usize, num_steps: i32, delay: u64, reload: &Function) {
         stride * num_steps as usize
     };
     let pattern = (2usize..limit).step_by(stride).collect::<Vec<_>>();
-    let p = pattern_helper(pattern, reload);
+    let p = pattern_helper(&pattern, reload);
 
     let result = prober.full_page_probe(p, NUM_ITERATION as u32, 100);
     println!("{}", result);

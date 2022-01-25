@@ -5,12 +5,12 @@ use cache_side_channel::{
     set_affinity, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::PAGE_LEN;
+use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use cache_utils::maccess;
 use cache_utils::mmap;
 use cache_utils::mmap::MMappedMemory;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use nix::Error;
-use prefetcher_reverse::ip_tool::{Function, TIMED_MACCESS};
 use prefetcher_reverse::{
     pattern_helper, reference_patterns, Prober, CACHE_LINE_LEN, PAGE_CACHELINE_LEN,
 };
@@ -23,7 +23,7 @@ pub const NUM_PAGES: usize = 256;
 
 fn exp(delay: u64, reload: &Function) {
     for (name, pattern) in reference_patterns() {
-        let p = pattern_helper(pattern, reload);
+        let p = pattern_helper(&pattern, reload);
         let mut prober = Prober::<1>::new(63).unwrap();
 
         println!("{}", name);

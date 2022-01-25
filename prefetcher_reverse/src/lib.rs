@@ -1,8 +1,14 @@
 #![feature(global_asm)]
-#![feature(linked_list_cursors)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::Probe::{Flush, FullFlush, Load};
+use std::fmt::{Display, Error, Formatter};
+use std::iter::{Cycle, Peekable};
+use std::ops::Range;
+use std::{thread, time};
+
+use nix::sys::stat::stat;
+use rand::seq::SliceRandom;
+
 use basic_timing_cache_channel::{
     CalibrationStrategy, TopologyAwareError, TopologyAwareTimingChannel,
 };
@@ -12,21 +18,14 @@ use cache_side_channel::{
     SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{only_reload, Threshold, PAGE_LEN};
+use cache_utils::ip_tool::Function;
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::rdtsc_nofence;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use flush_reload::naive::{NFRHandle, NaiveFlushAndReload};
 use flush_reload::{FRHandle, FRPrimitives, FlushAndReload};
-use nix::sys::stat::stat;
-use rand::seq::SliceRandom;
-use std::fmt::{Display, Error, Formatter};
-use std::iter::{Cycle, Peekable};
-use std::ops::Range;
-use std::{thread, time};
 
-pub mod ip_tool;
-
-use ip_tool::Function;
+use crate::Probe::{Flush, FullFlush, Load};
 
 // NB these may need to be changed / dynamically measured.
 pub const CACHE_LINE_LEN: usize = 64;
@@ -37,12 +36,12 @@ pub const CALIBRATION_STRAT: CalibrationStrategy = CalibrationStrategy::ASVP;
 pub struct Prober<const GS: usize> {
     pages: Vec<MMappedMemory<u8>>,
     ff_handles: Vec<Vec<FFHandle>>,
-    //fr_handles: Vec<Vec<FRHandle>>,
-    fr_handles: Vec<Vec<NFRHandle>>,
+    fr_handles: Vec<Vec<FRHandle>>,
+    //fr_handles: Vec<Vec<NFRHandle>>,
     page_indexes: Peekable<Cycle<Range<usize>>>,
     ff_channel: FlushAndFlush,
-    //fr_channel: FlushAndReload,
-    fr_channel: NaiveFlushAndReload,
+    fr_channel: FlushAndReload,
+    //fr_channel: NaiveFlushAndReload,
     delay: u64,
 }
 
@@ -120,7 +119,7 @@ pub struct FullPageDualProbeResults<'a> {
     pub full_flush_results: DPRItem<FullPR>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleProbeResult {
     pub probe_offset: usize,
     pub pattern_result: Vec<u64>,
@@ -177,16 +176,16 @@ impl<const GS: usize> Prober<GS> {
             Ok(old) => old,
             Err(nixerr) => return Err(ProberError::Nix(nixerr)),
         };
-        let mut fr_channel = NaiveFlushAndReload::new(Threshold {
+        /*let mut fr_channel = NaiveFlushAndReload::new(Threshold {
             bucket_index: 315,
             miss_faster_than_hit: false,
-        });
-        /*let mut fr_channel = match FlushAndReload::new(core, core, CALIBRATION_STRAT) {
+        });*/
+        let mut fr_channel = match FlushAndReload::new(core, core, CALIBRATION_STRAT) {
             Ok(res) => res,
             Err(err) => {
                 return Err(ProberError::TopologyError(err));
             }
-        };*/
+        };
 
         for i in 0..num_pages {
             let mut p = match MMappedMemory::<u8>::try_new(PAGE_LEN * GS, false, false, |j| {
@@ -246,7 +245,9 @@ impl<const GS: usize> Prober<GS> {
         self.page_indexes.next();
         let page_index = *self.page_indexes.peek().unwrap();
 
-        let mut ff_handles = self.ff_handles[page_index].iter_mut().collect();
+        let mut ff_handles = self.ff_handles[page_index]
+            .iter_mut() /*.rev()*/
+            .collect();
 
         unsafe { self.ff_channel.prepare(&mut ff_handles) };
 
@@ -293,7 +294,7 @@ impl<const GS: usize> Prober<GS> {
                     if let ProbeOutput::Full(vstatus) = probe_out {
                         for (i, status) in vstatus.iter().enumerate() {
                             if status.1 == Hit {
-                                v[i] += 1;
+                                v[/*63 -*/ i] += 1;
                             }
                         }
                     } else {
@@ -347,16 +348,26 @@ impl<const GS: usize> Prober<GS> {
             pattern: pattern.pattern.clone(),
             probe_type,
             num_iteration,
-            results: vec![],
+            results: vec![
+                SingleProbeResult {
+                    probe_offset: 0,
+                    pattern_result: vec![],
+                    probe_result: 0
+                };
+                64
+            ],
         };
-        for offset in 0..(PAGE_CACHELINE_LEN * GS) {
+        for offset in (0..(PAGE_CACHELINE_LEN * GS))
+        /*.rev()*/
+        {
+            // Reversed FIXME
             pattern.probe = match probe_type {
                 ProbeType::Load => Probe::Load(offset),
                 ProbeType::Flush => Probe::Flush(offset),
                 ProbeType::FullFlush => FullFlush,
             };
             let r = self.probe_pattern(pattern, num_iteration, warmup);
-            result.results.push(SingleProbeResult {
+            result.results[offset] = SingleProbeResult {
                 probe_offset: offset,
                 pattern_result: r.pattern_result,
                 probe_result: match r.probe_result {
@@ -364,7 +375,7 @@ impl<const GS: usize> Prober<GS> {
                     ProbeResult::Flush(r) => r,
                     ProbeResult::FullFlush(r) => r[offset],
                 },
-            });
+            };
         }
         result
     }
@@ -537,12 +548,12 @@ pub fn reference_patterns() -> [(&'static str, Vec<usize>); 9] {
     ]
 }
 
-pub fn pattern_helper<'a>(offsets: Vec<usize>, function: &'a Function) -> Vec<PatternAccess<'a>> {
+pub fn pattern_helper<'a>(offsets: &Vec<usize>, function: &'a Function) -> Vec<PatternAccess<'a>> {
     offsets
         .into_iter()
         .map(|i| PatternAccess {
             function,
-            offset: i,
+            offset: *i,
         })
         .collect()
 }

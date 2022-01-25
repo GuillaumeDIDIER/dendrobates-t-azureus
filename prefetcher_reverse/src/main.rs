@@ -5,12 +5,12 @@ use cache_side_channel::{
     set_affinity, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::PAGE_LEN;
+use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use cache_utils::maccess;
 use cache_utils::mmap;
 use cache_utils::mmap::MMappedMemory;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use nix::Error;
-use prefetcher_reverse::ip_tool::{Function, TIMED_MACCESS};
 use prefetcher_reverse::{
     pattern_helper, PatternAccess, Prober, CACHE_LINE_LEN, PAGE_CACHELINE_LEN,
 };
@@ -201,8 +201,8 @@ fn main() {
 
     let reload = Function::try_new(1, 0, TIMED_MACCESS).unwrap();
 
-    let pattern = pattern_helper(generate_pattern(0, 3, 12).unwrap(), &reload);
-    let pattern4 = pattern_helper(generate_pattern(0, 4, 12).unwrap(), &reload);
+    let pattern = pattern_helper(&generate_pattern(0, 3, 12).unwrap(), &reload);
+    let pattern4 = pattern_helper(&generate_pattern(0, 4, 12).unwrap(), &reload);
     let mut new_prober = Prober::<1>::new(63).unwrap();
     let result = new_prober.full_page_probe(pattern.clone(), NUM_ITERATION as u32, 100);
     println!("{}", result);
@@ -212,27 +212,27 @@ fn main() {
     println!("{}", result2);
     let result4 = new_prober.full_page_probe(pattern4, NUM_ITERATION as u32, 100);
     println!("{}", result4);
-    let pattern5 = pattern_helper(generate_pattern(0, 5, 8).unwrap(), &reload);
+    let pattern5 = pattern_helper(&generate_pattern(0, 5, 8).unwrap(), &reload);
     let result5 = new_prober.full_page_probe(pattern5, NUM_ITERATION as u32, 100);
     println!("{}", result5);
 
-    let pattern5 = pattern_helper(generate_pattern(0, 5, 4).unwrap(), &reload);
+    let pattern5 = pattern_helper(&generate_pattern(0, 5, 4).unwrap(), &reload);
     let result5 = new_prober.full_page_probe(pattern5, NUM_ITERATION as u32, 100);
     println!("{}", result5);
 
-    let pattern = pattern_helper(generate_pattern(0, 10, 4).unwrap(), &reload);
+    let pattern = pattern_helper(&generate_pattern(0, 10, 4).unwrap(), &reload);
     let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
     println!("{}", result);
 
-    let pattern = pattern_helper(generate_pattern(0, 6, 8).unwrap(), &reload);
+    let pattern = pattern_helper(&generate_pattern(0, 6, 8).unwrap(), &reload);
     let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
     println!("{}", result);
 
-    let pattern = pattern_helper(generate_pattern(2, 6, 0).unwrap(), &reload);
+    let pattern = pattern_helper(&generate_pattern(2, 6, 0).unwrap(), &reload);
     let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
     println!("{}", result);
 
-    let pattern = pattern_helper(vec![0, 0, 8, 8, 16, 16, 24, 24], &reload);
+    let pattern = pattern_helper(&vec![0, 0, 8, 8, 16, 16, 24, 24], &reload);
     let result = new_prober.full_page_probe(pattern, NUM_ITERATION as u32, 100);
     println!("{}", result);
 

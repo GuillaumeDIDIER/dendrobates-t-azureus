@@ -110,9 +110,11 @@ name = "cache_utils"
 version = "0.1.0"
 dependencies = [
  "atomic",
+ "bitvec",
  "cpuid",
  "hashbrown",
  "itertools",
+ "lazy_static",
  "libc",
  "nix",
  "polling_serial",
@@ -376,6 +378,7 @@ dependencies = [
  "cache_utils",
  "flush_flush",
  "flush_reload",
+ "itertools",
  "lazy_static",
  "nix",
  "rand",
