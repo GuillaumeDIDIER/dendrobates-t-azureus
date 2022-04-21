@@ -159,12 +159,12 @@ fn main() {
     let args = Params {
         limit: 2,
         same_ip: true,
-        unique_ip: true,
+        unique_ip: false, //true,
     };
 
     let mut experiments: Vec<(String, Box<dyn Fn(usize, usize) -> Vec<usize>>)> = vec![];
     for class in [
-        (
+        /*(
             "A",
             Box::new(|k| {
                 Box::new(move |i, j| vec![i, (i + k) % PAGE_CACHELINE_LEN, j])
@@ -191,14 +191,30 @@ fn main() {
                 Box::new(move |i, j| vec![i, j, (j - k) % PAGE_CACHELINE_LEN])
                     as Box<dyn Fn(usize, usize) -> Vec<usize>>
             }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
+        ),*/
+        (
+            "F",
+            Box::new(|k: isize| {
+                Box::new(move |i, j| {
+                    vec![
+                        i,
+                        (i as isize + k + PAGE_CACHELINE_LEN as isize) as usize
+                            % PAGE_CACHELINE_LEN,
+                        j,
+                        (i as isize + 2 * k + PAGE_CACHELINE_LEN as isize) as usize
+                            % PAGE_CACHELINE_LEN,
+                    ]
+                }) as Box<dyn Fn(usize, usize) -> Vec<usize>>
+            }) as Box<dyn Fn(isize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
         ),
     ] {
-        for k in [1, 2, 3, 4, 8] {
+        for k in [4 as isize, 3, 2, 1, -1, -2, -3, -4] {
+            /*2, 3, 4, 8,*/
             experiments.push((format!("{}{}", class.0, k), class.1(k)));
         }
     }
 
-    for class in [(
+    /*for class in [(
         "E",
         Box::new(|len: usize| {
             Box::new(move |base, stride| {
@@ -213,7 +229,7 @@ fn main() {
         for len in [2, 3, 4] {
             experiments.push((format!("{}{}", class.0, len), class.1(len)));
         }
-    }
+    }*/
 
     let mut prober = Prober::<1>::new(63).unwrap();
 
