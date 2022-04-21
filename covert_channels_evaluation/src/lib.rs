@@ -1,4 +1,3 @@
-#![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 use turn_lock::TurnHandle;
 
@@ -13,20 +12,18 @@ const PAGE_SIZE: usize = 1 << 12; // FIXME Magic
 // Each page has 1<<12 bytes / 1<<6 bytes per line, hence 64 lines (or 6 bits of info).
 
 // General structure : two threads, a transmitter and a reciever. Transmitter generates bytes, Reciever reads bytes, then on join compare results for accuracy.
-// Alos time in order to determine duration, in rdtsc and seconds.
+// Also time in order to determine duration, in rdtsc and seconds.
 
 use bit_field::BitField;
-use cache_side_channel::{restore_affinity, set_affinity, CoreSpec};
+use cache_side_channel::{restore_affinity, set_affinity, BitIterator};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::rdtsc_fence;
-use nix::sched::sched_getaffinity;
-use nix::unistd::Pid;
-use std::any::Any;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::thread;
 
+pub use cache_side_channel::CovertChannel;
 /*  TODO : replace page with a handle type,
     require exclusive handle access,
     Handle protected by the turn lock
@@ -34,13 +31,6 @@ use std::thread;
 /**
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
-pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
-    type CovertChannelHandle;
-    const BIT_PER_PAGE: usize;
-    unsafe fn transmit(&self, handle: &mut Self::CovertChannelHandle, bits: &mut BitIterator);
-    unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool>;
-    unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()>; // TODO Error Type
-}
 
 #[derive(Debug)]
 pub struct CovertChannelBenchmarkResult {
@@ -78,42 +68,6 @@ impl CovertChannelBenchmarkResult {
 
     pub fn csv_header() -> String {
         format!("bytes_transmitted,bits_error,error_rate,time_rdtsc,time_nanosec")
-    }
-}
-
-pub struct BitIterator<'a> {
-    bytes: &'a Vec<u8>,
-    byte_index: usize,
-    bit_index: u8,
-}
-
-impl<'a> BitIterator<'a> {
-    pub fn new(bytes: &'a Vec<u8>) -> BitIterator<'a> {
-        BitIterator {
-            bytes,
-            byte_index: 0,
-            bit_index: 0,
-        }
-    }
-
-    pub fn atEnd(&self) -> bool {
-        self.byte_index >= self.bytes.len()
-    }
-}
-
-impl Iterator for BitIterator<'_> {
-    type Item = bool;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(b) = self.bytes.get(self.byte_index) {
-            let r = (b >> (u8::BIT_LENGTH - 1 - self.bit_index as usize)) & 1 != 0;
-            self.bit_index += 1;
-            self.byte_index += self.bit_index as usize / u8::BIT_LENGTH;
-            self.bit_index = self.bit_index % u8::BIT_LENGTH as u8;
-            Some(r)
-        } else {
-            None
-        }
     }
 }
 
@@ -165,7 +119,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     let old_affinity = set_affinity(&channel.main_core()).unwrap();
 
     let size = num_pages * PAGE_SIZE;
-    let mut m = MMappedMemory::new(size, false, false, |i| (i / PAGE_SIZE) as u8);
+    let m = MMappedMemory::new(size, false, false, |i| (i / PAGE_SIZE) as u8);
     let mut receiver_turn_handles = Vec::new();
     let mut transmit_turn_handles = Vec::new();
 
@@ -197,7 +151,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     while received_bytes.len() < num_bytes {
         for handle in receiver_turn_handles.iter_mut() {
             let mut page = handle.wait();
-            let mut bits = unsafe { covert_channel_arc.receive(&mut *page) };
+            let bits = unsafe { covert_channel_arc.receive(&mut *page) };
             handle.next();
             received_bits.extend(&mut bits.iter());
             while received_bits.len() >= u8::BIT_LENGTH {
@@ -222,7 +176,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     let r = helper.join();
     let (start, start_time, sent_bytes) = match r {
         Ok(r) => r,
-        Err(e) => panic!("Join Error: {:?#}"),
+        Err(e) => panic!("Join Error: {:#?}", e),
     };
     assert_eq!(sent_bytes.len(), received_bytes.len());
     assert_eq!(num_bytes, received_bytes.len());

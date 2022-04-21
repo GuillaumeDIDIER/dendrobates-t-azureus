@@ -3,12 +3,11 @@ use cache_side_channel::table_side_channel::{
     SingleTableCacheSideChannel, TableAttackResult, TableCacheSideChannel,
 };
 use cache_side_channel::{
-    CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
-    SideChannelError, SingleAddrCacheSideChannel,
+    BitIterator, CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, CovertChannel,
+    MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{get_vpn, only_flush, only_reload, HashMap, Threshold, VPN};
 use cache_utils::flush;
-use covert_channels_evaluation::{BitIterator, CovertChannel};
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
 use nix::unistd::Pid;

@@ -2,6 +2,7 @@
 #![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use bit_field::BitField;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 use std::fmt::Debug;
@@ -136,6 +137,50 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
     }
 }
 */
+// From covert_channel_evaluation
+pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
+    type CovertChannelHandle;
+    const BIT_PER_PAGE: usize;
+    unsafe fn transmit(&self, handle: &mut Self::CovertChannelHandle, bits: &mut BitIterator);
+    unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool>;
+    unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()>; // TODO Error Type
+}
+
+pub struct BitIterator<'a> {
+    bytes: &'a Vec<u8>,
+    byte_index: usize,
+    bit_index: u8,
+}
+
+impl<'a> BitIterator<'a> {
+    pub fn new(bytes: &'a Vec<u8>) -> BitIterator<'a> {
+        BitIterator {
+            bytes,
+            byte_index: 0,
+            bit_index: 0,
+        }
+    }
+
+    pub fn atEnd(&self) -> bool {
+        self.byte_index >= self.bytes.len()
+    }
+}
+
+impl Iterator for BitIterator<'_> {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(b) = self.bytes.get(self.byte_index) {
+            let r = (b >> (u8::BIT_LENGTH - 1 - self.bit_index as usize)) & 1 != 0;
+            self.bit_index += 1;
+            self.byte_index += self.bit_index as usize / u8::BIT_LENGTH;
+            self.bit_index = self.bit_index % u8::BIT_LENGTH as u8;
+            Some(r)
+        } else {
+            None
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

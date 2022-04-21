@@ -15,8 +15,8 @@ use cache_side_channel::table_side_channel::{
 };
 use cache_side_channel::SideChannelError::AddressNotReady;
 use cache_side_channel::{
-    CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
-    SideChannelError, SingleAddrCacheSideChannel,
+    BitIterator, CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, CovertChannel,
+    MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP,
@@ -29,7 +29,6 @@ use cache_utils::calibration::{
 use cache_utils::complex_addressing::{CacheAttackSlicing, CacheSlicing};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{find_core_per_socket, flush, maccess, noop};
-use covert_channels_evaluation::{BitIterator, CovertChannel};
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
 use nix::unistd::Pid;

@@ -55,7 +55,6 @@ version = "0.1.0"
 dependencies = [
  "cache_side_channel",
  "cache_utils",
- "covert_channels_evaluation",
  "nix",
 ]
 
@@ -102,6 +101,7 @@ dependencies = [
 name = "cache_side_channel"
 version = "0.1.0"
 dependencies = [
+ "bit_field 0.10.1",
  "nix",
 ]
 
@@ -195,7 +195,6 @@ dependencies = [
  "basic_timing_cache_channel",
  "cache_side_channel",
  "cache_utils",
- "covert_channels_evaluation",
  "nix",
 ]
 
@@ -206,7 +205,6 @@ dependencies = [
  "basic_timing_cache_channel",
  "cache_side_channel",
  "cache_utils",
- "covert_channels_evaluation",
  "nix",
 ]
 

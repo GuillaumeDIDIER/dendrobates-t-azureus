@@ -2,10 +2,10 @@
 
 use cache_utils::frequency::get_freq_cpufreq_kernel;
 use cache_utils::rdtsc_fence;
+use core::time::Duration;
 use libc::sched_getcpu;
 use nix::sched::{sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
-use static_assertions::_core::time::Duration;
 use std::thread::sleep;
 use std::time::Instant;
 
