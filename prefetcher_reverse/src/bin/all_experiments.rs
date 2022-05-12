@@ -167,7 +167,7 @@ fn main() {
             Box::new(|k: usize| {
 
                 let f = Box::new(move |i, j| {
-                    let v = vec![
+                    let mut v = vec![
                         i,j,
                     ];
                     v.truncate(k);
@@ -189,7 +189,7 @@ fn main() {
     ] {
         for k in [0,1,2] {
             let exp = class.1(k);
-            experiments.push((format!("{}{}", class.0, k),exp.1, exp.2, exp.3));
+            experiments.push((format!("{}{}", class.0, k),exp.0, exp.1, exp.2));
         }
     }
 
