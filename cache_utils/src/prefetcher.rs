@@ -1,5 +1,9 @@
 use x86_64::registers::model_specific::Msr;
 
+/*
+This file can only run in ring 0, and is work in progress.
+ */
+
 use crate::calibration::only_flush;
 
 extern crate alloc;
