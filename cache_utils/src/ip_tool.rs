@@ -1,3 +1,5 @@
+#![cfg(feature = "use_std")]
+
 use crate::mmap::MMappedMemory;
 use bitvec::prelude::*;
 use lazy_static::lazy_static;

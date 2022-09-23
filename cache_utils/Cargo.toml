@@ -20,10 +20,10 @@ libc = { version = "0.2.92", optional = true }
 hashbrown = { version = "0.11.2", optional = true }
 turn_lock = { path = "../turn_lock", optional = true}
 lazy_static = "1.4.0"
-bitvec = "0.22.3"
+bitvec = { version = "0.22.3", optional = true }
 
 [features]
-use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock"]
+use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec"]
 no_std = ["polling_serial", "vga_buffer", "hashbrown"]
 
 default = ["use_std"]
