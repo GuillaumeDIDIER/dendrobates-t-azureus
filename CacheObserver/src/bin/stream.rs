@@ -1,7 +1,7 @@
 use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use cache_utils::{flush, maccess};
-use prefetcher_reverse::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
 use std::arch::x86_64 as arch_x86;
+use CacheObserver::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
 
 pub const NUM_ITERATION: usize = 1 << 10;
 

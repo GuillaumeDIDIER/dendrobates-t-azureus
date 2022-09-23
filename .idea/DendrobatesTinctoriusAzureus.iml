@@ -40,6 +40,7 @@
       <sourceFolder url="file://$MODULE_DIR$/turn_lock/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/covert_channels_benchmark/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/prefetcher_reverse/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/CacheObserver/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />

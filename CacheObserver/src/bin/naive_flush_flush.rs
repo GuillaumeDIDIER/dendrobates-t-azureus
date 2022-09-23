@@ -8,7 +8,7 @@ use cache_utils::calibration::{Threshold, PAGE_LEN};
 use cache_utils::maccess;
 use cache_utils::mmap::MMappedMemory;
 use flush_flush::naive::NaiveFlushAndFlush;
-use prefetcher_reverse::CACHE_LINE_LEN;
+use CacheObserver::CACHE_LINE_LEN;
 
 const ITERATIONS: i32 = 128;
 const THRESHOLD: usize = 175; // For Cyber Cobaye

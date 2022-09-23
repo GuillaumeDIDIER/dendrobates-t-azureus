@@ -1,5 +1,5 @@
 use cache_utils::ip_tool::{Function, TIMED_MACCESS};
-use prefetcher_reverse::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
+use CacheObserver::{pattern_helper, Prober, PAGE_CACHELINE_LEN};
 
 pub const NUM_ITERATION: usize = 1 << 10;
 

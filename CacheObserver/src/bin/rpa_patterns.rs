@@ -11,12 +11,12 @@ use cache_utils::mmap;
 use cache_utils::mmap::MMappedMemory;
 use flush_flush::{FFHandle, FFPrimitives, FlushAndFlush};
 use nix::Error;
-use prefetcher_reverse::{
-    pattern_helper, reference_patterns, Prober, CACHE_LINE_LEN, PAGE_CACHELINE_LEN,
-};
 use rand::seq::SliceRandom;
 use std::iter::Cycle;
 use std::ops::Range;
+use CacheObserver::{
+    pattern_helper, reference_patterns, Prober, CACHE_LINE_LEN, PAGE_CACHELINE_LEN,
+};
 
 pub const NUM_ITERATION: usize = 1 << 10;
 pub const NUM_PAGES: usize = 256;

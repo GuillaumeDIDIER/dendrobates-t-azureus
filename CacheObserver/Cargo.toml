@@ -1,5 +1,5 @@
 [package]
-name = "prefetcher_reverse"
+name = "CacheObserver"
 version = "0.1.0"
 authors = ["Guillaume DIDIER <guillaume.didier.2014@polytechnique.org>"]
 edition = "2018"

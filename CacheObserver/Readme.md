@@ -4,7 +4,7 @@ CacheObserver - monitor what happens in the cache when doing memory accesses
 This framework, derived from https://github.com/MIAOUS-group/calibration-done-right,
 is built to help reverse engineer prefetchers on Intel CPUs.
 
-The main entry point of the framework is the `prefetcher_reverse` crate.
+The main entry point of the framework is the `CacheObserver` crate.
 
 The code presented runs under Fedora 30, and can also be made to run on Ubuntu 18.04 LTS with minor tweaks
 
@@ -22,7 +22,7 @@ non-boosted frequency.
 One can run all the experiments with the following instructions :
 
 ```
-cd prefetcher_reverse
+cd CacheObserver
 mkdir results-xxx
 cd results-xxx
 sudo ../setup.sh

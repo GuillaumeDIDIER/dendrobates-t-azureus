@@ -14,7 +14,7 @@ Alternatively, limit to 3 accesses ?
 use cache_utils::ip_tool::{Function, TIMED_MACCESS};
 use itertools::Itertools;
 use nix::sched::sched_yield;
-use prefetcher_reverse::{
+use CacheObserver::{
     pattern_helper, FullPageDualProbeResults, PatternAccess, Prober, PAGE_CACHELINE_LEN,
 };
 
@@ -91,7 +91,6 @@ fn print_tagged_csv(tag: &str, results: Vec<FullPageDualProbeResults>, len: usiz
 
 fn exp(
     i: usize,
-    tag: &str,
     patterns: &Vec<Vec<usize>>,
     same_ip: bool,
     unique_ip: bool,
@@ -107,7 +106,7 @@ fn exp(
             results.push(result);
             sched_yield().unwrap();
         }
-        print_tagged_csv(&format!("SingleIP{}", tag), results, i);
+        print_tagged_csv(&format!("SingleIP{}", i), results, i);
         // generate the vec with a single IP
     }
     if unique_ip {
@@ -132,121 +131,35 @@ fn exp(
             results.push(result);
             sched_yield().unwrap();
         }
-        print_tagged_csv(&format!("UniqueIPs{}", tag), results, i);
+        print_tagged_csv(&format!("UniqueIPs{}", i), results, i);
     }
 }
-
-/* TODO change access patterns
-- We want patterns for i,j in [0,64]^2
-A (i,i+k,j)
-B (i,i-k,j)
-C (i,j,j+k)
-D (i,j,j-k)
-
-with k in 1,2,3,8, plus possibly others.
-4 access patterns will probably come in later
-
-In addition consider base + stride + len patterns, with a well chosen set of length, strides and bases
-len to be considered 2,3,4
-Identifiers :
-E 2
-F 3
-G 4
- */
 
 fn main() {
     // TODO Argument parsing
     let args = Params {
         limit: 2,
         same_ip: true,
-        unique_ip: false, //true,
+        unique_ip: true,
     };
-
-    let mut experiments: Vec<(String, Box<dyn Fn(usize, usize) -> Vec<usize>>)> = vec![];
-    for class in [
-        /*(
-            "A",
-            Box::new(|k| {
-                Box::new(move |i, j| vec![i, (i + k) % PAGE_CACHELINE_LEN, j])
-                    as Box<dyn Fn(usize, usize) -> Vec<usize>>
-            }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-        ),
-        (
-            "B",
-            Box::new(|k| {
-                Box::new(move |i, j| vec![i, (i - k) % PAGE_CACHELINE_LEN, j])
-                    as Box<dyn Fn(usize, usize) -> Vec<usize>>
-            }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-        ),
-        (
-            "C",
-            Box::new(|k| {
-                Box::new(move |i, j| vec![i, j, (j + k) % PAGE_CACHELINE_LEN])
-                    as Box<dyn Fn(usize, usize) -> Vec<usize>>
-            }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-        ),
-        (
-            "D",
-            Box::new(|k| {
-                Box::new(move |i, j| vec![i, j, (j - k) % PAGE_CACHELINE_LEN])
-                    as Box<dyn Fn(usize, usize) -> Vec<usize>>
-            }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-        ),*/
-        (
-            "F",
-            Box::new(|k: isize| {
-                Box::new(move |i, j| {
-                    vec![
-                        i,
-                        (i as isize + k + PAGE_CACHELINE_LEN as isize) as usize
-                            % PAGE_CACHELINE_LEN,
-                        j,
-                        (i as isize + 2 * k + PAGE_CACHELINE_LEN as isize) as usize
-                            % PAGE_CACHELINE_LEN,
-                    ]
-                }) as Box<dyn Fn(usize, usize) -> Vec<usize>>
-            }) as Box<dyn Fn(isize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-        ),
-    ] {
-        for k in [4 as isize, 3, 2, 1, -1, -2, -3, -4] {
-            /*2, 3, 4, 8,*/
-            experiments.push((format!("{}{}", class.0, k), class.1(k)));
-        }
-    }
-
-    /*for class in [(
-        "E",
-        Box::new(|len: usize| {
-            Box::new(move |base, stride| {
-                let mut res = vec![base];
-                for i in 0..len {
-                    res.push((base + stride * (i + 1)) % PAGE_CACHELINE_LEN)
-                }
-                res
-            }) as Box<dyn Fn(usize, usize) -> Vec<usize>>
-        }) as Box<dyn Fn(usize) -> Box<dyn Fn(usize, usize) -> Vec<usize>>>,
-    )] {
-        for len in [2, 3, 4] {
-            experiments.push((format!("{}{}", class.0, len), class.1(len)));
-        }
-    }*/
 
     let mut prober = Prober::<1>::new(63).unwrap();
 
     let mut patterns: Vec<Vec<usize>> = Vec::new();
-    //patterns.push(Vec::new());
+    patterns.push(Vec::new());
 
-    //exp(0, "", &patterns, args.same_ip, args.unique_ip, &mut prober);
+    exp(0, &patterns, args.same_ip, args.unique_ip, &mut prober);
 
-    for experiment in experiments {
-        let tag = &experiment.0;
-        let mut patterns = vec![];
-        for i in 0..PAGE_CACHELINE_LEN {
-            for j in 0..PAGE_CACHELINE_LEN {
-                patterns.push(experiment.1(i, j))
+    for i in 0..args.limit {
+        let mut new_patterns = Vec::new();
+        for pattern in patterns {
+            for i in 0..PAGE_CACHELINE_LEN {
+                let mut np = pattern.clone();
+                np.push(i);
+                new_patterns.push(np);
             }
         }
-        let i = patterns[0].len();
-        exp(i, tag, &patterns, args.same_ip, args.unique_ip, &mut prober);
+        patterns = new_patterns;
+        exp(i + 1, &patterns, args.same_ip, args.unique_ip, &mut prober);
     }
 }
