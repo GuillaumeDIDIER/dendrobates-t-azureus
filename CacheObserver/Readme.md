@@ -74,3 +74,4 @@ Known good nightly :
 
 - rustc 1.54.0-nightly (eab201df7 2021-06-09)
 - rustc 1.55.0-nightly (885399992 2021-07-06)
+- rustc 1.57.0-nightly (9a28ac83c 2021-09-18)

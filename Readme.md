@@ -20,3 +20,5 @@ Design decision :
 - [ ] Get serial console
 - [ ] Deal with cpuid / floating point niceties
 - [ ] Deal with the user mode switch
+
+Known good rust version : 1.57.0-nightly (9a28ac83c 2021-09-18)
