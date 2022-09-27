@@ -29,7 +29,6 @@ dependencies = [
  "memmap2",
  "nix",
  "openssl",
- "openssl-sys",
  "rand",
 ]
 
