@@ -349,7 +349,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             main_turn_handle.next();
             params = main_turn_handle.wait();
             // join thread.
-            helper_thread.unwrap().join();
+            helper_thread.unwrap().join().expect("Failed to join thread");
             // FIXME error handling
         }
     }

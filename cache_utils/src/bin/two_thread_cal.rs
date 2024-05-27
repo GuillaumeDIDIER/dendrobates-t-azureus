@@ -1,5 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+// SPDX-FileCopyrightText: 2021 Guillaume DIDIER
+//
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
+
 use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, flush_and_reload,
     get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
@@ -14,11 +19,12 @@ use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
-use core::cmp::min;
 use std::cmp::Ordering;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::process::Command;
 use std::str::from_utf8;
+
 
 unsafe fn multiple_access(p: *const u8) {
     unsafe {
@@ -34,7 +40,9 @@ unsafe fn multiple_access(p: *const u8) {
     }
 }
 
-const SIZE: usize = 2 << 20;
+//const SIZE: usize = 2 << 20;
+const SIZE: usize = 4 << 10;
+
 const MAX_SEQUENCE: usize = 2048 * 64;
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq, Debug)]
@@ -111,7 +119,8 @@ fn main() {
 
     println!("Number of cores per socket: {}", core_per_socket);
 
-    let m = MMappedMemory::new(SIZE, true, false, |i: usize| i as u8);
+    // TODO Enable Hugepage here if needed.
+    let m = MMappedMemory::new(SIZE, false, false, |i: usize| i as u8);
     let array = m.slice();
 
     let cache_line_size = 64;

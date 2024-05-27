@@ -2,7 +2,7 @@
 <module type="CPP_MODULE" version="4">
   <component name="FacetManager">
     <facet type="Python" name="Python facet">
-      <configuration sdkName="Python 3.7 (dendrobates-t-azureus)" />
+      <configuration sdkName="" />
     </facet>
   </component>
   <component name="NewModuleRootManager">
@@ -41,6 +41,8 @@
       <sourceFolder url="file://$MODULE_DIR$/covert_channels_benchmark/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/prefetcher_reverse/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/CacheObserver/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dendrobates-t-azureus/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/dendrobates-t-azureus/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
@@ -51,6 +53,5 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="Python 3.7 (dendrobates-t-azureus) interpreter library" level="application" />
   </component>
 </module>

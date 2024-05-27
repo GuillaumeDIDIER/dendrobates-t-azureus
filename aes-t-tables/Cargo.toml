@@ -3,15 +3,16 @@ name = "aes-t-tables"
 version = "0.1.0"
 authors = ["GuillaumeDIDIER <guillaume.didier95@hotmail.fr>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 openssl = "0.10.33"
 cache_utils = { path = "../cache_utils" }
-memmap2 = "0.2.1"
-rand = "0.8.3"
-nix = "0.20.0"
+memmap2 = "0.9.4"
+rand = "0.8.5"
+nix = "0.28.0"
 cache_side_channel = { path = "../cache_side_channel" }
 flush_flush = { path = "../flush_flush" }
 flush_reload = { path = "../flush_reload" }

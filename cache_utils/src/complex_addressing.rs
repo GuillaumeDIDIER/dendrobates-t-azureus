@@ -13,6 +13,8 @@ use hashbrown::HashMap;
 use hashbrown::HashSet;
 
 #[cfg(feature = "use_std")]
+use std::vec::Vec;
+#[cfg(feature = "use_std")]
 use std::collections::HashMap;
 #[cfg(feature = "use_std")]
 use std::collections::HashSet;
@@ -78,7 +80,7 @@ pub fn cache_slicing(
     match vendor {
         CPUVendor::Intel => {
             match uarch {
-                MicroArchitecture::KabyLake | MicroArchitecture::Skylake => ComplexAddressing(
+                MicroArchitecture::KabyLake | MicroArchitecture::Skylake | MicroArchitecture::WhiskeyLake => ComplexAddressing(
                     &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
                 ),
                 MicroArchitecture::CoffeeLake => {

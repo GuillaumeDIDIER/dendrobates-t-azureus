@@ -7,6 +7,7 @@ use std::collections::LinkedList;
 use std::ptr::copy_nonoverlapping;
 use std::sync::Mutex;
 use std::vec::Vec;
+use core::arch::global_asm;
 
 struct WXRange {
     start: usize,

@@ -4,6 +4,7 @@ use crate::complex_addressing::{cache_slicing, CacheAttackSlicing, CacheSlicing}
 use crate::{flush, maccess, rdtsc_fence};
 
 use cpuid::MicroArchitecture;
+use core::cmp::min;
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]
@@ -16,7 +17,6 @@ extern crate alloc;
 use crate::calibration::Verbosity::*;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::cmp::min;
 use itertools::Itertools;
 use core::hash::Hash;
 use core::ops::{Add, AddAssign};

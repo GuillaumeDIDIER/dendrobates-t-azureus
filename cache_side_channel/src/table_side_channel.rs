@@ -118,11 +118,11 @@ impl<T: SingleAddrCacheSideChannel> SingleTableCacheSideChannel<T::Handle> for T
                     SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
                 },
             }
-            for iteration in 0..100 {
+            for _iteration in 0..100 {
                 self.victim_single(victim);
                 let r = unsafe { self.test_single(addr, true) };
                 match r {
-                    Ok(status) => {}
+                    Ok(_status) => {}
                     Err(e) => match e {
                         SideChannelError::NeedRecalibration => panic!(),
                         SideChannelError::FatalError(e) => {
@@ -193,7 +193,7 @@ impl<T: MultipleAddrCacheSideChannel> MultipleTableCacheSideChannel<T::Handle> f
             batch.push(&mut **addr);
             let mut hits: HashMap<*const u8, u32> = HashMap::new();
             let mut misses: HashMap<*const u8, u32> = HashMap::new();
-            for i in 1..T::MAX_ADDR {
+            for _i in 1..T::MAX_ADDR {
                 if let Some(addr) = addr_iter.next() {
                     batch.push(&mut **addr);
                 } else {

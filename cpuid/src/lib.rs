@@ -12,12 +12,8 @@ use core::arch::x86_64;
 //use cstr_core::{CStr, CString};
 
 use crate::CPUVendor::{Intel, Unknown};
-use crate::MicroArchitecture::{
-    Airmont, Bonnell, Broadwell, CannonLake, CascadeLake, CoffeeLake, CooperLake, Core, Goldmont,
-    GoldmontPlus, Haswell, HaswellE, IceLake, IvyBridge, IvyBridgeE, KabyLake, KnightsLanding,
-    KnightsMill, Nehalem, NetBurst, Penryn, PentiumM, Saltwell, SandyBridge, Silvermont, Skylake,
-    SkylakeServer, Tremont, Westmere, Yonah, P5, P6,
-};
+use crate::MicroArchitecture::{Airmont, Bonnell, Broadwell, CannonLake, CascadeLake, CoffeeLake, CooperLake, Core, Goldmont, GoldmontPlus, Haswell, HaswellE, IceLake, IvyBridge, IvyBridgeE, KabyLake, KnightsLanding, KnightsMill, Nehalem, NetBurst, Penryn, PentiumM, Saltwell, SandyBridge, Silvermont, Skylake, SkylakeServer, Tremont, Westmere, Yonah, P5, P6, WhiskeyLake};
+
 //#[cfg(feature = "std")]
 //use std::ffi::{CStr, CString};
 
@@ -152,6 +148,7 @@ pub enum MicroArchitecture {
     // supports Intel 64 architecture.
     CascadeLake,
     CannonLake, // Only in volume 4 ??
+    WhiskeyLake,
     // The 2nd generation Intel® Xeon® Processor Scalable Family is based on the Cascade Lake product and supports
     // Intel 64 architecture.
     IceLake,
@@ -184,17 +181,20 @@ impl MicroArchitecture {
                 // Intel® CoreTM processors based on Coffee Lake microarchitecture, Intel® Xeon® E processors based on
                 // Coffee Lake microarchitecture
                 0x06_8E => {
-                    if stepping <= 9 {
-                        KabyLake
-                    } else {
-                        CoffeeLake
+                    match stepping {
+                        9 => KabyLake,
+                        10 => CoffeeLake,
+                        11 | 12 => WhiskeyLake,
+                        _ => {return None;}
                     }
                 }
                 0x06_9E => {
                     if stepping <= 9 {
                         KabyLake
-                    } else {
+                    } else if stepping <= 13{
                         CoffeeLake
+                    } else {
+                        return None;
                     }
                 }
                 // Future Intel® Xeon® processors based on Ice Lake microarchitecture
@@ -289,11 +289,11 @@ impl MicroArchitecture {
         }
     }
     pub fn get_family_model_stepping() -> Option<(CPUVendor, u32, u32)> {
+        let vendor = CPUVendor::get_cpu_vendor();
         // Warning this might not support AMD
-        if true {
+        if vendor == Intel {
             // TODO refactor some of this into a separate function.
             // has cpuid
-            let vendor = CPUVendor::get_cpu_vendor();
             let eax = unsafe { x86_64::__cpuid(1) }.eax;
             let stepping = eax & 0xf;
             let mut model = (eax >> 4) & 0xf;

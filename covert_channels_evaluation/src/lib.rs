@@ -95,13 +95,13 @@ fn transmit_thread<T: CovertChannel>(
     let mut bit_iter = BitIterator::new(&result);
     let start_time = std::time::Instant::now();
     let start = unsafe { rdtsc_fence() };
-    while !bit_iter.atEnd() {
+    while !bit_iter.at_end() {
         for page in params.handles.iter_mut() {
             let mut handle = page.wait();
             unsafe { params.covert_channel.transmit(&mut *handle, &mut bit_iter) };
             bit_sent += T::BIT_PER_PAGE;
             page.next();
-            if bit_iter.atEnd() {
+            if bit_iter.at_end() {
                 break;
             }
         }

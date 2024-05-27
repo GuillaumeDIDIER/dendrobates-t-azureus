@@ -1,7 +1,5 @@
 #![cfg_attr(feature = "no_std", no_std)]
-#![feature(ptr_internals)]
 #![feature(linked_list_cursors)]
-#![feature(global_asm)]
 #![allow(clippy::missing_safety_doc)]
 #![deny(unsafe_op_in_unsafe_fn)]
 

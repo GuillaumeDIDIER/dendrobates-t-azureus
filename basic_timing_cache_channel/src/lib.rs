@@ -13,7 +13,6 @@ use cache_side_channel::table_side_channel::{
     MultipleTableCacheSideChannel, SingleTableCacheSideChannel, TableAttackResult,
     TableCacheSideChannel,
 };
-use cache_side_channel::SideChannelError::AddressNotReady;
 use cache_side_channel::{
     BitIterator, CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, CovertChannel,
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
@@ -26,9 +25,9 @@ use cache_utils::calibration::{
     CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, CLFLUSH_NUM_ITERATION_AV, PAGE_LEN,
     SP, VPN,
 };
-use cache_utils::complex_addressing::{CacheAttackSlicing, CacheSlicing};
+use cache_utils::complex_addressing::{CacheAttackSlicing};
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{find_core_per_socket, flush, maccess, noop};
+use cache_utils::{find_core_per_socket, flush, maccess};
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
 use nix::unistd::Pid;
@@ -314,7 +313,7 @@ impl<T: TimingChannelPrimitives> TopologyAwareTimingChannel<T> {
 
         // Select the proper core
 
-        for (av, (global_error_pred, thresholds)) in res.iter() {
+        for (av, (global_error_pred, _thresholds)) in res.iter() {
             if global_error_pred.error_rate() < best_error_rate {
                 best_av = *av;
                 best_error_rate = global_error_pred.error_rate();
@@ -625,7 +624,7 @@ impl<T: TimingChannelPrimitives> MultipleAddrCacheSideChannel for TopologyAwareT
                     pages.into_iter().map(|(k, v)| v),
                     self.calibration_strategy,
                 ) {
-                    Err(e) => {
+                    Err(_e) => {
                         return Err(ChannelFatalError::Oops);
                     }
                     Ok(r) => r,
@@ -740,7 +739,7 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
     unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()> {
         let vpn: VPN = get_vpn(page);
         // Check if the page has already been readied. If so should error out ?
-        if let Some(preferred) = self.preferred_address.get(&vpn) {
+        if self.preferred_address.get(&vpn).is_some() {
             return Err(());
         }
 
@@ -758,7 +757,7 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
                         pages.into_iter(),
                         self.calibration_strategy,
                     ) {
-                        Err(e) => {
+                        Err(_e) => {
                             return Err(());
                         }
                         Ok(r) => r,
@@ -816,7 +815,7 @@ impl<T: TimingChannelPrimitives> CovertChannel for TopologyAwareTimingChannel<T>
                         calibration_epoch: self.calibration_epoch,
                     },
                 };
-                let r = unsafe { self.prepare_one_impl(&mut handle.0) }.unwrap();
+                unsafe { self.prepare_one_impl(&mut handle.0) }.unwrap();
 
                 return Ok(handle);
             }

@@ -41,7 +41,7 @@ pub fn restore_affinity(cpu_set: &CpuSet) {
     sched_setaffinity(Pid::from_raw(0), &cpu_set).unwrap();
 }
 
-#[must_use = "This result must be used to restore affinity"]
+//#[must_use = "This result must be used to restore affinity"]
 pub fn set_affinity(cpu_set: &CpuSet) -> Result<CpuSet, nix::Error> {
     let old = sched_getaffinity(Pid::from_raw(0))?;
     sched_setaffinity(Pid::from_raw(0), &cpu_set)?;
@@ -161,7 +161,7 @@ impl<'a> BitIterator<'a> {
         }
     }
 
-    pub fn atEnd(&self) -> bool {
+    pub fn at_end(&self) -> bool {
         self.byte_index >= self.bytes.len()
     }
 }
