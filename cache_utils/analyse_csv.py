@@ -6,7 +6,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import tikzplotlib
+#import tikzplotlib
 from sys import exit
 import wquantiles as wq
 import numpy as np
@@ -16,7 +16,10 @@ from functools import partial
 import sys
 
 # For cyber cobay sanity check :
-from gmpy2 import popcount
+# from gmpy2 import popcount
+def popcount(x):
+    return x.bit_count()
+
 functions_i9_9900 = [
              0b1111111111010101110101010001000000,
              0b0110111110111010110001001000000000,
@@ -35,7 +38,8 @@ def convert64(x):
     return np.int64(int(x, base=16))
 
 def convert8(x):
-    return np.int8(int(x, base=16))
+    return np.array(int(x, base=16)).astype(np.int64)
+    # return np.int8(int(x, base=16))
 
 df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
         dtype={
@@ -141,7 +145,7 @@ def custom_hist(x, *y, **kwargs):
 
 custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"])
 
-tikzplotlib.save("fig-hist-all.tex")#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+#tikzplotlib.save("fig-hist-all.tex")#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
 attacker = 2
@@ -151,7 +155,7 @@ slice = 14
 df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
 
 custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
-tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+#tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
 attacker = 9
@@ -161,7 +165,7 @@ slice = 8
 df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
 
 custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
-tikzplotlib.save("fig-hist-bad-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+#tikzplotlib.save("fig-hist-bad-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
 
