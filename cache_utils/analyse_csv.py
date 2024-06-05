@@ -52,6 +52,10 @@ def convert8(x):
     return np.array(int(x, base=16)).astype(np.int64)
     # return np.int8(int(x, base=16))
 
+if len(sys.argv) != 2:
+    print(f"Usage: {sys.argv[0]} <file>")
+    sys.exit(1)
+
 assert os.path.exists(sys.argv[1] + ".slices.csv")
 assert os.path.exists(sys.argv[1] + ".cores.csv")
 assert os.path.exists(sys.argv[1] + "-results_lite.csv.bz2")
@@ -125,14 +129,14 @@ slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
 df["slice_group"] = df["hash"].apply(slice_remap)
 
 
-print(df.columns)
+#print(df.columns)
 #df["Hash"] = df["Addr"].apply(lambda x: (x >> 15)&0x3)
 
 addresses = df["address"].unique()
-print(addresses)
-print(*[bin(a) for a in addresses], sep='\n')
+#print(addresses)
+#print(*[bin(a) for a in addresses], sep='\n')
 
-print(df.head())
+#print(df.head())
 
 min_time = df["time"].min()
 max_time = df["time"].max()
@@ -152,36 +156,32 @@ df_main_core_0 = df[df["main_core"] == 0]
 
 colours = ["b", "r", "g", "y"]
 
-def custom_hist(x, *y, **kwargs):
-    for (i, yi) in enumerate(y):
+def custom_hist(x_axis, *values, **kwargs):
+    if "title" in kwargs:
+        plt.title(kwargs["title"])
+        del kwargs["title"]
+
+    for (i, yi) in enumerate(values):
         kwargs["color"] = colours[i]
-        sns.distplot(x, range(graph_lower, graph_upper), hist_kws={"weights": yi, "histtype":"step"}, kde=False, **kwargs)
+        hist = sns.histplot(x=x_axis, bins=range(graph_lower, graph_upper), weights=yi, stat="count", multiple="stack", kde=False, shrink=3, **kwargs)
 
 
-custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"])
+custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
 
 #tikzplotlib.save("fig-hist-all.tex")#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
-attacker = 2
-victim = 7
-slice = 14
+def show_specific_position(attacker, victim, slice):
+    df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
 
-df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
+    custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"], title=f"A{attacker} V{victim} S{slice}")
+    #tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+    plt.show()
 
-custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
-#tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-plt.show()
+show_specific_position(3, 2, 3)
+#show_specific_position(2, 7, 14)
+#show_specific_position(9, 4, 8)
 
-attacker = 9
-victim = 4
-slice = 8
-
-df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
-
-custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"])
-#tikzplotlib.save("fig-hist-bad-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-plt.show()
 
 # Fix np.darray is unhashable
 df_main_core_0.loc[:, ('hash',)] = df_main_core_0['hash'].apply(dict_to_json)
@@ -249,5 +249,3 @@ plt.show()
 # test = pd.DataFrame({"value" : [0, 5], "weight": [5, 1]})
 # plt.figure()
 # sns.distplot(test["value"], hist_kws={"weights": test["weight"]}, kde=False)
-
-sys.exit(0)
