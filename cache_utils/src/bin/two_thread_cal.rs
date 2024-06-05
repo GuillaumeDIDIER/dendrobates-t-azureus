@@ -111,9 +111,10 @@ fn main() {
 
     let core_per_socket_str = from_utf8(&core_per_socket_out.stdout).unwrap();
 
-    //println!("Number of cores per socket: {}", cps_str);
+    //println!("Number of cores per socket (str): {}", core_per_socket_str);
 
     let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)]
+        .trim()
         .parse()
         .unwrap_or(0);
 
@@ -156,7 +157,7 @@ fn main() {
             display_name: "clflush remote hit",
             t: &(),
         },
-        /*        CalibrateOperation2T {
+        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_shared_hit",
@@ -176,7 +177,7 @@ fn main() {
             name: "clflush_local_hit_f",
             display_name: "clflush local hit - f",
             t: &(),
-        },*/
+        },
         CalibrateOperation2T {
             prepare: noop::<u8>,
             op: only_flush_wrap,
@@ -184,7 +185,7 @@ fn main() {
             display_name: "clflush miss - n",
             t: &(),
         },
-        /*        CalibrateOperation2T {
+        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_local_hit_n",
@@ -218,7 +219,7 @@ fn main() {
             name: "reload_local_hit",
             display_name: "reload local hit",
             t: &(),
-        },*/
+        },
     ];
 
     let r = unsafe {
