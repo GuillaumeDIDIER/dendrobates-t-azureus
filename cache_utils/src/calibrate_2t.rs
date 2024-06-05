@@ -88,7 +88,10 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
     let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
 
-    let slicing = get_cache_attack_slicing(core_per_socket, cache_line_length).unwrap();
+    let slicing = match get_cache_attack_slicing(core_per_socket, cache_line_length) {
+        Some(v) => v,
+        None => panic!("Unable to determine cache slicing !")
+    };
 
     let mut ret = Vec::new();
 
