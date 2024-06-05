@@ -21,3 +21,5 @@ tftpboot
 pxelinux.cfg
 serial.out
 memdisk
+**/venv
+cache_utils/results*/
