@@ -10,6 +10,12 @@ from sys import exit
 import numpy as np
 from scipy import optimize
 import sys
+import os
+
+import warnings
+
+warnings.filterwarnings('ignore')
+print("warnings are filtered, enable them back if you are having some trouble")
 
 # TODO
 # sys.argv[1] should be the root
@@ -23,6 +29,9 @@ import sys
 # each row is an origin core
 # each column a helper core if applicable
 
+assert os.path.exists(sys.argv[1] + ".stats.csv")
+assert os.path.exists(sys.argv[1] + ".slices.csv")
+assert os.path.exists(sys.argv[1] + ".cores.csv")
 
 stats = pd.read_csv(sys.argv[1] + ".stats.csv",
                     dtype={
@@ -234,9 +243,9 @@ figure_median_I.map(sns.lineplot, 'slice_group', 'predicted_miss', color="b")
 figure_median_I.set_titles(col_template="$A$ = {col_name}")
 figure_median_I.tight_layout()
 
-import tikzplotlib
+# import tikzplotlib
 
-tikzplotlib.save("fig-median-I.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+# tikzplotlib.save("fig-median-I.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
 #stats["predicted_remote_hit_no_gpu"] = exclusive_hit_topology_nogpu_df(stats, *(res_no_gpu[0]))
@@ -250,7 +259,7 @@ figure_median_E_A0.map(sns.scatterplot, 'helper_core_fixed', 'clflush_remote_hit
 figure_median_E_A0.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu', color="r")
 figure_median_E_A0.set_titles(col_template="$S$ = {col_name}")
 
-tikzplotlib.save("fig-median-E-A0.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
+# tikzplotlib.save("fig-median-E-A0.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
 g = sns.FacetGrid(stats, row="main_core_fixed")

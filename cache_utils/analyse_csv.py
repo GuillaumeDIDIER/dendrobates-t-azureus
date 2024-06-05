@@ -7,13 +7,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 #import tikzplotlib
-from sys import exit
 import wquantiles as wq
 import numpy as np
 
 from functools import partial
 
 import sys
+import os
+
+import json
+import warnings
+
+warnings.filterwarnings('ignore')
+print("warnings are filtered, enable them back if you are having some trouble")
+
+def dict_to_json(d):
+    if isinstance(d, dict):
+        return json.dumps(d)
+    return d
 
 # For cyber cobay sanity check :
 # from gmpy2 import popcount
@@ -41,6 +52,10 @@ def convert8(x):
     return np.array(int(x, base=16)).astype(np.int64)
     # return np.int8(int(x, base=16))
 
+assert os.path.exists(sys.argv[1] + ".slices.csv")
+assert os.path.exists(sys.argv[1] + ".cores.csv")
+assert os.path.exists(sys.argv[1] + "-results_lite.csv.bz2")
+
 df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
         dtype={
             "main_core": np.int8,
@@ -60,6 +75,8 @@ df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
             "reload_local_hit": np.int32},
         converters={'address': convert64, 'hash': convert8},
         )
+
+print(f"Loaded columns : {list(df.keys())}")
 
 sample_columns = [
 "clflush_remote_hit",
@@ -117,13 +134,11 @@ print(*[bin(a) for a in addresses], sep='\n')
 
 print(df.head())
 
-print(df["hash"].unique())
-
 min_time = df["time"].min()
 max_time = df["time"].max()
 
-q10s = [wq.quantile(df["time"], df[col], 0.1) for col in sample_flush_columns]
-q90s = [wq.quantile(df["time"], df[col], 0.9) for col in sample_flush_columns]
+q10s = [wq.quantile(df["time"], df[col], 0.1) for col in sample_flush_columns if col in df]
+q90s = [wq.quantile(df["time"], df[col], 0.9) for col in sample_flush_columns if col in df]
 
 graph_upper = int(((max(q90s) + 19) // 10) * 10)
 graph_lower = int(((min(q10s) - 10) // 10) * 10)
@@ -168,6 +183,9 @@ custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clf
 #tikzplotlib.save("fig-hist-bad-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 plt.show()
 
+# Fix np.darray is unhashable
+df_main_core_0.loc[:, ('hash',)] = df_main_core_0['hash'].apply(dict_to_json)
+df.loc[:, ('hash',)] = df['hash'].apply(dict_to_json)
 
 g = sns.FacetGrid(df_main_core_0, col="helper_core", row="hash", legend_out=True)
 g2 = sns.FacetGrid(df, col="main_core", row="hash", legend_out=True)
@@ -194,7 +212,7 @@ g2.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_loc
 #g3.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
 
 #g4 = sns.FacetGrid(df_mcf6_slg7, row="helper_core_fixed", col="helper_ht")
-g#4.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
+#g4.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
 
 def stat(x, key):
     return wq.median(x["time"], x[key])
@@ -216,7 +234,7 @@ stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 #print(stats.to_string())
 
 plt.show()
-exit(0)
+sys.exit(0)
 g = sns.FacetGrid(stats, row="Core")
 
 g.map(sns.distplot, 'Miss', bins=range(100, 480), color="r")
@@ -232,4 +250,4 @@ plt.show()
 # plt.figure()
 # sns.distplot(test["value"], hist_kws={"weights": test["weight"]}, kde=False)
 
-exit(0)
+sys.exit(0)
