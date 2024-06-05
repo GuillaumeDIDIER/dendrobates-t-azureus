@@ -1,8 +1,7 @@
 #!/bin/sh
 
-# NAME=`basename "$1" .txt.bz2`
-# echo $NAME
-NAME=$1
+NAME="${1%%.*}"
+echo $NAME
 
 #bzcat $1 | awk '/^Iteration [:digit:]*[.]*/ ' > "${NAME}-iterations.txt"
 #rm "${NAME}-results.csv.bz2"
