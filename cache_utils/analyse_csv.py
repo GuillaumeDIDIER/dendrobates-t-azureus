@@ -21,6 +21,8 @@ import warnings
 warnings.filterwarnings('ignore')
 print("warnings are filtered, enable them back if you are having some trouble")
 
+sns.set_theme()
+
 def dict_to_json(d):
     if isinstance(d, dict):
         return json.dumps(d)
@@ -161,10 +163,21 @@ def custom_hist(x_axis, *values, **kwargs):
         plt.title(kwargs["title"])
         del kwargs["title"]
 
+    plt.xlim([graph_lower, graph_upper])
+
     for (i, yi) in enumerate(values):
         kwargs["color"] = colours[i]
-        hist = sns.histplot(x=x_axis, bins=range(graph_lower, graph_upper), weights=yi, stat="count", multiple="stack", kde=False, shrink=3, **kwargs)
-
+        sns.histplot(
+            x=x_axis,
+            weights=yi,
+            binwidth=5,
+            bins=range(graph_lower, graph_upper),
+            element="step",
+            edgecolor=colours[i],  # Outline color
+            alpha=0.2,
+            kde=False,
+            **kwargs
+        )
 
 custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
 
