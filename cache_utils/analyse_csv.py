@@ -125,38 +125,21 @@ df["helper_socket"] = df["helper_core"].apply(remap_core("socket"))
 df["helper_core_fixed"] = df["helper_core"].apply(remap_core("core"))
 df["helper_ht"] = df["helper_core"].apply(remap_core("hthread"))
 
-# slice_mapping = {3: 0, 1: 1, 2: 2, 0: 3}
 
 slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
 df["slice_group"] = df["hash"].apply(slice_remap)
 
 
-#print(df.columns)
-#df["Hash"] = df["Addr"].apply(lambda x: (x >> 15)&0x3)
+def get_graphing_bounds():
+    q10s = [wq.quantile(df["time"], df[col], 0.1) for col in sample_flush_columns if col in df]
+    q90s = [wq.quantile(df["time"], df[col], 0.9) for col in sample_flush_columns if col in df]
 
-addresses = df["address"].unique()
-#print(addresses)
-#print(*[bin(a) for a in addresses], sep='\n')
+    return int(((min(q10s) - 10) // 10) * 10), int(((max(q90s) + 19) // 10) * 10)
 
-#print(df.head())
 
-min_time = df["time"].min()
-max_time = df["time"].max()
-
-q10s = [wq.quantile(df["time"], df[col], 0.1) for col in sample_flush_columns if col in df]
-q90s = [wq.quantile(df["time"], df[col], 0.9) for col in sample_flush_columns if col in df]
-
-graph_upper = int(((max(q90s) + 19) // 10) * 10)
-graph_lower = int(((min(q10s) - 10) // 10) * 10)
-# graph_lower = (min_time // 10) * 10
-# graph_upper = ((max_time + 9) // 10) * 10
-
+graph_lower, graph_upper = get_graphing_bounds()
 print("graphing between {}, {}".format(graph_lower, graph_upper))
 
-df_main_core_0 = df[df["main_core"] == 0]
-#df_helper_core_0 = df[df["helper_core"] == 0]
-
-colours = ["b", "r", "g", "y"]
 
 def custom_hist(x_axis, *values, **kwargs):
     if "title" in kwargs:
@@ -166,23 +149,20 @@ def custom_hist(x_axis, *values, **kwargs):
     plt.xlim([graph_lower, graph_upper])
 
     for (i, yi) in enumerate(values):
-        kwargs["color"] = colours[i]
+        color = ["b", "r", "g", "y"][i%4]
+        kwargs["color"] = color
+
         sns.histplot(
             x=x_axis,
             weights=yi,
             binwidth=5,
             bins=range(graph_lower, graph_upper),
             element="step",
-            edgecolor=colours[i],  # Outline color
+            edgecolor=color,
             alpha=0.2,
             kde=False,
             **kwargs
         )
-
-custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
-
-#tikzplotlib.save("fig-hist-all.tex")#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-plt.show()
 
 def show_specific_position(attacker, victim, slice):
     df_ax_vx_sx = df[(df["hash"] == slice) & (df["main_core"] == attacker) & (df["helper_core"] == victim)]
@@ -191,74 +171,48 @@ def show_specific_position(attacker, victim, slice):
     #tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
     plt.show()
 
-show_specific_position(3, 2, 3)
-#show_specific_position(2, 7, 14)
-#show_specific_position(9, 4, 8)
+def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit"]):
+    # Color convention here :
+    # Blue = miss
+    # Red = Remote Hit
+    # Green = Local Hit
+    # Yellow = Shared Hit
+    df.loc[:, (row,)] = df[row].apply(dict_to_json)
+    g = sns.FacetGrid(df, col=col, row=row, legend_out=True)
+    g.map(custom_hist, "time", *shown)
+
+    plt.show()
+
+def export_stats_csv():
+    def stat(x, key):
+        return wq.median(x["time"], x[key])
+    df_grouped = df.groupby(["main_core", "helper_core", "hash"])
+
+    miss = df_grouped.apply(stat, "clflush_miss_n")
+    hit_remote = df_grouped.apply(stat, "clflush_remote_hit")
+    hit_local = df_grouped.apply(stat, "clflush_local_hit_n")
+    hit_shared = df_grouped.apply(stat, "clflush_shared_hit")
+
+    stats = miss.reset_index()
+    stats.columns = ["main_core", "helper_core", "hash", "clflush_miss_n"]
+    stats["clflush_remote_hit"] = hit_remote.values
+    stats["clflush_local_hit_n"] = hit_local.values
+    stats["clflush_shared_hit"] = hit_shared.values
+
+    stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 
 
-# Fix np.darray is unhashable
-df_main_core_0.loc[:, ('hash',)] = df_main_core_0['hash'].apply(dict_to_json)
-df.loc[:, ('hash',)] = df['hash'].apply(dict_to_json)
-
-g = sns.FacetGrid(df_main_core_0, col="helper_core", row="hash", legend_out=True)
-g2 = sns.FacetGrid(df, col="main_core", row="hash", legend_out=True)
-
-
-# Color convention here :
-# Blue = miss
-# Red = Remote Hit
-# Green = Local Hit
-# Yellow = Shared Hit
-
-g.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
-
-g2.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
-
-# g.map(sns.distplot, "time", hist_kws={"weights": df["clflush_hit"]}, kde=False)
-
-#plt.show()
-#plt.figure()
-
-#df_mcf6 = df[df["main_core_fixed"] == 6]
-#df_mcf6_slg7 = df_mcf6[df_mcf6["slice_group"] == 7]
-#g3 = sns.FacetGrid(df_mcf6_slg7, row="helper_core_fixed", col="main_ht")
-#g3.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
-
-#g4 = sns.FacetGrid(df_mcf6_slg7, row="helper_core_fixed", col="helper_ht")
-#g4.map(custom_hist, "time", "clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit")
-
-def stat(x, key):
-    return wq.median(x["time"], x[key])
-
-
-miss = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_miss_n")
-hit_remote = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_remote_hit")
-hit_local = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_local_hit_n")
-hit_shared = df.groupby(["main_core", "helper_core", "hash"]).apply(stat, "clflush_shared_hit")
-
-stats = miss.reset_index()
-stats.columns = ["main_core", "helper_core", "hash", "clflush_miss_n"]
-stats["clflush_remote_hit"] = hit_remote.values
-stats["clflush_local_hit_n"] = hit_local.values
-stats["clflush_shared_hit"] = hit_shared.values
-
-stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
-
-#print(stats.to_string())
-
-plt.show()
-sys.exit(0)
-g = sns.FacetGrid(stats, row="Core")
-
-g.map(sns.distplot, 'Miss', bins=range(100, 480), color="r")
-g.map(sns.distplot, 'Hit', bins=range(100, 480))
+custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
 plt.show()
 
-#stats["clflush_miss_med"] = stats[[0]].apply(lambda x: x["miss_med"])
-#stats["clflush_hit_med"] = stats[[0]].apply(lambda x: x["hit_med"])
-#del df[[0]]
-#print(hit.to_string(), miss.to_string())
+show_specific_position(0, 2, 0)
 
-# test = pd.DataFrame({"value" : [0, 5], "weight": [5, 1]})
-# plt.figure()
-# sns.distplot(test["value"], hist_kws={"weights": test["weight"]}, kde=False)
+df_main_core_0 = df[df["main_core"] == 0]
+show_grid(df_main_core_0, "helper_core", "hash")
+show_grid(df, "main_core", "hash")
+
+
+if not os.path.exists(sys.argv[1] + ".stats.csv"):
+    export_stats_csv()
+else:
+    print("Skipping .stats.csv export")
