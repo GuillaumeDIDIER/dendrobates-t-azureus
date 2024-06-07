@@ -56,10 +56,10 @@ stats = pd.read_csv(sys.argv[1] + ".stats.csv",
 slice_mapping = pd.read_csv(sys.argv[1] + ".slices.csv")
 core_mapping = pd.read_csv(sys.argv[1] + ".cores.csv")
 
-print(core_mapping.to_string())
-print(slice_mapping.to_string())
+print("core mapping:\n", core_mapping.to_string())
+print("slice mapping:\n", slice_mapping.to_string())
 
-print("core {} is mapped to '{}'".format(4, repr(core_mapping.iloc[4])))
+#print("core {} is mapped to '{}'".format(4, repr(core_mapping.iloc[4])))
 
 min_time_miss = stats["clflush_miss_n"].min()
 max_time_miss = stats["clflush_miss_n"].max()
@@ -91,8 +91,7 @@ print("Graphing from {} to {}".format(graph_lower_miss, graph_upper_miss))
 
 g_ = sns.FacetGrid(stats, col="main_core_fixed", row="slice_group")
 
-g_.map(sns.distplot, 'clflush_miss_n', bins=range(graph_lower_miss, graph_upper_miss), color="b")
-#g.map(sns.scatterplot, 'slice_group', 'clflush_local_hit_n', color="g")
+g_.map(sns.histplot, 'clflush_miss_n', bins=range(graph_lower_miss, graph_upper_miss), color="b", edgecolor="b", alpha=0.2)
 plt.show()
 
 

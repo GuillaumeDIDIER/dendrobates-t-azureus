@@ -177,7 +177,6 @@ def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clfl
     # Red = Remote Hit
     # Green = Local Hit
     # Yellow = Shared Hit
-    df.loc[:, (row,)] = df[row].apply(dict_to_json)
     g = sns.FacetGrid(df, col=col, row=row, legend_out=True)
     g.map(custom_hist, "time", *shown)
 
@@ -202,14 +201,19 @@ def export_stats_csv():
     stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
 
 
-custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
-plt.show()
+df.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
-show_specific_position(0, 2, 0)
+if "NO_PLOT" not in os.environ:
+    custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
+    plt.show()
 
-df_main_core_0 = df[df["main_core"] == 0]
-show_grid(df_main_core_0, "helper_core", "hash")
-show_grid(df, "main_core", "hash")
+    show_specific_position(0, 2, 0)
+
+    df_main_core_0 = df[df["main_core"] == 0]
+    df_main_core_0.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
+
+    show_grid(df_main_core_0, "helper_core", "hash")
+    show_grid(df, "main_core", "hash")
 
 
 if not os.path.exists(sys.argv[1] + ".stats.csv"):
