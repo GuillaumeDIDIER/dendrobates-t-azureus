@@ -9,8 +9,7 @@ import seaborn as sns
 #import tikzplotlib
 import wquantiles as wq
 import numpy as np
-
-from functools import partial
+import argparse
 
 import sys
 import os
@@ -54,15 +53,37 @@ def convert8(x):
     return np.array(int(x, base=16)).astype(np.int64)
     # return np.int8(int(x, base=16))
 
-if len(sys.argv) != 2:
-    print(f"Usage: {sys.argv[0]} <file>")
-    sys.exit(1)
 
-assert os.path.exists(sys.argv[1] + ".slices.csv")
-assert os.path.exists(sys.argv[1] + ".cores.csv")
-assert os.path.exists(sys.argv[1] + "-results_lite.csv.bz2")
+parser = argparse.ArgumentParser(
+    prog=sys.argv[0],
+)
 
-df = pd.read_csv(sys.argv[1] + "-results_lite.csv.bz2",
+parser.add_argument("path", help="Path to the experiment files")
+
+parser.add_argument(
+    "--no-plot",
+    dest="no_plot",
+    action="store_true",
+    default=False,
+    help="No visible plot (save figures to files)"
+)
+
+parser.add_argument(
+    "--stats",
+    dest="stats",
+    action="store_true",
+    default=False,
+    help="Don't compute figures, just create .stats.csv file"
+)
+
+args = parser.parse_args()
+print(args.path)
+
+assert os.path.exists(args.path + ".slices.csv")
+assert os.path.exists(args.path + ".cores.csv")
+assert os.path.exists(args.path + "-results_lite.csv.bz2")
+
+df = pd.read_csv(args.path + "-results_lite.csv.bz2",
         dtype={
             "main_core": np.int8,
             "helper_core": np.int8,
@@ -107,8 +128,8 @@ sample_flush_columns = [
 ]
 
 
-slice_mapping = pd.read_csv(sys.argv[1] + ".slices.csv")
-core_mapping = pd.read_csv(sys.argv[1] + ".cores.csv")
+slice_mapping = pd.read_csv(args.path + ".slices.csv")
+core_mapping = pd.read_csv(args.path + ".cores.csv")
 
 def remap_core(key):
     def remap(core):
@@ -169,7 +190,11 @@ def show_specific_position(attacker, victim, slice):
 
     custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"], title=f"A{attacker} V{victim} S{slice}")
     #tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-    plt.show()
+    if args.no_plot:
+        plt.savefig(args.path+".specific-a{}v{}s{}.png".format(attacker, victim, slice))
+        plt.close()
+    else:
+        plt.show()
 
 def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit"]):
     # Color convention here :
@@ -179,8 +204,7 @@ def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clfl
     # Yellow = Shared Hit
     g = sns.FacetGrid(df, col=col, row=row, legend_out=True)
     g.map(custom_hist, "time", *shown)
-
-    plt.show()
+    return g
 
 def export_stats_csv():
     def stat(x, key):
@@ -198,25 +222,43 @@ def export_stats_csv():
     stats["clflush_local_hit_n"] = hit_local.values
     stats["clflush_shared_hit"] = hit_shared.values
 
-    stats.to_csv(sys.argv[1] + ".stats.csv", index=False)
+    stats.to_csv(args.path + ".stats.csv", index=False)
 
 
 df.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
-if "NO_PLOT" not in os.environ:
+if not args.stats:
     custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
-    plt.show()
+    if args.no_plot:
+        plt.savefig(args.path+".miss_v_hit.png")
+        plt.close()
+    else:
+        plt.show()
+
 
     show_specific_position(0, 2, 0)
 
     df_main_core_0 = df[df["main_core"] == 0]
     df_main_core_0.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
-    show_grid(df_main_core_0, "helper_core", "hash")
-    show_grid(df, "main_core", "hash")
+    g = show_grid(df_main_core_0, "helper_core", "hash")
+
+    if args.no_plot:
+        g.savefig(args.path+".helper_grid.png")
+        plt.close()
+    else:
+        plt.show()
+
+    g = show_grid(df, "main_core", "hash")
+
+    if args.no_plot:
+        g.savefig(args.path+".main_grid.png")
+        plt.close()
+    else:
+        plt.show()
 
 
-if not os.path.exists(sys.argv[1] + ".stats.csv"):
+if not os.path.exists(args.path + ".stats.csv") or args.stats:
     export_stats_csv()
 else:
     print("Skipping .stats.csv export")
