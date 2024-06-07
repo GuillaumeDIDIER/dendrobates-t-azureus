@@ -9,6 +9,7 @@ import seaborn as sns
 from sys import exit
 import numpy as np
 from scipy import optimize
+import argparse
 import sys
 import os
 
@@ -18,7 +19,7 @@ warnings.filterwarnings('ignore')
 print("warnings are filtered, enable them back if you are having some trouble")
 
 # TODO
-# sys.argv[1] should be the root
+# args.path should be the root
 # with root-result_lite.csv.bz2 the result
 # and .stats.csv
 # root.slices a slice mapping - done
@@ -29,11 +30,30 @@ print("warnings are filtered, enable them back if you are having some trouble")
 # each row is an origin core
 # each column a helper core if applicable
 
-assert os.path.exists(sys.argv[1] + ".stats.csv")
-assert os.path.exists(sys.argv[1] + ".slices.csv")
-assert os.path.exists(sys.argv[1] + ".cores.csv")
+parser = argparse.ArgumentParser(
+    prog=sys.argv[0],
+)
 
-stats = pd.read_csv(sys.argv[1] + ".stats.csv",
+parser.add_argument("path", help="Path to the experiment files")
+
+parser.add_argument(
+    "--no-plot",
+    dest="no_plot",
+    action="store_true",
+    default=False,
+    help="No visible plot (save figures to files)"
+)
+
+args = parser.parse_args()
+
+img_dir = os.path.dirname(args.path)+"/figs/"
+os.makedirs(img_dir, exist_ok=True)
+
+assert os.path.exists(args.path + ".stats.csv")
+assert os.path.exists(args.path + ".slices.csv")
+assert os.path.exists(args.path + ".cores.csv")
+
+stats = pd.read_csv(args.path + ".stats.csv",
                     dtype={
                         "main_core": np.int8,
                         "helper_core": np.int8,
@@ -53,8 +73,8 @@ stats = pd.read_csv(sys.argv[1] + ".stats.csv",
                     }
                     )
 
-slice_mapping = pd.read_csv(sys.argv[1] + ".slices.csv")
-core_mapping = pd.read_csv(sys.argv[1] + ".cores.csv")
+slice_mapping = pd.read_csv(args.path + ".slices.csv")
+core_mapping = pd.read_csv(args.path + ".cores.csv")
 
 print("core mapping:\n", core_mapping.to_string())
 print("slice mapping:\n", slice_mapping.to_string())
@@ -71,7 +91,6 @@ def remap_core(key):
         return remapped[key]
 
     return remap
-
 
 stats["main_socket"] = stats["main_core"].apply(remap_core("socket"))
 stats["main_core_fixed"] = stats["main_core"].apply(remap_core("core"))
@@ -92,7 +111,11 @@ print("Graphing from {} to {}".format(graph_lower_miss, graph_upper_miss))
 g_ = sns.FacetGrid(stats, col="main_core_fixed", row="slice_group")
 
 g_.map(sns.histplot, 'clflush_miss_n', bins=range(graph_lower_miss, graph_upper_miss), color="b", edgecolor="b", alpha=0.2)
-plt.show()
+if args.no_plot:
+    g_.savefig(img_dir+"medians0.png")
+    plt.close()
+else:
+    plt.show()
 
 
 
@@ -245,7 +268,11 @@ figure_median_I.tight_layout()
 # import tikzplotlib
 
 # tikzplotlib.save("fig-median-I.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-plt.show()
+if args.no_plot:
+    plt.savefig(img_dir+"medians1.png")
+    plt.close()
+else:
+    plt.show()
 
 #stats["predicted_remote_hit_no_gpu"] = exclusive_hit_topology_nogpu_df(stats, *(res_no_gpu[0]))
 stats["predicted_remote_hit_gpu"] = exclusive_hit_topology_gpu_df(stats, *(res_gpu[0]))
@@ -259,18 +286,35 @@ figure_median_E_A0.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_
 figure_median_E_A0.set_titles(col_template="$S$ = {col_name}")
 
 # tikzplotlib.save("fig-median-E-A0.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-plt.show()
+if args.no_plot:
+    plt.savefig(img_dir+"medians1.png")
+    plt.close()
+else:
+    plt.show()
 
 g = sns.FacetGrid(stats, row="main_core_fixed")
 
 g.map(sns.scatterplot, 'slice_group', 'clflush_miss_n', color="b")
 g.map(sns.scatterplot, 'slice_group', 'clflush_local_hit_n', color="g")
 
+if args.no_plot:
+    g.savefig(img_dir+"medians2.png")
+    plt.close()
+else:
+    plt.show()
+
+
 g0 = sns.FacetGrid(stats, row="slice_group")
 
 g0.map(sns.scatterplot, 'main_core_fixed', 'clflush_miss_n', color="b")
 g0.map(sns.scatterplot, 'main_core_fixed', 'clflush_local_hit_n', color="g") # this gives away the trick I think !
 # possibility of sending a general please discard this everyone around one of the ring + wait for ACK - direction depends on the core.
+
+if args.no_plot:
+    g0.savefig(img_dir+"medians2.png")
+    plt.close()
+else:
+    plt.show()
 
 
 
@@ -281,9 +325,20 @@ g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu', color="r")
 #g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_no_gpu', color="g")
 #g2.map(plot_func(exclusive_hit_topology_nogpu_df, *(res_no_gpu[0])), 'helper_core_fixed', color="g")
 
+if args.no_plot:
+    g2.savefig(img_dir+"medians3.png")
+    plt.close()
+else:
+    plt.show()
+
+
 g3 = sns.FacetGrid(stats, row="main_core_fixed", col="slice_group")
 g3.map(sns.scatterplot, 'helper_core_fixed', 'clflush_shared_hit', color="y")
 
 # more ideas needed
+if args.no_plot:
+    g3.savefig(img_dir+"medians4.png")
+    plt.close()
+else:
+    plt.show()
 
-plt.show()

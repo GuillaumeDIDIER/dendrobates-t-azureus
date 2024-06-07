@@ -77,7 +77,9 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-print(args.path)
+
+img_dir = os.path.dirname(args.path)+"/figs/"
+os.makedirs(img_dir, exist_ok=True)
 
 assert os.path.exists(args.path + ".slices.csv")
 assert os.path.exists(args.path + ".cores.csv")
@@ -191,7 +193,7 @@ def show_specific_position(attacker, victim, slice):
     custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"], title=f"A{attacker} V{victim} S{slice}")
     #tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
     if args.no_plot:
-        plt.savefig(args.path+".specific-a{}v{}s{}.png".format(attacker, victim, slice))
+        plt.savefig(img_dir+"specific-a{}v{}s{}.png".format(attacker, victim, slice))
         plt.close()
     else:
         plt.show()
@@ -230,7 +232,7 @@ df.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 if not args.stats:
     custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
     if args.no_plot:
-        plt.savefig(args.path+".miss_v_hit.png")
+        plt.savefig(img_dir+"miss_v_hit.png")
         plt.close()
     else:
         plt.show()
@@ -244,7 +246,7 @@ if not args.stats:
     g = show_grid(df_main_core_0, "helper_core", "hash")
 
     if args.no_plot:
-        g.savefig(args.path+".helper_grid.png")
+        g.savefig(img_dir+"helper_grid.png")
         plt.close()
     else:
         plt.show()
@@ -252,7 +254,7 @@ if not args.stats:
     g = show_grid(df, "main_core", "hash")
 
     if args.no_plot:
-        g.savefig(args.path+".main_grid.png")
+        g.savefig(img_dir+"main_grid.png")
         plt.close()
     else:
         plt.show()
