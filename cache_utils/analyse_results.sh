@@ -15,5 +15,5 @@ NAME="${1%%.*}"
 bash 2T/analyse.sh $1
 
 . venv/bin/activate
-python analyse_csv.py $NAME
-python analyse_medians.py $NAME
+python analyse_csv.py $NAME ${@:2}
+python analyse_medians.py $NAME ${@:2}

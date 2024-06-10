@@ -35,6 +35,8 @@ machine = get_element(root, "Machine")
 
 core_count = 0
 sockets = []
+previous_cores = 0 # nb of cores seen in previous NUMA Node
+seen_cores = {}
 for pack in get_elements(machine, "Package"):
     socket = [] # Each L3Cache corresponds to 1 socket
     l3 = get_element(pack, "L3Cache")
@@ -48,8 +50,22 @@ for pack in get_elements(machine, "Package"):
             core.append(int(PU.attrib["os_index"]))
             core_count += 1
 
-        socket.append((int(l2.attrib["os_index"]), core))
+        cpu_index = None
+        if "os_index" in l2.attrib:
+            core_index = int(l2.attrib["os_index"]) # L2Cache indexing is global and is not affected by NUMA Node
+        elif "os_index" in core_obj.attrib:
+            core_index = int(core_obj.attrib["os_index"]) + previous_cores # core indexing start at 0 in a each NUMA Node
+        else:
+            print("No os index for this core", file=sys.stderr)
+            sys.exit(1)
+
+        if core_index in seen_cores:
+            print("Core collision, you may need to reindex cores", file=sys.stderr)
+        seen_cores[core_index] = True
+
+        socket.append((core_index, core))
     sockets.append(socket)
+    previous_cores += len(socket)
 
 # socket, core, hyper-thread
 out_data = [
