@@ -332,6 +332,16 @@ else:
     plt.show()
 
 
+for core in stats["main_core_fixed"].unique():
+    os.makedirs(img_dir+f"slices{core}", exist_ok=True)
+    for slice in stats["slice_group"].unique():
+        df = stats[(stats["slice_group"] == slice) & (stats["main_core_fixed"] == core)]
+        fig = sns.scatterplot(df, x="helper_core_fixed", y="clflush_remote_hit", color="r")
+        fig.set(title=f"main_core={core} slice={slice}")
+        plt.savefig(img_dir+f"slices{core}/"+str(slice)+".png")
+        plt.close()
+
+
 g3 = sns.FacetGrid(stats, row="main_core_fixed", col="slice_group")
 g3.map(sns.scatterplot, 'helper_core_fixed', 'clflush_shared_hit', color="y")
 
