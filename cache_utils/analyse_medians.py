@@ -44,6 +44,14 @@ parser.add_argument(
     help="No visible plot (save figures to files)"
 )
 
+parser.add_argument(
+    "--rslice",
+    dest="rslice",
+    action="store_true",
+    default=False,
+    help="Create slice{} directories with segmented grid"
+)
+
 args = parser.parse_args()
 
 img_dir = os.path.dirname(args.path)+"/figs/"
@@ -269,7 +277,7 @@ figure_median_I.tight_layout()
 
 # tikzplotlib.save("fig-median-I.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 if args.no_plot:
-    plt.savefig(img_dir+"medians1.png")
+    plt.savefig(img_dir+"medians_miss.png")
     plt.close()
 else:
     plt.show()
@@ -287,7 +295,7 @@ figure_median_E_A0.set_titles(col_template="$S$ = {col_name}")
 
 # tikzplotlib.save("fig-median-E-A0.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
 if args.no_plot:
-    plt.savefig(img_dir+"medians1.png")
+    plt.savefig(img_dir+"medians_remote_hit.png")
     plt.close()
 else:
     plt.show()
@@ -298,7 +306,7 @@ g.map(sns.scatterplot, 'slice_group', 'clflush_miss_n', color="b")
 g.map(sns.scatterplot, 'slice_group', 'clflush_local_hit_n', color="g")
 
 if args.no_plot:
-    g.savefig(img_dir+"medians2.png")
+    g.savefig(img_dir+"medians_miss_v_localhit_core.png")
     plt.close()
 else:
     plt.show()
@@ -311,7 +319,7 @@ g0.map(sns.scatterplot, 'main_core_fixed', 'clflush_local_hit_n', color="g") # t
 # possibility of sending a general please discard this everyone around one of the ring + wait for ACK - direction depends on the core.
 
 if args.no_plot:
-    g0.savefig(img_dir+"medians2.png")
+    g0.savefig(img_dir+"medians_miss_v_localhit_slice.png")
     plt.close()
 else:
     plt.show()
@@ -326,20 +334,20 @@ g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu', color="r")
 #g2.map(plot_func(exclusive_hit_topology_nogpu_df, *(res_no_gpu[0])), 'helper_core_fixed', color="g")
 
 if args.no_plot:
-    g2.savefig(img_dir+"medians3.png")
+    g2.savefig(img_dir+"medians_remote_hit_grid.png")
     plt.close()
 else:
     plt.show()
 
-
-for core in stats["main_core_fixed"].unique():
-    os.makedirs(img_dir+f"slices{core}", exist_ok=True)
-    for slice in stats["slice_group"].unique():
-        df = stats[(stats["slice_group"] == slice) & (stats["main_core_fixed"] == core)]
-        fig = sns.scatterplot(df, x="helper_core_fixed", y="clflush_remote_hit", color="r")
-        fig.set(title=f"main_core={core} slice={slice}")
-        plt.savefig(img_dir+f"slices{core}/"+str(slice)+".png")
-        plt.close()
+if args.rslice:
+    for core in stats["main_core_fixed"].unique():
+        os.makedirs(img_dir+f"slices{core}", exist_ok=True)
+        for slice in stats["slice_group"].unique():
+            df = stats[(stats["slice_group"] == slice) & (stats["main_core_fixed"] == core)]
+            fig = sns.scatterplot(df, x="helper_core_fixed", y="clflush_remote_hit", color="r")
+            fig.set(title=f"main_core={core} slice={slice}")
+            plt.savefig(img_dir+f"slices{core}/"+str(slice)+".png")
+            plt.close()
 
 
 g3 = sns.FacetGrid(stats, row="main_core_fixed", col="slice_group")
@@ -347,7 +355,7 @@ g3.map(sns.scatterplot, 'helper_core_fixed', 'clflush_shared_hit', color="y")
 
 # more ideas needed
 if args.no_plot:
-    g3.savefig(img_dir+"medians4.png")
+    g3.savefig(img_dir+"medians_sharedhit.png")
     plt.close()
 else:
     plt.show()
