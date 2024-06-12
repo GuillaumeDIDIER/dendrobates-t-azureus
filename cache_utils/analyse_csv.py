@@ -164,6 +164,15 @@ graph_lower, graph_upper = get_graphing_bounds()
 print("graphing between {}, {}".format(graph_lower, graph_upper))
 
 
+def plot(filename, g=None):
+    if args.no_plot:
+        if g is not None:
+            g.savefig(img_dir+filename)
+        else:
+            plt.savefig(img_dir+filename)
+        plt.close()
+    plt.show()
+
 def custom_hist(x_axis, *values, **kwargs):
     if "title" in kwargs:
         plt.title(kwargs["title"])
@@ -192,11 +201,8 @@ def show_specific_position(attacker, victim, slice):
 
     custom_hist(df_ax_vx_sx["time"], df_ax_vx_sx["clflush_miss_n"], df_ax_vx_sx["clflush_remote_hit"], title=f"A{attacker} V{victim} S{slice}")
     #tikzplotlib.save("fig-hist-good-A{}V{}S{}.tex".format(attacker,victim,slice))#, axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-    if args.no_plot:
-        plt.savefig(img_dir+"specific-a{}v{}s{}.png".format(attacker, victim, slice))
-        plt.close()
-    else:
-        plt.show()
+    plot("specific-a{}v{}s{}.png".format(attacker, victim, slice))
+
 
 def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clflush_local_hit_n", "clflush_shared_hit"]):
     # Color convention here :
@@ -231,12 +237,10 @@ df.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
 if not args.stats:
     custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], title="miss v. hit")
-    if args.no_plot:
-        plt.savefig(img_dir+"miss_v_hit.png")
-        plt.close()
-    else:
-        plt.show()
+    plot("miss_v_hit.png")
 
+    custom_hist(df["time"], df["clflush_miss_n"], df["clflush_remote_hit"], df["clflush_local_hit_n"], df["clflush_shared_hit"], title="miss v. hit")
+    plot("miss_vall_hits.png")
 
     show_specific_position(0, 2, 0)
 
@@ -244,20 +248,13 @@ if not args.stats:
     df_main_core_0.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
     g = show_grid(df_main_core_0, "helper_core", "hash")
-
-    if args.no_plot:
-        g.savefig(img_dir+"helper_grid.png")
-        plt.close()
-    else:
-        plt.show()
+    plot("helper_grid.png", g=g)
 
     g = show_grid(df, "main_core", "hash")
+    plot("main_grid.png", g=g)
 
-    if args.no_plot:
-        g.savefig(img_dir+"main_grid.png")
-        plt.close()
-    else:
-        plt.show()
+    g = show_grid(df, "main_core", "helper_core")
+    plot("main_helper_grid.png", g=g)
 
 
 if not os.path.exists(args.path + ".stats.csv") or args.stats:

@@ -100,6 +100,15 @@ def remap_core(key):
 
     return remap
 
+def plot(filename, g=None):
+    if args.no_plot:
+        if g is not None:
+            g.savefig(img_dir+filename)
+        else:
+            plt.savefig(img_dir+filename)
+        plt.close()
+    plt.show()
+
 stats["main_socket"] = stats["main_core"].apply(remap_core("socket"))
 stats["main_core_fixed"] = stats["main_core"].apply(remap_core("core"))
 stats["main_ht"] = stats["main_core"].apply(remap_core("hthread"))
@@ -119,13 +128,7 @@ print("Graphing from {} to {}".format(graph_lower_miss, graph_upper_miss))
 g_ = sns.FacetGrid(stats, col="main_core_fixed", row="slice_group")
 
 g_.map(sns.histplot, 'clflush_miss_n', bins=range(graph_lower_miss, graph_upper_miss), color="b", edgecolor="b", alpha=0.2)
-if args.no_plot:
-    g_.savefig(img_dir+"medians0.png")
-    plt.close()
-else:
-    plt.show()
-
-
+plot("medians_miss_grid.png", g=g_)
 
 # also explains remote
 # shared needs some thinking as there is something weird happening there.
@@ -276,11 +279,7 @@ figure_median_I.tight_layout()
 # import tikzplotlib
 
 # tikzplotlib.save("fig-median-I.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-if args.no_plot:
-    plt.savefig(img_dir+"medians_miss.png")
-    plt.close()
-else:
-    plt.show()
+plot("medians_miss.png")
 
 #stats["predicted_remote_hit_no_gpu"] = exclusive_hit_topology_nogpu_df(stats, *(res_no_gpu[0]))
 stats["predicted_remote_hit_gpu"] = exclusive_hit_topology_gpu_df(stats, *(res_gpu[0]))
@@ -294,37 +293,19 @@ figure_median_E_A0.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_
 figure_median_E_A0.set_titles(col_template="$S$ = {col_name}")
 
 # tikzplotlib.save("fig-median-E-A0.tex", axis_width=r'0.175\textwidth', axis_height=r'0.25\textwidth')
-if args.no_plot:
-    plt.savefig(img_dir+"medians_remote_hit.png")
-    plt.close()
-else:
-    plt.show()
+plot("medians_remote_hit.png")
+
 
 g = sns.FacetGrid(stats, row="main_core_fixed")
-
 g.map(sns.scatterplot, 'slice_group', 'clflush_miss_n', color="b")
 g.map(sns.scatterplot, 'slice_group', 'clflush_local_hit_n', color="g")
-
-if args.no_plot:
-    g.savefig(img_dir+"medians_miss_v_localhit_core.png")
-    plt.close()
-else:
-    plt.show()
-
+plot("medians_miss_v_localhit_core.png", g=g)
 
 g0 = sns.FacetGrid(stats, row="slice_group")
-
 g0.map(sns.scatterplot, 'main_core_fixed', 'clflush_miss_n', color="b")
 g0.map(sns.scatterplot, 'main_core_fixed', 'clflush_local_hit_n', color="g") # this gives away the trick I think !
 # possibility of sending a general please discard this everyone around one of the ring + wait for ACK - direction depends on the core.
-
-if args.no_plot:
-    g0.savefig(img_dir+"medians_miss_v_localhit_slice.png")
-    plt.close()
-else:
-    plt.show()
-
-
+plot("medians_miss_v_localhit_slice.png", g=g0)
 
 g2 = sns.FacetGrid(stats, row="main_core_fixed", col="slice_group")
 g2.map(sns.scatterplot, 'helper_core_fixed', 'clflush_remote_hit', color="r")
@@ -332,12 +313,8 @@ g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu', color="r")
 #g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu2', color="g")
 #g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_no_gpu', color="g")
 #g2.map(plot_func(exclusive_hit_topology_nogpu_df, *(res_no_gpu[0])), 'helper_core_fixed', color="g")
+plot("medians_remote_hit_grid.png", g=g2)
 
-if args.no_plot:
-    g2.savefig(img_dir+"medians_remote_hit_grid.png")
-    plt.close()
-else:
-    plt.show()
 
 if args.rslice:
     for core in stats["main_core_fixed"].unique():
@@ -352,11 +329,6 @@ if args.rslice:
 
 g3 = sns.FacetGrid(stats, row="main_core_fixed", col="slice_group")
 g3.map(sns.scatterplot, 'helper_core_fixed', 'clflush_shared_hit', color="y")
-
+plot("medians_sharedhit.png", g=g3)
 # more ideas needed
-if args.no_plot:
-    g3.savefig(img_dir+"medians_sharedhit.png")
-    plt.close()
-else:
-    plt.show()
 
