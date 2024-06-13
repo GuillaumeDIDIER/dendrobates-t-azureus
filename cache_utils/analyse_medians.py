@@ -399,37 +399,61 @@ def facet_grid(
     return grid
 
 
-def all_facets(df, id_, *args, **kwargs):
+def all_facets(df, pre="", post="", *args, **kwargs):
     """
     df : panda dataframe
-    id_: the str to append to filenames
+    pre, post: strings to add before and after the filename
     """
 
     facet_grid(
         df, "main_core_fixed", "helper_core_fixed", "slice_group",
-        title=f"medians_facet_{id_}s.png", *args, **kwargs
+        title=f"{pre}facet_slice{post}.png", *args, **kwargs
     )
     facet_grid(
         df, "helper_core_fixed", "slice_group", "main_core_fixed",
-        title=f"medians_facet_{id}c.png", *args, **kwargs
+        title=f"{pre}facet_main{post}.png", *args, **kwargs
     )
     facet_grid(
         df, "slice_group", "main_core_fixed", "helper_core_fixed",
-        title=f"medians_facet_{id}h.png", *args, **kwargs
+        title=f"{pre}facet_helper{post}.png", *args, **kwargs
     )
 
 
 if args.rslice:
     rslice()
 
-do_predictions(stats)
-all_facets(stats, "")
+# do_predictions(stats)
+# all_facets(stats, "")
 
-for main in (0, 1):
-    for helper in (0, 1):
-        print(f"Doing all facets {main}x{helper}")
-        filtered_df = stats[
-            (stats["main_core_fixed"] // (num_core / 2) == main)
-            & (stats["helper_core_fixed"] // (num_core / 2) == helper)
-        ]
-        all_facets(filtered_df, f"m{main}h{helper}_")
+def do_facet(main: int, helper: int, line: bool):
+    df = stats.copy(deep=True)
+
+    print(f"Doing all facets {main}x{helper}")
+    filtered_df = stats[
+        (stats["main_core_fixed"] // (num_core / 2) == main)
+        & (stats["helper_core_fixed"] // (num_core / 2) == helper)
+    ]
+    method = "line" if line else "pt"
+    all_facets(
+        filtered_df,
+        pre=f"hit_{method}_",
+        post=f"_m{main}h{helper}",
+        shown=["clflush_remote_hit"],
+        colors=["r"],
+        draw_fn=sns.lineplot if line else sns.scatterplot
+    )
+    all_facets(
+        filtered_df,
+        pre=f"miss_{method}_",
+        post=f"_m{main}h{helper}",
+        shown=["clflush_miss_n"],
+        colors=["b"],
+        draw_fn=sns.lineplot if line else sns.scatterplot
+    )
+
+from multiprocessing import Pool
+import itertools
+
+with Pool(8) as pool:
+    pool.starmap(do_facet, itertools.product((0, 1), (0, 1), (True, False)))
+
