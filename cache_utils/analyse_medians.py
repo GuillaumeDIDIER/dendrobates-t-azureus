@@ -7,6 +7,8 @@ import os
 import sys
 import argparse
 import warnings
+import itertools
+from multiprocessing import Pool
 
 import numpy as np
 import pandas as pd
@@ -419,12 +421,6 @@ def all_facets(df, pre="", post="", *args, **kwargs):
     )
 
 
-if args.rslice:
-    rslice()
-
-# do_predictions(stats)
-# all_facets(stats, "")
-
 def do_facet(main: int, helper: int, line: bool):
     df = stats.copy(deep=True)
 
@@ -451,8 +447,15 @@ def do_facet(main: int, helper: int, line: bool):
         draw_fn=sns.lineplot if line else sns.scatterplot
     )
 
-from multiprocessing import Pool
-import itertools
+
+
+if args.rslice:
+    rslice()
+
+# do_predictions(stats)
+# all_facets(stats, "")
+
+
 
 with Pool(8) as pool:
     pool.starmap(do_facet, itertools.product((0, 1), (0, 1), (True, False)))
