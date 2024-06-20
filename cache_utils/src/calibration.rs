@@ -197,7 +197,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
 }
 
 pub const CFLUSH_BUCKET_SIZE: usize = 1;
-pub const CFLUSH_BUCKET_NUMBER: usize = 500;
+pub const CFLUSH_BUCKET_NUMBER: usize = 1000;
 
 pub const CFLUSH_NUM_ITER: u32 = 1 << 10;
 pub const CLFLUSH_NUM_ITERATION_AV: u32 = 1 << 8;
@@ -246,6 +246,7 @@ pub struct CalibrateResult {
     pub median: Vec<u64>,
     pub min: Vec<u64>,
     pub max: Vec<u64>,
+    pub count: Vec<isize>
 }
 
 pub struct CalibrateOperation<'a> {
@@ -384,6 +385,7 @@ fn calibrate_impl_fixed_freq(
             median: vec![0; operations.len()],
             min: vec![0; operations.len()],
             max: vec![0; operations.len()],
+            count: vec![0; operations.len()],
         };
         calibrate_result.histogram.reserve(operations.len());
 
@@ -419,11 +421,13 @@ fn calibrate_impl_fixed_freq(
                 let min = &mut calibrate_result.min[op];
                 let max = &mut calibrate_result.max[op];
                 let med = &mut calibrate_result.median[op];
+                let count = &mut calibrate_result.count[op];
                 let sum = &mut sums[op];
                 if verbosity_level >= RawResult {
                     print!(",{}", hist);
                 }
-
+                
+                *count += 1;
                 if *min == 0 {
                     // looking for min
                     if *hist > SPURIOUS_THRESHOLD {

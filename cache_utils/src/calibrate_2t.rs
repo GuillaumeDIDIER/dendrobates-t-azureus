@@ -231,6 +231,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
                 median: vec![0; operations.len()],
                 min: vec![0; operations.len()],
                 max: vec![0; operations.len()],
+                count: vec![0; operations.len()],
             };
             calibrate_result.histogram.reserve(operations.len());
 
@@ -293,11 +294,13 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
                     let min = &mut calibrate_result.min[op];
                     let max = &mut calibrate_result.max[op];
                     let med = &mut calibrate_result.median[op];
+                    let count = &mut calibrate_result.count[op];
                     let sum = &mut sums[op];
                     if options.verbosity >= RawResult {
                         print!(",{}", hist);
                     }
 
+                    *count += 1;
                     if *min == 0 {
                         // looking for min
                         if *hist > SPURIOUS_THRESHOLD {
@@ -321,11 +324,12 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             if options.verbosity >= Thresholds {
                 for (j, op) in operations.iter().enumerate() {
                     println!(
-                        "{}: min {}, median {}, max {}",
+                        "{}: min {}, median {}, max {}, count {}",
                         op.display_name,
                         calibrate_result.min[j],
                         calibrate_result.median[j],
-                        calibrate_result.max[j]
+                        calibrate_result.max[j],
+                        calibrate_result.count[j],
                     );
                 }
                 print!("CSV: {},{},{:p}, ", main_core, helper_core, pointer);
