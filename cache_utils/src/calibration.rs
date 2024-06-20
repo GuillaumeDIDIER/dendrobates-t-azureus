@@ -246,7 +246,7 @@ pub struct CalibrateResult {
     pub median: Vec<u64>,
     pub min: Vec<u64>,
     pub max: Vec<u64>,
-    pub count: Vec<isize>
+    pub count: Vec<u32>
 }
 
 pub struct CalibrateOperation<'a> {
@@ -426,8 +426,7 @@ fn calibrate_impl_fixed_freq(
                 if verbosity_level >= RawResult {
                     print!(",{}", hist);
                 }
-                
-                *count += 1;
+                *count += *hist;
                 if *min == 0 {
                     // looking for min
                     if *hist > SPURIOUS_THRESHOLD {

@@ -300,7 +300,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
                         print!(",{}", hist);
                     }
 
-                    *count += 1;
+                    *count += *hist;
                     if *min == 0 {
                         // looking for min
                         if *hist > SPURIOUS_THRESHOLD {
