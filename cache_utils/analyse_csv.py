@@ -76,12 +76,21 @@ parser.add_argument(
     help="Don't compute figures, just create .stats.csv file"
 )
 
+parser.add_argument(
+    "--no-slice-remap",
+    dest="slice_remap",
+    action="store_false",
+    default=True,
+    help="Don't remap the slices"
+)
+
 args = parser.parse_args()
 
 img_dir = os.path.dirname(args.path)+"/figs/"
 os.makedirs(img_dir, exist_ok=True)
 
-assert os.path.exists(args.path + ".slices.csv")
+if args.slice_remap:
+    assert os.path.exists(args.path + ".slices.csv")
 assert os.path.exists(args.path + ".cores.csv")
 assert os.path.exists(args.path + "-results_lite.csv.bz2")
 
@@ -129,8 +138,8 @@ sample_flush_columns = [
     "clflush_local_hit_n",
 ]
 
-
-slice_mapping = pd.read_csv(args.path + ".slices.csv")
+if args.slice_remap:
+    slice_mapping = pd.read_csv(args.path + ".slices.csv")
 core_mapping = pd.read_csv(args.path + ".cores.csv")
 
 def remap_core(key):
@@ -149,8 +158,11 @@ df["helper_core_fixed"] = df["helper_core"].apply(remap_core("core"))
 df["helper_ht"] = df["helper_core"].apply(remap_core("hthread"))
 
 
-slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
-df["slice_group"] = df["hash"].apply(slice_remap)
+if args.slice_remap:
+    slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
+    df["slice_group"] = df["hash"].apply(slice_remap)
+else:
+    df["slice_group"] = df["hash"]
 
 
 def get_graphing_bounds():
@@ -215,20 +227,56 @@ def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clfl
     return g
 
 def export_stats_csv():
-    def stat(x, key):
-        return wq.median(x["time"], x[key])
+    def get_spread(df, key):
+        filtered_df = df[(df[key] != 0)]
+        mini, maxi = filtered_df["time"].min(), filtered_df["time"].max()
+        return maxi-mini
+    
+    def compute_stat(x, key):
+        def compute_median(x):
+            return wq.median(x["time"], x[key])
+
+        filtered_x = x[(x[key] != 0)]
+        mini, maxi = filtered_x["time"].min(), filtered_x["time"].max()
+
+        miss_spread = get_spread(x, "clflush_miss_n")
+        
+        if maxi-mini < 3*miss_spread:
+            med = compute_median(x)
+            return [med, med]
+
+        if key == "clflush_remote_hit":
+            """print(
+                "double for core {}:{}@{}, helper {}:{}@{}".format(
+                    x["main_core_fixed"].unique()[0],
+                    x["main_ht"].unique()[0],
+                    x["main_socket"].unique()[0],
+                    x["helper_core_fixed"].unique()[0],
+                    x["helper_ht"].unique()[0],
+                    x["helper_socket"].unique()[0],
+                )
+            )"""
+        center = mini + (maxi-mini)/2
+        return [compute_median(filtered_x[(filtered_x["time"] < center)]), compute_median(filtered_x[(filtered_x["time"] >= center)])]
+    
     df_grouped = df.groupby(["main_core", "helper_core", "hash"])
+    
+    miss = df_grouped.apply(lambda x: compute_stat(x, "clflush_miss_n"))
+    hit_remote = df_grouped.apply(lambda x: compute_stat(x, "clflush_remote_hit"))
+    hit_local = df_grouped.apply(lambda x: compute_stat(x, "clflush_local_hit_n"))
+    hit_shared = df_grouped.apply(lambda x: compute_stat(x, "clflush_shared_hit"))
 
-    miss = df_grouped.apply(stat, "clflush_miss_n")
-    hit_remote = df_grouped.apply(stat, "clflush_remote_hit")
-    hit_local = df_grouped.apply(stat, "clflush_local_hit_n")
-    hit_shared = df_grouped.apply(stat, "clflush_shared_hit")
+    stats = pd.DataFrame({
+        "main_core": miss.index.get_level_values(0),
+        "helper_core": miss.index.get_level_values(1),
+        "hash": miss.index.get_level_values(2),
+        "clflush_miss_n": miss.values,
+        "clflush_remote_hit": hit_remote.values,
+        "clflush_local_hit_n": hit_local.values,
+        "clflush_shared_hit": hit_shared.values
+    })
 
-    stats = miss.reset_index()
-    stats.columns = ["main_core", "helper_core", "hash", "clflush_miss_n"]
-    stats["clflush_remote_hit"] = hit_remote.values
-    stats["clflush_local_hit_n"] = hit_local.values
-    stats["clflush_shared_hit"] = hit_shared.values
+    stats = stats.explode(['clflush_miss_n', 'clflush_remote_hit', 'clflush_local_hit_n', 'clflush_shared_hit'])
 
     stats.to_csv(args.path + ".stats.csv", index=False)
 
@@ -247,14 +295,14 @@ if not args.stats:
     df_main_core_0 = df[df["main_core"] == 0]
     df_main_core_0.loc[:, ("hash",)] = df["hash"].apply(dict_to_json)
 
-    g = show_grid(df_main_core_0, "helper_core", "hash")
-    plot("helper_grid.png", g=g)
+    g = show_grid(df_main_core_0, "helper_core", "hash", shown=["clflush_miss_n", "clflush_remote_hit"])
+    plot("grid_helper_dual.png", g=g)
 
-    g = show_grid(df, "main_core", "hash")
-    plot("main_grid.png", g=g)
+    g = show_grid(df, "main_core", "hash", shown=["clflush_miss_n", "clflush_remote_hit"])
+    plot("grid_main_dual.png", g=g)
 
-    g = show_grid(df, "main_core", "helper_core")
-    plot("main_helper_grid.png", g=g)
+    g = show_grid(df, "main_core", "helper_core", shown=["clflush_miss_n", "clflush_remote_hit"])
+    plot("grid_main_helper_dual.png", g=g)
 
 
 if not os.path.exists(args.path + ".stats.csv") or args.stats:
