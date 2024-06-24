@@ -113,6 +113,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache_slice"
+version = "0.1.0"
+
+[[package]]
 name = "cache_utils"
 version = "0.1.0"
 dependencies = [

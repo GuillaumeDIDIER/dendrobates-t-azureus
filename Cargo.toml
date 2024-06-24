@@ -15,5 +15,6 @@ members = [
     "basic_timing_cache_channel",
     "turn_lock",
     "CacheObserver",
-    "dendrobates-t-azureus"
+    "dendrobates-t-azureus",
+    "cache_slice",
 ]
