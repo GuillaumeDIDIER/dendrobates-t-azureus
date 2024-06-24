@@ -2,7 +2,7 @@
 name = "dendrobates_tinctoreus_azureus"
 version = "0.1.0"
 authors = ["Guillaume DIDIER <guillaume.didier.2014@polytechnique.org>"]
-edition = "2018"
+edition = "2021"
 
 [package.metadata.bootimage]
 #run-command = ["./scripts/bochs.sh", "{}"]

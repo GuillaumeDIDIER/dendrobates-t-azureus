@@ -125,6 +125,9 @@ fn main() {
     let array = m.slice();
 
     let cache_line_size = 64;
+    // CPUID EAX=1: Additional Information in EBX Bits 	EBX 	Valid
+    // 15:8 	CLFLUSH line size (Value * 8 = cache line size in bytes) 	if CLFLUSH feature flag is set.
+    // (CPUID.01.EDX.CLFSH [bit 19]= 1)
 
     // Generate core iterator
     let mut core_pairs: Vec<(usize, usize)> = Vec::new();

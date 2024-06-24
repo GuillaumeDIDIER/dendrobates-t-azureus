@@ -10,7 +10,6 @@ use cache_utils::calibration::Verbosity;
 use nix::errno::Errno;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
-use nix::Error::Sys;
 
 use cache_utils::mmap::MMappedMemory;
 use cpuid::MicroArchitecture;
@@ -58,7 +57,7 @@ pub fn main() {
                     //println!("Iteration {}...ok ", i);
                     eprint!(" {}", i);
                 }
-                Err(Sys(Errno::EINVAL)) => {
+                Err(Errno::EINVAL) => {
                     //println!("skipping");
                     continue;
                 }
@@ -83,7 +82,7 @@ pub fn main() {
                     println!("Iteration {}...ok ", i);
                     eprintln!("Iteration {}...ok ", i);
                 }
-                Err(Sys(Errno::EINVAL)) => {
+                Err(Errno::EINVAL) => {
                     println!("skipping");
                     continue;
                 }
