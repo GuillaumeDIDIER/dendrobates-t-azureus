@@ -2,7 +2,7 @@
 
 use std::arch::x86_64::_mm_clflush;
 use crate::arch::CpuClass::{IntelCore, IntelXeon, IntelXeonSP};
-use crate::arch::get_performance_counters_xeon;
+use crate::arch::{get_performance_counters_core, get_performance_counters_xeon};
 use crate::Error::UnsupportedCPU;
 use crate::msr::{read_msr_on_cpu, write_msr_on_cpu};
 
@@ -10,6 +10,7 @@ pub mod msr;
 pub mod utils;
 mod arch;
 
+#[derive(Debug)]
 pub enum Error {
     UnsupportedCPU,
     InvalidParameter,
@@ -30,7 +31,7 @@ unsafe fn poke(addr: *const u8) {
     }
 }
 
-unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u32>, Error> {
+unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, Error> {
     let performance_counters = if let Some(p) = get_performance_counters_xeon() {
         p
     } else {
@@ -75,24 +76,38 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     }
 
     // Read counters
-    let mut result = Vec::new();
+    let mut results = Vec::new();
     for i in 0..max_cbox {
         let result = read_msr_on_cpu(performance_counters.msr_pmon_ctr0[i], cpu)?;
-        result.push(result)
+        results.push(result)
     }
 
-    Ok(result)
+    Ok(results)
 }
 
-fn monitor_core(addr: *const u8, cpu: u8, max_core: u8) -> Result<Vec<u32>, Error> {
+fn monitor_core(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, Error> {
     // Note, we need to add the workaround for one missing perf counter here.
+    let performance_counters = if let Some(p) = get_performance_counters_core() {
+        p
+    } else {
+        return Err(UnsupportedCPU);
+    };
+
+    let workaround = if (performance_counters.max_slice as usize) + 1 == max_cbox {
+        true
+    } else if (performance_counters.max_slice as usize) >= max_cbox {
+        false
+    } else {
+        return Err(Error::InvalidParameter);
+    };
+
     unimplemented!()
 }
 
-pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result<Vec<u32>, Error> {
+pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result<Vec<u64>, Error> {
     match arch::determine_cpu_class() {
         Some(IntelCore) => {
-            unimplemented!()
+            unsafe { monitor_core(addr, cpu, max_cbox as usize) }
         }
         Some(IntelXeon) => {
             unsafe { monitor_xeon(addr, cpu, max_cbox as usize) }
