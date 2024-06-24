@@ -43,6 +43,7 @@
       <sourceFolder url="file://$MODULE_DIR$/CacheObserver/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dendrobates-t-azureus/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dendrobates-t-azureus/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/cache_slice/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />
