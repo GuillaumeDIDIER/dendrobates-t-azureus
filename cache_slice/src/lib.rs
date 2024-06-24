@@ -49,7 +49,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
 
     // Reset counters
     for i in 0..max_cbox {
-        write_msr_on_cpu(performance_counters.msr_pmon_ctl0[i], cpu, performance_counters.val_box_reset)?;
+        write_msr_on_cpu(performance_counters.msr_pmon_box_ctl[i], cpu, performance_counters.val_box_reset)?;
     }
 
     // Enable counting
@@ -72,14 +72,18 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
 
     // Freeze counters
     for i in 0..max_cbox {
-        write_msr_on_cpu(performance_counters.msr_pmon_ctr0[i], cpu, performance_counters.val_box_freeze)?;
+        write_msr_on_cpu(performance_counters.msr_pmon_box_ctl[i], cpu, performance_counters.val_box_freeze)?;
     }
 
     // Read counters
     let mut results = Vec::new();
     for i in 0..max_cbox {
         let result = read_msr_on_cpu(performance_counters.msr_pmon_ctr0[i], cpu)?;
-        results.push(result)
+        if (result - NUM_POKE as u64) < 0 {
+            results.push(0);
+        } else {
+            results.push(result - NUM_POKE as u64);
+        }
     }
 
     Ok(results)

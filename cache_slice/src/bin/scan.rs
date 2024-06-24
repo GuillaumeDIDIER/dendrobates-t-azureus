@@ -8,7 +8,7 @@ pub fn main() {
     let nb_cores = core_per_package();
     println!("Found {} cores", nb_cores);
 
-    let target = vec![0x0123456789abcdefu64, 64];
+    let target = vec![0x0123456789abcdefu64; 64];
 
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     let mut core_set = Vec::new();
