@@ -18,11 +18,11 @@ pub(crate) fn determine_cpu_class() -> Option<CpuClass> {
 
     // Todo, sift through the documentation to add support for more CPUs
     match (info.family_id(), info.model_id()) {
-        (0x06, 0x4f)
-        | (0x06, 0x2d)
+        (0x06, 0x2d)
         | (0x06, 0x3e)
         | (06, 0x3f)
-        | (0x06, 0x56) => {
+        | (0x06, 0x56)
+        | (0x06, 0x4f) => {
             Some(IntelXeon)
         }
         (0x06, 0x55) => {
@@ -62,7 +62,7 @@ pub(crate) fn get_performance_counters_xeon() -> Option<&'static XeonPerfCounter
         0x2d /* 45 */ => Some(&SANDY_BRIDGE_XEON),
         0x3e /* 62 */ => Some(&IVY_BRIDGE_XEON),
         0x3f /* 63 */ => Some(&HASWELL_XEON),
-        0x56 /* 86 */ => Some(&BROADWELL_XEON),
+        0x4f | 0x56 /* 86 */ => Some(&BROADWELL_XEON),
         _ => None,
     }
 }
