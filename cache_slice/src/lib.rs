@@ -79,7 +79,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     let mut results = Vec::new();
     for i in 0..max_cbox {
         let result = read_msr_on_cpu(performance_counters.msr_pmon_ctr0[i], cpu)?;
-        if (result - NUM_POKE as u64) < 0 {
+        if (result as i64 - NUM_POKE as i64) < 0 {
             results.push(0);
         } else {
             results.push(result - NUM_POKE as u64);
