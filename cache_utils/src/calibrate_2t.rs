@@ -219,7 +219,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             params.address = pointer;
 
             //let hash = slicing.hash(pointer as usize);
-            let hash = determine_slice(pointer, nb_cores, None).unwrap();
+            let hash = determine_slice(pointer, main_core as u8, nb_cores).unwrap();
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);

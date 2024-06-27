@@ -24,7 +24,7 @@ pub fn main() {
         cpu_set.set(core).unwrap();
         sched_setaffinity(Pid::this(), &cpu_set).unwrap();
         for addr in target.iter() {
-            let slice = determine_slice(addr, nb_cores, Some(core));
+            let slice = determine_slice(addr as *const u64 as *const u8, core as u8, nb_cores);
             match slice {
                 Some(slice) => {
                     println!("({:2}) Slice for addr {:x}: {}", core, addr as *const u64 as usize, slice)
@@ -35,7 +35,7 @@ pub fn main() {
             }
         }
         for addr in target.iter() {
-            let slice = determine_slice(addr, nb_cores, Some(0));
+            let slice = determine_slice(addr as *const u64 as *const u8, 0, nb_cores);
             match slice {
                 Some(slice) => {
                     println!("({:2}) Slice for addr {:x}: {}", core, addr as *const u64 as usize, slice)
