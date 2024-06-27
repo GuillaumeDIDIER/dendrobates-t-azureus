@@ -7,6 +7,8 @@ use crate::complex_addressing::CacheAttackSlicing;
 use core::arch::x86_64 as arch_x86;
 use itertools::Itertools;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
+use cache_slice::utils::core_per_package;
+use cache_slice::determine_slice;
 use nix::unistd::Pid;
 use nix::Error;
 use std::cmp::min;
@@ -210,12 +212,14 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             Some(ref ima) => Box::new(ima.values().copied()),
             None => Box::new((0..len as isize).step_by(cache_line_length)),
         };*/
+        let nb_cores = core_per_package();
 
         for i in offsets {
             let pointer = unsafe { p.offset(i) };
             params.address = pointer;
 
-            let hash = slicing.hash(pointer as usize);
+            //let hash = slicing.hash(pointer as usize);
+            let hash = determine_slice(pointer, nb_cores, None).unwrap();
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);

@@ -125,6 +125,22 @@ pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result
     }
 }
 
+pub fn determine_slice(addr: *const u8, nb_cores: u16, core: Option<u16>) -> Option<usize> {
+    let res = unsafe {
+        monitor_address(addr as *const u64 as *const u8, core.unwrap_or(0) as u8, nb_cores)
+    }.unwrap();
+
+    let slice = res.iter().enumerate().max_by_key(|(_i, val)| { **val });
+
+    let maxi = res.iter().max().unwrap();
+    let slice = if *maxi == 0 { None } else { slice };
+
+    match slice {
+        Some((slice, _)) => { Some(slice) }
+        None => { None }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
