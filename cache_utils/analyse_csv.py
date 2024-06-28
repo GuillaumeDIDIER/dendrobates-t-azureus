@@ -3,24 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-License-Identifier: MIT
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-#import tikzplotlib
-import wquantiles as wq
-import numpy as np
 import argparse
-
+import warnings
+import time
+import json
 import sys
 import os
 
-import json
-import warnings
+import matplotlib.style as mplstyle
+import matplotlib.pyplot as plt
+import wquantiles as wq
+import seaborn as sns
+import pandas as pd
+import numpy as np
+#import tikzplotlib
 
-warnings.filterwarnings('ignore')
-print("warnings are filtered, enable them back if you are having some trouble")
 
-sns.set_theme()
+t = time.time()
+def print_timed(*args, **kwargs):
+    print(f"[{round(time.time()-t, 1):>8}]", *args, **kwargs)
+
 
 def dict_to_json(d):
     if isinstance(d, dict):
@@ -86,6 +88,9 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+warnings.filterwarnings('ignore')
+print_timed("warnings are filtered, enable them back if you are having some trouble")
+
 img_dir = os.path.dirname(args.path)+"/figs/"
 os.makedirs(img_dir, exist_ok=True)
 
@@ -114,7 +119,7 @@ df = pd.read_csv(args.path + "-results_lite.csv.bz2",
         converters={'address': convert64, 'hash': convert8},
         )
 
-print(f"Loaded columns : {list(df.keys())}")
+print_timed(f"Loaded columns : {list(df.keys())}")
 
 sample_columns = [
 "clflush_remote_hit",
@@ -143,24 +148,30 @@ if args.slice_remap:
 core_mapping = pd.read_csv(args.path + ".cores.csv")
 
 def remap_core(key):
+    column = core_mapping.columns.get_loc(key)
     def remap(core):
-        remapped = core_mapping.iloc[core]
-        return remapped[key]
+        return core_mapping.iat[core, column]
 
     return remap
 
 
-df["main_socket"] = df["main_core"].apply(remap_core("socket"))
-df["main_core_fixed"] = df["main_core"].apply(remap_core("core"))
-df["main_ht"] = df["main_core"].apply(remap_core("hthread"))
-df["helper_socket"] = df["helper_core"].apply(remap_core("socket"))
-df["helper_core_fixed"] = df["helper_core"].apply(remap_core("core"))
-df["helper_ht"] = df["helper_core"].apply(remap_core("hthread"))
+columns = [
+    ("main_socket", "main_core", "socket")
+    ("main_core_fixed", "main_core", "core")
+    ("main_ht", "main_core", "hthread")
+    ("helper_socket", "helper_core", "socket")
+    ("helper_core_fixed", "helper_core", "core")
+    ("helper_ht", "helper_core", "hthread")
+]
+for (col, icol, key) in columns:
+    df[col] = df[icol].apply(remap_core(key))
+    print_timed(f"Column {col} added")
 
 
 if args.slice_remap:
     slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
     df["slice_group"] = df["hash"].apply(slice_remap)
+    print_timed(f"Column slice_group added")
 else:
     df["slice_group"] = df["hash"]
 
@@ -172,9 +183,10 @@ def get_graphing_bounds():
     return int(((min(q10s) - 10) // 10) * 10), int(((max(q90s) + 19) // 10) * 10)
 
 
-graph_lower, graph_upper = get_graphing_bounds()
-print("graphing between {}, {}".format(graph_lower, graph_upper))
+mplstyle.use("fast")
 
+graph_lower, graph_upper = get_graphing_bounds()
+print_timed(f"graphing between {graph_lower}, {graph_upper}")
 
 def plot(filename, g=None):
     if args.no_plot:
@@ -182,6 +194,7 @@ def plot(filename, g=None):
             g.savefig(img_dir+filename)
         else:
             plt.savefig(img_dir+filename)
+        print_timed(f"Saved {filename}")
         plt.close()
     plt.show()
 
@@ -233,31 +246,7 @@ def export_stats_csv():
         return maxi-mini
     
     def compute_stat(x, key):
-        def compute_median(x):
-            return wq.median(x["time"], x[key])
-
-        filtered_x = x[(x[key] != 0)]
-        mini, maxi = filtered_x["time"].min(), filtered_x["time"].max()
-
-        miss_spread = get_spread(x, "clflush_miss_n")
-        
-        if maxi-mini < 3*miss_spread:
-            med = compute_median(x)
-            return [med, med]
-
-        if key == "clflush_remote_hit":
-            """print(
-                "double for core {}:{}@{}, helper {}:{}@{}".format(
-                    x["main_core_fixed"].unique()[0],
-                    x["main_ht"].unique()[0],
-                    x["main_socket"].unique()[0],
-                    x["helper_core_fixed"].unique()[0],
-                    x["helper_ht"].unique()[0],
-                    x["helper_socket"].unique()[0],
-                )
-            )"""
-        center = mini + (maxi-mini)/2
-        return [compute_median(filtered_x[(filtered_x["time"] < center)]), compute_median(filtered_x[(filtered_x["time"] >= center)])]
+        return wq.median(x["time"], x[key])
     
     df_grouped = df.groupby(["main_core", "helper_core", "hash"])
     
@@ -275,8 +264,6 @@ def export_stats_csv():
         "clflush_local_hit_n": hit_local.values,
         "clflush_shared_hit": hit_shared.values
     })
-
-    stats = stats.explode(['clflush_miss_n', 'clflush_remote_hit', 'clflush_local_hit_n', 'clflush_shared_hit'])
 
     stats.to_csv(args.path + ".stats.csv", index=False)
 
@@ -308,4 +295,4 @@ if not args.stats:
 if not os.path.exists(args.path + ".stats.csv") or args.stats:
     export_stats_csv()
 else:
-    print("Skipping .stats.csv export")
+    print_timed("Skipping .stats.csv export")
