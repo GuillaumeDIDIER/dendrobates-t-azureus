@@ -15,7 +15,9 @@ import pandas as pd
 import seaborn as sns
 from scipy import optimize
 import matplotlib.pyplot as plt
+import matplotlib.style as mplstyle
 
+mplstyle.use("fast")
 
 warnings.filterwarnings("ignore")
 print("warnings are filtered, enable them back if you are having some trouble")
@@ -54,14 +56,23 @@ parser.add_argument(
     help="Create slice{} directories with segmented grid",
 )
 
+parser.add_argument(
+    "--no-slice-remap",
+    dest="slice_remap",
+    action="store_false",
+    default=True,
+    help="Don't remap the slices"
+)
+
 args = parser.parse_args()
 
 img_dir = os.path.dirname(args.path) + "/figs/"
 os.makedirs(img_dir, exist_ok=True)
 
 assert os.path.exists(args.path + ".stats.csv")
-assert os.path.exists(args.path + ".slices.csv")
 assert os.path.exists(args.path + ".cores.csv")
+if args.slice_remap:
+    assert os.path.exists(args.path + ".slices.csv")
 
 stats = pd.read_csv(
     args.path + ".stats.csv",
@@ -84,7 +95,8 @@ stats = pd.read_csv(
     },
 )
 
-slice_mapping = pd.read_csv(args.path + ".slices.csv")
+if args.slice_remap:
+    slice_mapping = pd.read_csv(args.path + ".slices.csv")
 core_mapping = pd.read_csv(args.path + ".cores.csv")
 
 # print("core mapping:\n", core_mapping.to_string())
@@ -129,9 +141,12 @@ stats["helper_ht"] = stats["helper_core"].apply(remap_core("hthread"))
 
 # slice_mapping = {3: 0, 1: 1, 2: 2, 0: 3}
 
-stats["slice_group"] = stats["hash"].apply(
-    lambda h: slice_mapping["slice_group"].iloc[h]
-)
+if args.slice_remap:
+    stats["slice_group"] = stats["hash"].apply(
+        lambda h: slice_mapping["slice_group"].iloc[h]
+    )
+else:
+    stats["slice_group"] = stats["hash"]
 
 graph_lower_miss = int((min_time_miss // 10) * 10)
 graph_upper_miss = int(((max_time_miss + 9) // 10) * 10)
@@ -386,15 +401,26 @@ def facet_grid(
             "clflush_miss_n",
         ],
         colors=["y", "r", "g", "b"],
+        separate_hthreads=False,
         title=None,
     ):
     """
     Creates a facet grid showing all points
     """
+    if separate_hthreads:
+        colors=["y", "r", "g", "b"]
+        for el in shown:
+            for helper, main in itertools.product((0, 1), (0, 1)):
+                df[el+f"_m{main}h{helper}"] = df[(df["main_ht"] == main) & (df["helper_ht"] == helper)][el]
+
     grid = sns.FacetGrid(df, row=row, col=col)
 
     for i, el in enumerate(shown):
-        grid.map(draw_fn, third, el, color=colors[i % len(colors)])
+        if separate_hthreads:
+            for helper, main in itertools.product((0, 1), (0, 1)):
+                grid.map(draw_fn, third, el+f"_m{main}h{helper}", color=colors[(helper+2*main) % len(colors)])# marker=['+', 'x'][helper])
+        else:
+            grid.map(draw_fn, third, el, color=colors[i % len(colors)])
 
     if title is not None:
         plot(title, g=grid)
@@ -408,7 +434,7 @@ def all_facets(df, pre="", post="", *args, **kwargs):
     """
 
     facet_grid(
-        df, "main_core_fixed", "helper_core_fixed", "slice_group",
+        df, "helper_core_fixed", "main_core_fixed", "slice_group",
         title=f"{pre}facet_slice{post}.png", *args, **kwargs
     )
     facet_grid(
@@ -416,47 +442,58 @@ def all_facets(df, pre="", post="", *args, **kwargs):
         title=f"{pre}facet_main{post}.png", *args, **kwargs
     )
     facet_grid(
-        df, "slice_group", "main_core_fixed", "helper_core_fixed",
+        df, "main_core_fixed", "slice_group", "helper_core_fixed",
         title=f"{pre}facet_helper{post}.png", *args, **kwargs
     )
 
 
-def do_facet(main: int, helper: int, line: bool):
+def do_facet(main: int, helper: int, line: bool, metrics: str):
+    """
+    - metrics: hit, miss or all
+    """
     df = stats.copy(deep=True)
 
-    print(f"Doing all facets {main}x{helper}")
+    print(f"Doing all facets {main}x{helper} {metrics}")
     filtered_df = stats[
-        (stats["main_core_fixed"] // (num_core / 2) == main)
-        & (stats["helper_core_fixed"] // (num_core / 2) == helper)
+        (stats["main_socket"] == main)
+        & (stats["helper_socket"] == helper)
     ]
     method = "line" if line else "pt"
-    all_facets(
-        filtered_df,
-        pre=f"hit_{method}_",
-        post=f"_m{main}h{helper}",
-        shown=["clflush_remote_hit"],
-        colors=["r"],
-        draw_fn=sns.lineplot if line else sns.scatterplot
-    )
-    all_facets(
-        filtered_df,
-        pre=f"miss_{method}_",
-        post=f"_m{main}h{helper}",
-        shown=["clflush_miss_n"],
-        colors=["b"],
-        draw_fn=sns.lineplot if line else sns.scatterplot
-    )
+    shown = []
+    colors = []
+    if metrics == "hit" or metrics == "all":
+        shown.append("clflush_remote_hit")
+        colors.append("r")
+    if metrics == "miss" or metrics == "all":
+        shown.append("clflush_miss_n")
+        colors.append("b")
 
+    all_facets(
+        filtered_df,
+        pre=f"{metrics}_{method}_",
+        post=f"_m{main}h{helper}",
+        shown=shown,
+        colors=colors,
+        draw_fn=sns.lineplot if line else sns.scatterplot
+    )
 
 
 if args.rslice:
     rslice()
 
 # do_predictions(stats)
-# all_facets(stats, "")
+# all_facets(stats, shown=["clflush_remote_hit"], colors=["r"])
 
 
 
 with Pool(8) as pool:
-    pool.starmap(do_facet, itertools.product((0, 1), (0, 1), (True, False)))
+    pool.starmap(
+        do_facet,
+        itertools.product(
+            stats["main_socket"].unique(),
+            stats["helper_socket"].unique(),
+            (True, False),
+            ("hit", "miss")
+        )
+    )
 
