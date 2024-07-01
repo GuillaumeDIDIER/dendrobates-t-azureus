@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-License-Identifier: MIT
-
 import os
 import sys
 import argparse
@@ -108,14 +107,6 @@ min_time_miss = stats["clflush_miss_n"].min()
 max_time_miss = stats["clflush_miss_n"].max()
 
 
-def remap_core(key):
-    def remap(core):
-        remapped = core_mapping.iloc[core]
-        return remapped[key]
-
-    return remap
-
-
 def plot(filename, g=None):
     if args.no_plot:
         if g is not None:
@@ -132,13 +123,29 @@ def plot(filename, g=None):
     plt.show()
 
 
-stats["main_socket"] = stats["main_core"].apply(remap_core("socket"))
-stats["main_core_fixed"] = stats["main_core"].apply(remap_core("core"))
-stats["main_ht"] = stats["main_core"].apply(remap_core("hthread"))
-stats["helper_socket"] = stats["helper_core"].apply(remap_core("socket"))
-stats["helper_core_fixed"] = stats["helper_core"].apply(remap_core("core"))
-stats["helper_ht"] = stats["helper_core"].apply(remap_core("hthread"))
+def remap_core(key):
+    column = core_mapping.columns.get_loc(key)
+    def remap(core):
+        return core_mapping.iat[core, column]
+    return remap
 
+
+columns = [
+    ("main_socket", "main_core", "socket"),
+    ("main_core_fixed", "main_core", "core"),
+    ("main_ht", "main_core", "hthread"),
+    ("helper_socket", "helper_core", "socket"),
+    ("helper_core_fixed", "helper_core", "core"),
+    ("helper_ht", "helper_core", "hthread"),
+]
+for (col, icol, key) in columns:
+    stats[col] = stats[icol].apply(remap_core(key))
+
+#! Remove points where helper_core == main_core but main_ht != helper_ht
+stats = stats[
+    (stats["main_ht"] == stats["helper_ht"])
+    | (stats["main_core_fixed"] != stats["helper_core_fixed"])
+]
 # slice_mapping = {3: 0, 1: 1, 2: 2, 0: 3}
 
 if args.slice_remap:
@@ -164,216 +171,97 @@ graph_upper_miss = int(((max_time_miss + 9) // 10) * 10)
 
 # print(stats.head())
 
-num_core = len(stats["main_core_fixed"].unique())
+num_core = len(stats["main_core_fixed"].unique())/2
 # print("Found {}".format(num_core))
 
-
-def miss_topology(main_core_fixed, slice_group, C, h):
-    return C + h * abs(main_core_fixed - slice_group) + h * abs(slice_group + 1)
-
-
-def miss_topology_df(x, C, h):
-    func = lambda x, C, h: miss_topology(x["main_core_fixed"], x["slice_group"], C, h)
-    return x.apply(func, args=(C, h), axis=1)
-
-
-memory = -1
-gpu_if_any = num_core
-
-
-def exclusive_hit_topology_gpu(main_core, slice_group, helper_core, C, h1, h2):
-    round_trip = gpu_if_any - memory
-
-    if slice_group <= num_core / 2:
-        # send message towards higher cores first
-        if helper_core < slice_group:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(round_trip - (helper_core - memory))
-            )
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
+def ring_distance(x0, x1):
+    """
+    return (a, b) where `a` is the core distance and `b` the larger "ring step"
+    """
+    dist = abs(x0-x1)
+    if x0 // (num_core/2) != x1 // (num_core/2):
+        return min(num_core-1-dist, dist-1), 1
     else:
-        # send message toward lower cores first
-        if helper_core > slice_group:
-            r = C + h1 * abs(main_core - slice_group) + h2 * abs(helper_core - memory)
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
-    return r
+        return dist, 0
+
+def slice_msg_distance(x1, x0):
+    """
+    Si l'expéditeur est à l'extrémité d'une des lignes, il envoie toujours dans le même sens
+    (vers toute sa ligne d'abord), sinon, il prend le chemin le plus court
+    """
+    dist = abs(x0-x1)
+    if x0 == 3:
+        dist = (x0-x1+8)%8
+    elif x0 == 4:
+        dist = (x1-x0+8)%8
+
+    if x0 in [0, 3, 4, 7]:
+        if dist > 3:
+            return dist, 1
+        return dist, 0
+
+    return ring_distance(x0, x1)
 
 
-def exclusive_hit_topology_gpu_df(x, C, h1, h2):
-    def func(x, C, h1, h2):
-        return exclusive_hit_topology_gpu(
-            x["main_core_fixed"], x["slice_group"], x["helper_core_fixed"], C, h1, h2
-        )
+def miss_topology(main_core, slice_group, C, h, H):
+    core, ring = slice_msg_distance(main_core, slice_group)
+    return C + h * core + H*ring
 
-    return x.apply(func, args=(C, h1, h2), axis=1)
-
-
-def exclusive_hit_topology_gpu2(main_core, slice_group, helper_core, C, h1, h2):
-    round_trip = gpu_if_any + 1 - memory
-
-    if slice_group <= num_core / 2:
-        # send message towards higher cores first
-        if helper_core < slice_group:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(round_trip - (helper_core - memory))
-            )
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
-    else:
-        # send message toward lower cores first
-        if helper_core > slice_group:
-            r = C + h1 * abs(main_core - slice_group) + h2 * abs(helper_core - memory)
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
-    return r
+def miss_topology_df(x, C, h, H):
+    func = lambda x, C, h, H: miss_topology(x["main_core_fixed"], x["slice_group"], C, h, H)
+    return x.apply(func, args=(C, h, H), axis=1)
 
 
-def exclusive_hit_topology_gpu2_df(x, C, h1, h2):
-    def func(x, C, h1, h2):
-        return exclusive_hit_topology_gpu2(
-            x["main_core_fixed"], x["slice_group"], x["helper_core_fixed"], C, h1, h2
-        )
+def remote_hit_topology(main_core, helper_core, slice_group, C, h, H):
+    core0, ring0 = slice_msg_distance(main_core, slice_group)
+    core1, ring1 = slice_msg_distance(helper_core, slice_group)
+    return C + h*(core0+core1) + H*(ring0+ring1)
 
-    return x.apply(func, args=(C, h1, h2), axis=1)
-
-
-# unlikely
-def exclusive_hit_topology_nogpu(main_core, slice_group, helper_core, C, h1, h2):
-    round_trip = (num_core - 1) - memory
-
-    if slice_group <= num_core / 2:
-        # send message towards higher cores first
-        if helper_core < slice_group:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(round_trip - (helper_core - memory))
-            )
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
-    else:
-        # send message toward lower cores first
-        if helper_core > slice_group:
-            r = C + h1 * abs(main_core - slice_group) + h2 * abs(helper_core - memory)
-        else:
-            r = (
-                C
-                + h1 * abs(main_core - slice_group)
-                + h2 * abs(helper_core - slice_group)
-            )
-    return r
-
-
-def exclusive_hit_topology_nogpu_df(x, C, h1, h2):
-    def func(x, C, h1, h2):
-        return exclusive_hit_topology_nogpu(
-            x["main_core_fixed"], x["slice_group"], x["helper_core_fixed"], C, h1, h2
-        )
-
-    return x.apply(func, args=(C, h1, h2), axis=1)
-
-
-def remote_hit_topology_2(x, C, h):
-    main_core = x["main_core_fixed"]
-    slice_group = x["slice_group"]
-    helper_core = x["helper_core_fixed"]
-    return (
-        C
-        + h * abs(main_core - slice_group)
-        + h * abs(slice_group - helper_core)
-        + h * abs(helper_core - main_core)
-    )
-
-
-def shared_hit_topology_1(x, C, h):
-    main_core = x["main_core_fixed"]
-    slice_group = x["slice_group"]
-    helper_core = x["helper_core_fixed"]
-    return (
-        C
-        + h * abs(main_core - slice_group)
-        + h * max(abs(slice_group - main_core), abs(slice_group - helper_core))
-    )
+def remote_hit_topology_df(x, C, h, H):
+    func = lambda x, C, h, H: remote_hit_topology(x["main_core_fixed"], x["helper_core_fixed"], x["slice_group"], C, h, H)
+    return x.apply(func, args=(C, h, H), axis=1)
 
 
 def do_predictions(df):
+    def plot_predicted_topo(col, row, x_ax, target, pred):
+        title_letter = {
+            "main_core_fixed": "A",
+            "helper_core_fixed": "V",
+            "slice_group": "S"
+        }.get(col, col[0])
+
+        figure_A0 = sns.FacetGrid(df, col=col, row=row)
+        figure_A0.map(sns.scatterplot, x_ax, pred, color="r")
+        figure_A0.map(sns.scatterplot, x_ax, target, color="g", marker="+")
+        figure_A0.set_titles(col_template="$"+title_letter+"$ = {col_name}")
+        plot(f"medians_{pred}_{col}.png")
+
+
+    
+    df = df[(df["main_socket"] == 0) & (df["helper_socket"] == 0)]
     res_miss = optimize.curve_fit(
         miss_topology_df, df[["main_core_fixed", "slice_group"]], df["clflush_miss_n"]
     )
-    # print("Miss topology:")
-    # print(res_miss)
+    print("Miss topology:")
+    print(res_miss)
 
-    res_gpu = optimize.curve_fit(
-        exclusive_hit_topology_gpu_df,
-        df[["main_core_fixed", "slice_group", "helper_core_fixed"]],
-        df["clflush_remote_hit"],
+
+    res_remote_hit = optimize.curve_fit(
+        remote_hit_topology_df, df[["main_core_fixed", "helper_core_fixed", "slice_group"]], df["clflush_remote_hit"]
     )
-    # print("Exclusive hit topology (GPU):")
-    # print(res_gpu)
+    print("Remote hit topology:")
+    print(res_remote_hit)
 
-    # res_gpu2 = optimize.curve_fit(
-    #     exclusive_hit_topology_gpu2_df,
-    #     df[["main_core_fixed", "slice_group", "helper_core_fixed"]],
-    #     df["clflush_remote_hit"]
-    # )
-    # print("Exclusive hit topology (GPU2):")
-    # print(res_gpu2)
-
-    # res_no_gpu = optimize.curve_fit(
-    #     exclusive_hit_topology_nogpu_df,
-    #     df[["main_core_fixed", "slice_group", "helper_core_fixed"]],
-    #     df["clflush_remote_hit"]
-    # )
-    # print("Exclusive hit topology (No GPU):")
-    # print(res_no_gpu)
 
     df["predicted_miss"] = miss_topology_df(df, *(res_miss[0]))
+    plot_predicted_topo("slice_group", None, "main_core_fixed", "clflush_miss_n", "predicted_miss")
+    plot_predicted_topo("main_core_fixed", None, "slice_group", "clflush_miss_n", "predicted_miss")
 
-    # df["predicted_remote_hit_no_gpu"] = exclusive_hit_topology_nogpu_df(df, *(res_no_gpu[0]))
-    df["predicted_remote_hit_gpu"] = exclusive_hit_topology_gpu_df(df, *(res_gpu[0]))
-    # df["predicted_remote_hit_gpu2"] = exclusive_hit_topology_gpu_df(df, *(res_gpu2[0]))
-
-    df_A0 = df[df["main_core_fixed"] == 0]
-    figure_A0 = sns.FacetGrid(df_A0, col="slice_group")
-    figure_A0.map(sns.scatterplot, "helper_core_fixed", "clflush_remote_hit", color="r")
-    figure_A0.map(
-        sns.lineplot, "helper_core_fixed", "predicted_remote_hit_gpu", color="r"
-    )
-    figure_A0.set_titles(col_template="$S$ = {col_name}")
-    plot("medians_remote_hit.png")
-
-    g2 = sns.FacetGrid(df, row="main_core_fixed", col="slice_group")
-    g2.map(sns.scatterplot, "helper_core_fixed", "clflush_remote_hit", color="r")
-    g2.map(sns.lineplot, "helper_core_fixed", "predicted_remote_hit_gpu", color="r")
-    # g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_gpu2', color="g")
-    # g2.map(sns.lineplot, 'helper_core_fixed', 'predicted_remote_hit_no_gpu', color="g")
-    plot("medians_remote_hit_grid.png", g=g2)
+    df["predicted_remote_hit"] = remote_hit_topology_df(df, *(res_remote_hit[0]))
+    plot_predicted_topo("slice_group", "helper_core_fixed", "main_core_fixed", "clflush_remote_hit", "predicted_remote_hit")
+    plot_predicted_topo("main_core_fixed", "helper_core_fixed", "slice_group", "clflush_remote_hit", "predicted_remote_hit")
+    
+    
 
 
 def rslice():
@@ -418,7 +306,14 @@ def facet_grid(
     for i, el in enumerate(shown):
         if separate_hthreads:
             for helper, main in itertools.product((0, 1), (0, 1)):
-                grid.map(draw_fn, third, el+f"_m{main}h{helper}", color=colors[(helper+2*main) % len(colors)])# marker=['+', 'x'][helper])
+                kwargs = {"marker": ['x', '+'][helper]} if draw_fn == sns.scatterplot else {}
+                grid.map(
+                    draw_fn,
+                    third,
+                    el+f"_m{main}h{helper}",
+                    color=colors[(helper+2*main) % len(colors)],
+                    **kwargs
+                )
         else:
             grid.map(draw_fn, third, el, color=colors[i % len(colors)])
 

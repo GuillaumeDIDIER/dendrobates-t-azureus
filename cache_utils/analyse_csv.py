@@ -122,16 +122,16 @@ df = pd.read_csv(args.path + "-results_lite.csv.bz2",
 print_timed(f"Loaded columns : {list(df.keys())}")
 
 sample_columns = [
-"clflush_remote_hit",
-"clflush_shared_hit",
-"clflush_miss_f",
-"clflush_local_hit_f",
-"clflush_miss_n",
-"clflush_local_hit_n",
-"reload_miss",
-"reload_remote_hit",
-"reload_shared_hit",
-"reload_local_hit",
+    "clflush_remote_hit",
+    "clflush_shared_hit",
+    "clflush_miss_f",
+    "clflush_local_hit_f",
+    "clflush_miss_n",
+    "clflush_local_hit_n",
+    "reload_miss",
+    "reload_remote_hit",
+    "reload_shared_hit",
+    "reload_local_hit",
 ]
 
 sample_flush_columns = [
@@ -156,12 +156,12 @@ def remap_core(key):
 
 
 columns = [
-    ("main_socket", "main_core", "socket")
-    ("main_core_fixed", "main_core", "core")
-    ("main_ht", "main_core", "hthread")
-    ("helper_socket", "helper_core", "socket")
-    ("helper_core_fixed", "helper_core", "core")
-    ("helper_ht", "helper_core", "hthread")
+    ("main_socket", "main_core", "socket"),
+    ("main_core_fixed", "main_core", "core"),
+    ("main_ht", "main_core", "hthread"),
+    ("helper_socket", "helper_core", "socket"),
+    ("helper_core_fixed", "helper_core", "core"),
+    ("helper_ht", "helper_core", "hthread"),
 ]
 for (col, icol, key) in columns:
     df[col] = df[icol].apply(remap_core(key))
@@ -171,7 +171,7 @@ for (col, icol, key) in columns:
 if args.slice_remap:
     slice_remap = lambda h: slice_mapping["slice_group"].iloc[h]
     df["slice_group"] = df["hash"].apply(slice_remap)
-    print_timed(f"Column slice_group added")
+    print_timed("Column slice_group added")
 else:
     df["slice_group"] = df["hash"]
 
@@ -240,13 +240,14 @@ def show_grid(df, col, row, shown=["clflush_miss_n", "clflush_remote_hit", "clfl
     return g
 
 def export_stats_csv():
-    def get_spread(df, key):
-        filtered_df = df[(df[key] != 0)]
-        mini, maxi = filtered_df["time"].min(), filtered_df["time"].max()
-        return maxi-mini
-    
     def compute_stat(x, key):
-        return wq.median(x["time"], x[key])
+        """
+        Compute the statistic for 1 helper core/main core/slice/column
+        - median : default, not influenced by errors
+        - average : better accuracy when observing floor steps in the results
+        """
+        # return wq.median(x["time"], x[key])
+        return np.average(x[key], weights=x["time"])
     
     df_grouped = df.groupby(["main_core", "helper_core", "hash"])
     
