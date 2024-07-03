@@ -96,30 +96,36 @@ fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     } else {
         return Err(UnsupportedCPU);
     };
-
+    #[cfg(debug_assertions)]
     eprint!("Finding the number of CBox available... ");
     let max_cbox = (read_msr_on_cpu(performance_counters.msr_unc_cbo_config, cpu)? & 0xF) as usize; // TODO magic number (mask for bit 3:0)
+    #[cfg(debug_assertions)]
     eprintln!("{}", max_cbox);
 
     if max_cbox > performance_counters.max_slice as usize {
         return Err(InvalidParameter);
     }
 
+    #[cfg(debug_assertions)]
     eprintln!("Disabling counters");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
 
+    #[cfg(debug_assertions)]
     eprint!("Resetting counters...");
     for i in 0..max_cbox {
         eprint!(" {i}");
         write_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu, performance_counters.val_reset_ctrs)?;
     }
+    #[cfg(debug_assertions)]
     eprintln!(" ok");
 
+    #[cfg(debug_assertions)]
     eprintln!("Selecting events");
     for i in 0..max_cbox {
         write_msr_on_cpu(performance_counters.msr_unc_cbo_perfevtsel0[i], cpu, performance_counters.val_select_evt_core)?;
     }
 
+    #[cfg(debug_assertions)]
     eprintln!("enabling counters");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_enable_ctrs)?;
 
@@ -131,6 +137,7 @@ fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
 
     */
     // Read counters
+    #[cfg(debug_assertions)]
     eprintln!("Gathering results");
     let mut results = Vec::new();
     for i in 0..max_cbox {
@@ -142,6 +149,7 @@ fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
         }
     }
 
+    #[cfg(debug_assertions)]
     eprintln!("disabling counters again");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
 
