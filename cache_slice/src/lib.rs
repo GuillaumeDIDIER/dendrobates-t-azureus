@@ -113,6 +113,7 @@ fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     #[cfg(debug_assertions)]
     eprint!("Resetting counters...");
     for i in 0..max_cbox {
+        #[cfg(debug_assertions)]
         eprint!(" {i}");
         write_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu, performance_counters.val_reset_ctrs)?;
     }
