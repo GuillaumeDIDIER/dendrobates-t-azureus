@@ -99,6 +99,7 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
 
     let workaround = if (performance_counters.max_slice as usize) + 1 == max_cbox {
         max_cbox = performance_counters.max_slice as usize;
+        eprintln!("Using workaround");
         true
     } else if (performance_counters.max_slice as usize) >= max_cbox {
         false
@@ -106,16 +107,22 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
         return Err(Error::InvalidParameter);
     };
 
+    eprintln!("Disabling counters");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
 
+    eprint!("Resetting counters...");
     for i in 0..max_cbox {
+        eprint!(" {i}");
         write_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu, performance_counters.val_reset_ctrs)?;
     }
+    eprintln!(" ok");
 
+    eprintln!("Selecting events");
     for i in 0..max_cbox {
         write_msr_on_cpu(performance_counters.msr_unc_cbo_perfevtsel0[i], cpu, performance_counters.val_select_evt_core)?;
     }
 
+    eprintln!("enabling counters");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_enable_ctrs)?;
 
     unsafe { poke(addr) };
@@ -126,6 +133,7 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
 
     */
     // Read counters
+    eprintln!("Gathering results");
     let mut results = Vec::new();
     for i in 0..max_cbox {
         let result = read_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu)?;
@@ -136,6 +144,7 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
         }
     }
 
+    eprintln!("disabling counters again");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
 
     Ok(results)
