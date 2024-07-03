@@ -135,6 +135,7 @@ pub struct XeonPerfCounters {
 }
 
 pub struct CorePerfCounters {
+    pub msr_unc_cbo_config: u64,
     pub max_slice: u16,
     pub msr_unc_perf_global_ctr: u64,
     pub val_enable_ctrs: u64,
@@ -221,6 +222,7 @@ const BROADWELL_XEON: XeonPerfCounters = XeonPerfCounters {
 
 // TODO find appropriate values
 const ALDER_LAKE_TO_RAPTOR_LAKE_CORE: CorePerfCounters = CorePerfCounters {
+    msr_unc_cbo_config: 0x396,
     max_slice: 10,
     msr_unc_perf_global_ctr: 0x2ff0,
     val_enable_ctrs: 0x20000000, // To validate
@@ -233,6 +235,7 @@ const ALDER_LAKE_TO_RAPTOR_LAKE_CORE: CorePerfCounters = CorePerfCounters {
 
 // TODO verify his on ICELAKE, and appropriate values. Also deal with backport Cypress Cove ?
 const CANNON_LAKE_TO_TIGER_LAKE_CORE: CorePerfCounters = CorePerfCounters {
+    msr_unc_cbo_config: 0x396,
     max_slice: 8, // To validate
     msr_unc_perf_global_ctr: 0xe01,
     val_enable_ctrs: 0x20000000, // To validate
@@ -244,6 +247,7 @@ const CANNON_LAKE_TO_TIGER_LAKE_CORE: CorePerfCounters = CorePerfCounters {
 };
 
 const SKYLAKE_KABYLAKE_CORE: CorePerfCounters = CorePerfCounters {
+    msr_unc_cbo_config: 0x396,
     max_slice: 7,
     msr_unc_perf_global_ctr: 0xe01,
     val_enable_ctrs: 0x20000000,
@@ -257,7 +261,8 @@ const SKYLAKE_KABYLAKE_CORE: CorePerfCounters = CorePerfCounters {
 // This is documented in Intel SDM, 20.3.4.6 (in March 2024 edition)
 
 const SANDYBRIDGE_TO_BROADWELL_CORE: CorePerfCounters = CorePerfCounters {
-    max_slice: 0,
+    msr_unc_cbo_config: 0x396,
+    max_slice: 4,
     msr_unc_perf_global_ctr: 0x391,
     // Go in MSR_UNC_PERF_GLOBAL_CTR EN (bit 29) set to one, and route PMI to core 1-4 upon overflow.
     val_enable_ctrs: 0x2000000f,
