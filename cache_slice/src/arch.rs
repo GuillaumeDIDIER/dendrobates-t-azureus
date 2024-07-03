@@ -90,7 +90,22 @@ pub(crate) fn get_performance_counters_core() -> Option<&'static CorePerfCounter
         0x4e
         | 0x5e
         | 0x8e
-        | 0x9e => Some(&SKYLAKE_KABYLAKE_CORE),
+        | 0x9e
+        | 0xa5 => Some(&SKYLAKE_KABYLAKE_CORE),
+        0x66
+        | 0x7e
+        | 0x8c
+        | 0x8d => Some(&CANNON_LAKE_TO_TIGER_LAKE_CORE),
+        0xa7 => {
+            eprintln!("Rocket Lake may be like Skylake or like Ice Lake.");
+            eprintln!("You need to edit the code in arch.rs, and validate if the perf counters work like any of those two.");
+            eprintln!("For now assuming Ice Lake by default");
+            Some(&CANNON_LAKE_TO_TIGER_LAKE_CORE)
+        }
+        0x9a
+        | 0x97
+        | 0xba
+        | 0xb7 => Some(&ALDER_LAKE_TO_RAPTOR_LAKE_CORE),
         _ => None,
     }
 }
