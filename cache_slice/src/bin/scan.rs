@@ -1,4 +1,4 @@
-use cache_slice::determine_slice;
+use cache_slice::monitor_address;
 use cache_slice::utils::core_per_package;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
@@ -23,28 +23,36 @@ pub fn main() {
         let mut cpu_set = CpuSet::new();
         cpu_set.set(core).unwrap();
         sched_setaffinity(Pid::this(), &cpu_set).unwrap();
-        for addr in target.iter() {
-            let slice = determine_slice(addr as *const u64 as *const u8, core as u8, nb_cores);
+        for addr in target.iter().step_by(8) {
+            let address = addr as *const u64 as *const u8;
+            let res = unsafe { monitor_address(address, core as u8, nb_cores) }.unwrap();
+            print!("({:2}) {:x}:", core, address as usize);
+            for slice in res {
+                print!(" {:6}", slice)
+            }
+            println!();
+            /*let slice = res.iter().enumerate().max_by_key(|(_i, val)| { **val });
             match slice {
-                Some(slice) => {
+                Some((slice, _)) => {
                     println!("({:2}) Slice for addr {:x}: {}", core, addr as *const u64 as usize, slice)
                 }
                 None => {
                     eprintln!("({:2}) Failed to find slice for addr {:x}", core, addr as *const u64 as usize)
                 }
-            }
+            }*/
         }
-        for addr in target.iter() {
-            let slice = determine_slice(addr as *const u64 as *const u8, 0, nb_cores);
+        /*for addr in target.iter() {
+            let res = unsafe { monitor_address(addr as *const u64 as *const u8, 0, nb_cores) }.unwrap();
+            let slice = res.iter().enumerate().max_by_key(|(_i, val)| { **val });
             match slice {
-                Some(slice) => {
-                    println!("({:2}) Slice for addr {:x}: {}", core, addr as *const u64 as usize, slice)
+                Some((slice, _)) => {
+                    println!("({:2}) Slice for addr {:x}: {}", 0, addr as *const u64 as usize, slice)
                 }
                 None => {
-                    eprintln!("({:2}) Failed to find slice for addr {:x}", core, addr as *const u64 as usize)
+                    eprintln!("({:2}) Failed to find slice for addr {:x}", 0, addr as *const u64 as usize)
                 }
             }
-        }
+        }*/
         sched_setaffinity(Pid::this(), &old).unwrap();
     }
 }
