@@ -23,7 +23,7 @@ impl From<std::io::Error> for Error {
     }
 }
 
-const NUM_POKE: usize = 10000;
+const NUM_POKE: usize = 100000;
 
 unsafe fn poke(addr: *const u8) {
     for _i in 0..NUM_POKE {
@@ -79,7 +79,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     let mut results = Vec::new();
     for i in 0..max_cbox {
         let result = read_msr_on_cpu(performance_counters.msr_pmon_ctr0[i], cpu)?;
-        if (result as i64 - NUM_POKE as i64) < 0 {
+        if result < NUM_POKE as u64 {
             results.push(0);
         } else {
             results.push(result - NUM_POKE as u64);
@@ -89,7 +89,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     Ok(results)
 }
 
-fn monitor_core(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, Error> {
+fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64>, Error> {
     // Note, we need to add the workaround for one missing perf counter here.
     let performance_counters = if let Some(p) = get_performance_counters_core() {
         p
@@ -98,6 +98,7 @@ fn monitor_core(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, E
     };
 
     let workaround = if (performance_counters.max_slice as usize) + 1 == max_cbox {
+        max_cbox = performance_counters.max_slice as usize;
         true
     } else if (performance_counters.max_slice as usize) >= max_cbox {
         false
@@ -105,7 +106,39 @@ fn monitor_core(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, E
         return Err(Error::InvalidParameter);
     };
 
-    unimplemented!()
+    write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
+
+    for i in 0..max_cbox {
+        write_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu, performance_counters.val_reset_ctrs)?;
+    }
+
+    for i in 0..max_cbox {
+        write_msr_on_cpu(performance_counters.msr_unc_cbo_perfevtsel0[i], cpu, performance_counters.val_select_evt_core)?;
+    }
+
+    write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_enable_ctrs)?;
+
+    unsafe { poke(addr) };
+
+    /*
+    // Commented out in original code : TODO, check if this makes any difference ?
+    write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
+
+    */
+    // Read counters
+    let mut results = Vec::new();
+    for i in 0..max_cbox {
+        let result = read_msr_on_cpu(performance_counters.msr_unc_cbo_per_ctr0[i], cpu)?;
+        if result < NUM_POKE as u64 {
+            results.push(0);
+        } else {
+            results.push(result - NUM_POKE as u64);
+        }
+    }
+
+    write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
+
+    Ok(results)
 }
 
 pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result<Vec<u64>, Error> {

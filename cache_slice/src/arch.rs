@@ -198,24 +198,24 @@ const BROADWELL_XEON: XeonPerfCounters = XeonPerfCounters {
 const ALDER_LAKE_TO_RAPTOR_LAKE_CORE: CorePerfCounters = CorePerfCounters {
     max_slice: 10,
     msr_unc_perf_global_ctr: 0x2ff0,
-    val_enable_ctrs: 0, // TODO
+    val_enable_ctrs: 0x20000000, // To validate
     msr_unc_cbo_perfevtsel0: &[0x2000, 0x2008, 0x2010, 0x2018, 0x2020, 0x2028, 0x2030, 0x2038, 0x2040, 0x2048],
     msr_unc_cbo_per_ctr0: &[0x2002, 0x200a, 0x2012, 0x201a, 0x2022, 0x202a, 0x2032, 0x203a, 0x2042, 0x204a],
-    val_disable_ctrs: 0, // TODO
-    val_select_evt_core: 0, // TODO
-    val_reset_ctrs: 0, // TODO
+    val_disable_ctrs: 0x0, // To validate
+    val_select_evt_core: 0x408f34, // To validate
+    val_reset_ctrs: 0x0, // To validate
 };
 
 // TODO verify his on ICELAKE, and appropriate values. Also deal with backport Cypress Cove ?
 const CANNON_LAKE_TO_TIGER_LAKE_CORE: CorePerfCounters = CorePerfCounters {
-    max_slice: 8, // TODO
+    max_slice: 8, // To validate
     msr_unc_perf_global_ctr: 0xe01,
-    val_enable_ctrs: 0, // TODO
+    val_enable_ctrs: 0x20000000, // To validate
     msr_unc_cbo_perfevtsel0: &[0x700, 0x708, 0x710, 0x718, 0x720, 0x728, 0x730, 0x738],
     msr_unc_cbo_per_ctr0: &[0x702, 0x70a, 0x712, 0x71a, 0x722, 0x72a, 0x732, 0x73a],
-    val_disable_ctrs: 0x0, // TODO
-    val_select_evt_core: 0, // TODO
-    val_reset_ctrs: 0x0, // TODO
+    val_disable_ctrs: 0x0, // To validate
+    val_select_evt_core: 0x408f34, // To validate
+    val_reset_ctrs: 0x0, // To validate
 };
 
 const SKYLAKE_KABYLAKE_CORE: CorePerfCounters = CorePerfCounters {
@@ -229,13 +229,23 @@ const SKYLAKE_KABYLAKE_CORE: CorePerfCounters = CorePerfCounters {
     val_reset_ctrs: 0x0,
 };
 
+// This is documented in Intel SDM, 20.3.4.6 (in March 2024 edition)
+
 const SANDYBRIDGE_TO_BROADWELL_CORE: CorePerfCounters = CorePerfCounters {
     max_slice: 0,
     msr_unc_perf_global_ctr: 0x391,
+    // Go in MSR_UNC_PERF_GLOBAL_CTR EN (bit 29) set to one, and route PMI to core 1-4 upon overflow.
     val_enable_ctrs: 0x2000000f,
     msr_unc_cbo_perfevtsel0: &[0x700, 0x710, 0x720, 0x730],
     msr_unc_cbo_per_ctr0: &[0x706, 0x716, 0x726, 0x736],
     val_disable_ctrs: 0x0,
+    // Counter Mask (bit 28-24) 0, Inv (23) 0, EN (22) 1, OVF (20) 0, E (18) 0,
+    // Unit Mask (bit 15-8) 0x8f, Event Select (bit 7-0) 0x34
+    // Event selection from https://perfmon-events.intel.com
+    // UNC_CBO_CACHE_LOOKUP.ANY_MESI
+    // L3 Lookup any request that access cache and found line in MESI-state. 	EventSel=34H UMask=8FH
+    // Counter=0,1
     val_select_evt_core: 0x408f34,
+    // TODO
     val_reset_ctrs: 0x0,
 };
