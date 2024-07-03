@@ -3,7 +3,7 @@
 use std::arch::x86_64::_mm_clflush;
 use crate::arch::CpuClass::{IntelCore, IntelXeon, IntelXeonSP};
 use crate::arch::{get_performance_counters_core, get_performance_counters_xeon};
-use crate::Error::UnsupportedCPU;
+use crate::Error::{InvalidParameter, UnsupportedCPU};
 use crate::msr::{read_msr_on_cpu, write_msr_on_cpu};
 
 pub mod msr;
@@ -39,7 +39,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     };
 
     if (performance_counters.max_slice as usize) < max_cbox {
-        return Err(Error::InvalidParameter);
+        return Err(InvalidParameter);
     }
 
     // Freeze counters
@@ -89,7 +89,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     Ok(results)
 }
 
-fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64>, Error> {
+fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     // Note, we need to add the workaround for one missing perf counter here.
     let performance_counters = if let Some(p) = get_performance_counters_core() {
         p
@@ -97,15 +97,13 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
         return Err(UnsupportedCPU);
     };
 
-    let workaround = if (performance_counters.max_slice as usize) + 1 == max_cbox {
-        max_cbox = performance_counters.max_slice as usize;
-        eprintln!("Using workaround");
-        true
-    } else if (performance_counters.max_slice as usize) >= max_cbox {
-        false
-    } else {
-        return Err(Error::InvalidParameter);
-    };
+    eprint!("Finding the number of CBox available... ");
+    let max_cbox = read_msr_on_cpu(performance_counters.msr_unc_cbo_config, cpu)? & 0xF; // TODO magic number (mask for bit 3:0)
+    eprintln!("{}", max_cbox);
+
+    if max_cbox > performance_counters.max_slice as u64 {
+        return Err(InvalidParameter);
+    }
 
     eprintln!("Disabling counters");
     write_msr_on_cpu(performance_counters.msr_unc_perf_global_ctr, cpu, performance_counters.val_disable_ctrs)?;
@@ -150,10 +148,11 @@ fn monitor_core(addr: *const u8, cpu: u8, mut max_cbox: usize) -> Result<Vec<u64
     Ok(results)
 }
 
+// Note: max_cbox is not used on Intel Core.
 pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result<Vec<u64>, Error> {
     match arch::determine_cpu_class() {
         Some(IntelCore) => {
-            unsafe { monitor_core(addr, cpu, max_cbox as usize) }
+            unsafe { monitor_core(addr, cpu) }
         }
         Some(IntelXeon) => {
             unsafe { monitor_xeon(addr, cpu, max_cbox as usize) }
