@@ -98,10 +98,10 @@ fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     };
 
     eprint!("Finding the number of CBox available... ");
-    let max_cbox = read_msr_on_cpu(performance_counters.msr_unc_cbo_config, cpu)? & 0xF; // TODO magic number (mask for bit 3:0)
+    let max_cbox = (read_msr_on_cpu(performance_counters.msr_unc_cbo_config, cpu)? & 0xF) as usize; // TODO magic number (mask for bit 3:0)
     eprintln!("{}", max_cbox);
 
-    if max_cbox > performance_counters.max_slice as u64 {
+    if max_cbox > performance_counters.max_slice as usize {
         return Err(InvalidParameter);
     }
 
