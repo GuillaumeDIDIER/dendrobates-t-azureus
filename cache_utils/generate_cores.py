@@ -45,7 +45,7 @@ for pack in get_elements(machine, "Package"):
         l1 = get_element(l2, "L1Cache")
         l1i = get_element(l1, "L1iCache")
         core_obj = get_element(l1i, "Core")
-        
+
         for PU in get_elements(core_obj, "PU"):
             core.append(int(PU.attrib["os_index"]))
             core_count += 1

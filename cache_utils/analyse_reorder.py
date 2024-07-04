@@ -52,7 +52,7 @@ slices = list(stats["hash"].unique())
 def slice_reorder(df, fst_slice, params=None):
     if params is None:
         params = ["clflush_miss_n", "clflush_remote_hit"]
-    
+
     keys = slices.copy()
     sliced_df = {
         i : df[(df["hash"] == i)] for i in keys
@@ -81,7 +81,7 @@ def slice_reorder(df, fst_slice, params=None):
         total_dist += dist
         new_reorder.append(next)
         keys.remove(next)
-    
+
     print("slice_group")
     print("\n".join([
         str(new_reorder.index(i)) for i in range(len(slices))
@@ -111,8 +111,8 @@ def core_reorder(df, fst_core, params=None, position="both", lcores=None):
 
     if params is None:
         params = ["clflush_miss_n", "clflush_remote_hit"]
-    
-    
+
+
     if lcores is None:
         lcores = cores.copy()
 
