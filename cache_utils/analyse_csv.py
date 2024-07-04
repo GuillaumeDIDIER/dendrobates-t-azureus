@@ -163,9 +163,10 @@ columns = [
     ("helper_core_fixed", "helper_core", "core"),
     ("helper_ht", "helper_core", "hthread"),
 ]
-for (col, icol, key) in columns:
-    df[col] = df[icol].apply(remap_core(key))
-    print_timed(f"Column {col} added")
+if not args.stats:
+    for (col, icol, key) in columns:
+        df[col] = df[icol].apply(remap_core(key))
+        print_timed(f"Column {col} added")
 
 
 if args.slice_remap:
@@ -244,13 +245,13 @@ def export_stats_csv():
         """
         Compute the statistic for 1 helper core/main core/slice/column
         - median : default, not influenced by errors
-        - average : better accuracy when observing floor steps in the results
+        - average : better precision when observing floor steps in the results
         """
         # return wq.median(x["time"], x[key])
         return np.average(x[key], weights=x["time"])
-    
+
     df_grouped = df.groupby(["main_core", "helper_core", "hash"])
-    
+
     miss = df_grouped.apply(lambda x: compute_stat(x, "clflush_miss_n"))
     hit_remote = df_grouped.apply(lambda x: compute_stat(x, "clflush_remote_hit"))
     hit_local = df_grouped.apply(lambda x: compute_stat(x, "clflush_local_hit_n"))
