@@ -213,23 +213,29 @@ def ha_dist(core, is_QPI):
     """
     if is_QPI:
         if core < 4:
-            return core
-        return 7-core
+            return core, 0
+        return 7-core, 1 # +1 for PCI
 
     if core < 4:
-        return 3-core
-    return core-4
+        return 3-core, 0
+    return core-4, 0
+
+def cclockwise_dist(source, dest):
+    base = (dest+8-source)%8
+    side_jump = 0
+    if source < 4 and dest >= 4:
+        side_jump = 1
+    elif source >= 4 and dest < 4:
+        side_jump = 2
+    return base, side_jump
 
 def cclockwise_ha_dist(core, is_QPI):
     """
     counter-clockwise distance to Home Agent
     """
     if is_QPI:
-        return 7-core
-
-    if core < 4:
-        return 3-core
-    return 11-core
+        return cclockwise_dist(core, 7)
+    return cclockwise_dist(core, 3)
 
 def miss_topology(main_core, slice_group, h, down_jump, top_jump, ini, ha_h):
     core, ring = slice_msg_distance(slice_group, main_core%8)
@@ -237,93 +243,79 @@ def miss_topology(main_core, slice_group, h, down_jump, top_jump, ini, ha_h):
     side_jump = 0
     side_jump += top_jump if ring == 2 else 0
     side_jump += down_jump if ring == 1 else 0
-    return (cclockwise_ha_dist(slice_group, False)//2)*ha_h+h*core + side_jump + ini
+    return (cclockwise_ha_dist(slice_group, False))*ha_h+h*core + side_jump + ini
 
 def miss_topology_df(x, h, down_jump, top_jump, ini, ha_h):
     func = lambda x, h, down_jump, top_jump, ini, ha_h: miss_topology(x["main_core_fixed"], x["slice_group"], h, down_jump, top_jump, ini, ha_h)
     return x.apply(func, args=(h, down_jump, top_jump, ini, ha_h), axis=1)
 
 
-def remote_hit_topology(main_core, helper_core, slice_group, C, h, H):
-    core0, ring0, _ = slice_msg_distance(main_core, slice_group)
-    core1, ring1, _ = slice_msg_distance(helper_core, slice_group)
-    return C + h*(core0+core1) + H*(ring0+ring1)
+def remote_hit_topology(main_core, helper_core, slice_group, const, core_jump, HA_jump):
+    """
+    main_core
+    -> local_slice
+    -> remote_slice
+    -> helper_core
+    -> remote_slice
+    -> local_slice
+    -> main_core
+    """
+    if main_core // 8 == helper_core // 8:
+        print("Can only do hit predictions for different socket", file=sys.stderr)
+        raise NotImplementedError
 
-def remote_hit_topology_df(x, C, h, H):
-    func = lambda x, C, h, H: remote_hit_topology(x["main_core_fixed"], x["helper_core_fixed"], x["slice_group"], C, h, H)
-    return x.apply(func, args=(C, h, H), axis=1)
+    helper, main = helper_core%8, main_core%8
+    main_slice_local = slice_msg_distance(slice_group, main)
+    slice_QPI = cclockwise_dist(0, slice_group) # clockwise
+    QPI_slice_r = cclockwise_dist(0, slice_group)
+    slice_r_helper = slice_msg_distance(slice_group, helper)
+
+    costs = (main_slice_local[0]+slice_QPI[0]+QPI_slice_r[0]+slice_r_helper[0], main_slice_local[1]+slice_QPI[1]+QPI_slice_r[1]+slice_r_helper[1])
+    return const+costs[0]*core_jump+costs[1]*HA_jump # may need some adjustments
+
+def remote_hit_topology_df(x, const, core_jump, HA_jump):
+    func = lambda x, const, core_jump, HA_jump: remote_hit_topology(x["main_core_fixed"], x["helper_core_fixed"], x["slice_group"], const, core_jump, HA_jump)
+    return x.apply(func, args=(const, core_jump, HA_jump), axis=1)
 
 
 def do_predictions(df):
     def plot_predicted_topo(col, row, x_ax, target, pred, df=df):
-        title_letter = {
+        titles = {
             "main_core_fixed": "A",
             "helper_core_fixed": "V",
-            "slice_group": "S"
-        }.get(col, col[0])
+            "slice_group": "S",
+            None: "None"
+        }
 
         figure_A0 = sns.FacetGrid(df, col=col, row=row)
-        figure_A0.map(sns.scatterplot, x_ax, pred, color="r")
-        figure_A0.map(sns.scatterplot, x_ax, target, color="g", marker="+")
-        figure_A0.set_titles(col_template="$"+title_letter+"$ = {col_name}")
+        figure_A0.map(sns.scatterplot, x_ax, target, color="g")
+        figure_A0.map(sns.scatterplot, x_ax, pred, color="r", marker="+")
+        figure_A0.set_titles(
+            col_template="$"+titles.get(col, col[0])+"$ = {col_name}",
+            row_template="$"+titles.get(row, row[0])+"$ = {row_name}"
+        )
         plot(f"medians_{pred}_{col}.png")
 
 
-
-    values = []
     main_socket, helper_socket = 0, 0
     dfc = df[(df["main_socket"] == main_socket) & (df["helper_socket"] == helper_socket)]
-    cores = sorted(list(dfc["main_core_fixed"].unique()))
-    slices = sorted(list(dfc["slice_group"].unique()))
     res_miss = optimize.curve_fit(
         miss_topology_df, dfc[["main_core_fixed", "slice_group"]], dfc["clflush_miss_n"]
     )
     print("Miss topology:")
     print(res_miss)
-    values.append(res_miss[0])
-
 
     dfc["predicted_miss"] = miss_topology_df(dfc, *(res_miss[0]))
     plot_predicted_topo("slice_group", None, "main_core_fixed", "clflush_miss_n", "predicted_miss", df=dfc)
     plot_predicted_topo("main_core_fixed", None, "slice_group", "clflush_miss_n", "predicted_miss", df=dfc)
 
-    for slice_ in slices:
-        dfc = df[(df["slice_group"] == slice_) & (df["main_socket"] == main_socket) & (df["helper_socket"] == helper_socket)]
-        res_miss = optimize.curve_fit(
-            miss_topology_df, dfc[["main_core_fixed", "slice_group"]], dfc["clflush_miss_n"]
-        )
-        values.append(res_miss[0])
-
-        dfc[f"predicted_miss_{slice_}"] = miss_topology_df(dfc, *(res_miss[0]))
-        plot_predicted_topo("slice_group", None, "main_core_fixed", "clflush_miss_n", f"predicted_miss_{slice_}", df=dfc)
-
-
-    print(list(values[0]))
-    print()
-    for i in values[1:]:
-        print(list(i))
-
-    values = []
-    for core in cores:
-        dfc = df[(df["main_core_fixed"] == core) & (df["main_socket"] == main_socket) & (df["helper_socket"] == helper_socket)]
-        res_miss = optimize.curve_fit(
-            miss_topology_df, dfc[["main_core_fixed", "slice_group"]], dfc["clflush_miss_n"]
-        )
-        values.append(res_miss[0])
-
-        dfc[f"predicted_miss_core{core}"] = miss_topology_df(dfc, *(res_miss[0]))
-        plot_predicted_topo("main_core_fixed", None, "slice_group", "clflush_miss_n", f"predicted_miss_core{core}", df=dfc)
-
-    for i in values:
-        print(list(i))
-    return
-
+    main_socket, helper_socket = 0, 1
+    dfc = df[(df["main_socket"] == main_socket) & (df["helper_socket"] == helper_socket)]
     res_remote_hit = optimize.curve_fit(
-        remote_hit_topology_df, df[["main_core_fixed", "helper_core_fixed", "slice_group"]], df["clflush_remote_hit"]
+        remote_hit_topology_df, dfc[["main_core_fixed", "helper_core_fixed", "slice_group"]], dfc["clflush_remote_hit"]
     )
     print("Remote hit topology:")
     print(res_remote_hit)
-
 
 
     df["diff_miss"] = df["clflush_miss_n"] - df["predicted_miss"]
@@ -339,10 +331,20 @@ def do_predictions(df):
         shown=["diff_miss"],
         separate_hthreads=True
     )
+    dfc["predicted_remote_hit"] = remote_hit_topology_df(dfc, *(res_remote_hit[0]))
+    plot_predicted_topo("slice_group", "helper_core_fixed", "main_core_fixed", "clflush_remote_hit", "predicted_remote_hit", df=dfc)
+    plot_predicted_topo("main_core_fixed", "slice_group", "helper_core_fixed", "clflush_remote_hit", "predicted_remote_hit", df=dfc)
+    plot_predicted_topo("helper_core_fixed", "main_core_fixed", "slice_group", "clflush_remote_hit", "predicted_remote_hit", df=dfc)
 
-    # df["predicted_remote_hit"] = remote_hit_topology_df(df, *(res_remote_hit[0]))
-    # plot_predicted_topo("slice_group", "helper_core_fixed", "main_core_fixed", "clflush_remote_hit", "predicted_remote_hit")
-    # plot_predicted_topo("main_core_fixed", "helper_core_fixed", "slice_group", "clflush_remote_hit", "predicted_remote_hit")
+    for col in ["slice_group", "helper_core_fixed", "main_core_fixed"]:
+        for val in sorted(list(dfc[col].unique())):
+            df_temp = dfc[(dfc[col] == val)]
+            res_remote_hit = optimize.curve_fit(
+            remote_hit_topology_df, df_temp[["main_core_fixed", "helper_core_fixed", "slice_group"]], df_temp["clflush_remote_hit"]
+            )
+            df_temp[f"predicted_remote_hit_{col}={val}"] = remote_hit_topology_df(df_temp, *(res_remote_hit[0]))
+            plot_predicted_topo("slice_group", "helper_core_fixed", "main_core_fixed", "clflush_remote_hit", f"predicted_remote_hit_{col}={val}", df=df_temp)
+            plot_predicted_topo("main_core_fixed", "helper_core_fixed", "slice_group", "clflush_remote_hit", f"predicted_remote_hit_{col}={val}", df=df_temp)
 
 
 
@@ -374,6 +376,7 @@ def facet_grid(
         colors=["y", "r", "g", "b"],
         separate_hthreads=False,
         title=None,
+        letters=None
     ):
     """
     Creates a facet grid showing all points
@@ -399,6 +402,10 @@ def facet_grid(
                 )
         else:
             grid.map(draw_fn, third, el, color=colors[i % len(colors)], marker='+')
+
+    if letters is not None:
+        grid.set_titles(col_template="$"+letters[0]+"$ = {row_name}", row_template="$"+letters[1]+"$ = {col_name}")
+    
 
     if title is not None:
         plot(title, g=grid)
@@ -465,27 +472,66 @@ if args.rslice:
     rslice()
 
 do_predictions(stats)
-#all_facets(stats, shown=["clflush_remote_hit"], colors=["r"], pre="hit")
-#all_facets(stats, shown=["clflush_miss_n"], colors=["b"], pre="miss")
+all_facets(stats, shown=["clflush_remote_hit"], colors=["r"], pre="hit_")
+all_facets(stats, shown=["clflush_miss_n"], colors=["b"], pre="miss_")
 
-#df=stats
-#for m, h, s in itertools.product((0, 1), (0, 1), df["slice_group"].unique()):
-#    dfc = df[(df["main_socket"] == m) & (df["main_core_fixed"]%8é == s) & (df["helper_socket"] == h)]
-#
-#    grid = sns.FacetGrid(dfc, row=None, col=None)
-#    grid.map(sns.scatterplot, "slice_group", "clflush_miss_n", marker="+")
-#
-#    plot(f"miss_m{m}h{h}m{s}", g=grid)
+def compare_facing():
+    df=stats
+    for m, h, s in itertools.product((0, 1), (0, 1), df["slice_group"].unique()):
+        dfc = df[(df["main_socket"] == m) & (df["main_core_fixed"]%8 == s) & (df["helper_socket"] == h)]
+
+        grid = sns.FacetGrid(dfc, row=None, col=None)
+        grid.map(sns.scatterplot, "slice_group", "clflush_miss_n", marker="+")
+
+        plot(f"miss_m{m}h{h}m{s}", g=grid)
 
 
-#with Pool(8) as pool:
-#    pool.starmap(
-#        do_facet,
-#        itertools.product(
-#            stats["main_socket"].unique(),
-#            stats["helper_socket"].unique(),
-#            (False, ),
-#            ("hit", "miss")
-#        )
-#    )
+def isolate_sockets():
+    with Pool(8) as pool:
+        pool.starmap(
+            do_facet,
+            itertools.product(
+                stats["main_socket"].unique(),
+                stats["helper_socket"].unique(),
+                (False, ),
+                ("hit", "miss")
+            )
+        )
 
+def superpose_sockets():
+    for main, same_socket in itertools.product(sorted(stats["main_core_fixed"].unique()), (True, False)):
+        df = stats[
+            (stats["slice_group"] == (main%8))
+            & (stats["main_core_fixed"] == main)
+            & ((stats["main_socket"] == stats["helper_socket"]) == same_socket)
+        ]
+        ax = sns.scatterplot(df, x="helper_core_fixed", y="clflush_remote_hit", marker="+", color="r")
+        ax.set_title(f"$S = {main%8}, V = {main}$")
+        plot(f"hit_{same_socket}_main{main:02d}.png")
+
+    df = stats[
+        (stats["slice_group"] == (stats["main_core_fixed"]%8))
+        & ((stats["main_core_fixed"]%8) == (stats["helper_core_fixed"]%8))
+        & (stats["main_socket"] != stats["helper_socket"])
+    ]
+    ax = sns.scatterplot(df, x="slice_group", y="clflush_remote_hit", marker="+", color="r")
+    plot(f"hit_same_slice.png")
+
+    stats["main_core_nosock"] = stats["main_core_fixed"]%8
+    stats["helper_core_nosock"] = stats["helper_core_fixed"]%8
+
+    facet_grid(
+        stats[(stats["main_socket"] != stats["helper_socket"])], "helper_core_nosock", "main_core_nosock", "slice_group",
+        title=f"hit_facet_slice_diff_socket.png",
+        separate_hthreads=True,
+        shown=["clflush_remote_hit"],
+        letters="VA"
+    )
+
+    facet_grid(
+        stats[(stats["main_socket"] == stats["helper_socket"])], "helper_core_nosock", "main_core_nosock", "slice_group",
+        title=f"hit_facet_slice_same_socket.png",
+        separate_hthreads=True,
+        letters="VA",
+        shown=["clflush_remote_hit"]
+    )
