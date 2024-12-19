@@ -1,13 +1,14 @@
 #![cfg(feature = "use_std")]
+extern crate std;
 
 use crate::mmap::MMappedMemory;
 use bitvec::prelude::*;
+use core::arch::global_asm;
 use lazy_static::lazy_static;
 use std::collections::LinkedList;
 use std::ptr::copy_nonoverlapping;
 use std::sync::Mutex;
 use std::vec::Vec;
-use core::arch::global_asm;
 
 struct WXRange {
     start: usize,
@@ -91,7 +92,7 @@ impl WXRange {
         while candidate + length <= self.end {
             let bit_range = &mut self.bitmap[(candidate - start)..(candidate - start + length)];
             if !bit_range.any() {
-                bit_range.set_all(true);
+                bit_range.fill(true);
                 return Ok(candidate as *mut u8);
             }
             candidate += align;
@@ -104,7 +105,7 @@ impl WXRange {
         if !self.bitmap[offset..(offset + size)].all() {
             panic!("deallocating invalid data");
         }
-        self.bitmap[offset..(offset + size)].set_all(false);
+        self.bitmap[offset..(offset + size)].fill(false);
     }
 }
 

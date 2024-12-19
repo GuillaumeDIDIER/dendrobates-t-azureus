@@ -19,8 +19,8 @@ test-success-exit-code = 33         # (0x10 << 1) | 1
 x86_64 = "0.15.1"
 vga_buffer = { path = "../vga_buffer" }
 polling_serial = { path = "../polling_serial" }
-volatile = "0.4.4"
-linked_list_allocator = "0.9.0"
+volatile = "0.6.1"
+linked_list_allocator = "0.10.5"
 cache_utils = { path = "../cache_utils", features = ["no_std"], default-features = false }
 arrayref = "0.3.6"
 

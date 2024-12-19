@@ -12,7 +12,7 @@ openssl = "0.10.33"
 cache_utils = { path = "../cache_utils" }
 memmap2 = "0.9.4"
 rand = "0.8.5"
-nix = "0.28.0"
+nix = "0.29.0"
 cache_side_channel = { path = "../cache_side_channel" }
 flush_flush = { path = "../flush_flush" }
 flush_reload = { path = "../flush_reload" }

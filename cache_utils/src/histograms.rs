@@ -80,7 +80,7 @@ impl<const WIDTH: u64, const N: usize> Into<usize> for SimpleBucketU64<WIDTH, N>
 impl<const WIDTH: u64, const N: usize> Bucket for SimpleBucketU64<WIDTH, N> {}
 
 impl<const WIDTH: u64, const N: usize> Step for SimpleBucketU64<WIDTH, N> {
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
+    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
         Step::steps_between(&start.0, &end.0)
     }
 

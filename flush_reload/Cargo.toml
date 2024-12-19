@@ -9,5 +9,5 @@ edition = "2021"
 [dependencies]
 cache_utils = { path = "../cache_utils" }
 cache_side_channel = { path = "../cache_side_channel" }
-nix = "0.28.0"
+# nix = "0.28.0"
 basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
