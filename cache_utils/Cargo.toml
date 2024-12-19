@@ -23,13 +23,27 @@ turn_lock = { path = "../turn_lock", optional = true }
 cache_slice = { path = "../cache_slice" }
 lazy_static = "1.4.0"
 bitvec = { version = "0.22.3", optional = true }
+numactl-sys = { path = "../../numactl-sys", optional = true }
+serde = { version = "1.0.216", features = ["derive"], optional = true }
+flexbuffers = { version = "2.0.0", optional = true }
+serde-big-array = { version = "0.5.1", optional = true }
+chrono = { version = "0.4.39", features = ["std", "clock"], optional = true }
+thiserror = { version = "2.0.7", optional = true }
+rmp-serde = "1.3.0"
+lzma-rs = "0.3.0"
 
 [features]
-use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec"]
+use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono"]
 no_std = ["polling_serial", "vga_buffer", "hashbrown"]
+numa = ["numactl-sys"]
+serde_support = ["serde", "flexbuffers", "serde-big-array"]
 
-default = ["use_std"]
+default = ["use_std", "numa", "serde_support"]
 
 [[bin]]
 name = "cache_utils"
 required-features = ["use_std"]
+
+[[bin]]
+name = "numa_analysis"
+required-features = ["use_std", "serde_support", "numa"]

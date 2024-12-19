@@ -7,5 +7,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nix = "0.28.0"
+nix = { version = "0.29.0", features = ["sched"] }
 bit_field = "0.10.2"

@@ -73,7 +73,7 @@ pub fn cache_slicing(
     _stepping: u32,
 ) -> CacheSlicing {
     let trailing_zeros = physical_cores.trailing_zeros();
-    if physical_cores != (1 << trailing_zeros) {
+    if physical_cores == 0 || physical_cores != (1 << trailing_zeros) {
         return Unsupported;
     }
 

@@ -1,3 +1,4 @@
+#![cfg(all(feature = "numa", feature = "use_std"))]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 // SPDX-FileCopyrightText: 2021 Guillaume DIDIER
@@ -6,22 +7,31 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, flush_and_reload,
-    get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
-    reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    HistParams, Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE,
-    CFLUSH_NUM_ITER, SP, SVP,
+    accumulate, calibrate_fixed_freq_2_thread, calibrate_fixed_freq_2_thread_numa,
+    calibration_result_to_ASVP, flush_and_reload, get_cache_attack_slicing, load_and_flush,
+    map_values, only_flush, only_reload, reduce, reload_and_flush, CalibrateOperation2T,
+    CalibrateResult2T, CalibrateResult2TNuma, CalibrationOptions, ErrorPrediction, HistParams,
+    Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
+use cache_utils::numa;
 use cache_utils::{flush, maccess, noop};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
+use cache_utils::numa_analysis::{
+    NumaCalibrationResult, OperationNames, BUCKET_NUMBER, BUCKET_SIZE,
+};
+use chrono::Local;
+use lzma_rs::xz_compress;
+use rmp_serde::{Deserializer, Serializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::process::Command;
 use std::str::from_utf8;
 
@@ -130,15 +140,17 @@ fn main() {
 
     // TODO this is where we generate the big list of parameters
 
+    let available_numa_nodes = numa::available_nodes().unwrap();
     // Generate core iterator
-    let mut core_pairs: Vec<(usize, usize)> = Vec::new();
+    let mut core_pairs: Vec<(numa::NumaNode, usize, usize)> = Vec::new();
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
-
-    for i in 0..CpuSet::count() {
+    for i in available_numa_nodes {
         for j in 0..CpuSet::count() {
-            if old.is_set(i).unwrap() && old.is_set(j).unwrap() {
-                core_pairs.push((i, j));
-                println!("{},{}", i, j);
+            for k in 0..CpuSet::count() {
+                if old.is_set(j).unwrap() && old.is_set(k).unwrap() {
+                    core_pairs.push((i, j, k));
+                    println!("{},{}", j, k);
+                }
             }
         }
     }
@@ -226,17 +238,17 @@ fn main() {
         },*/
     ];
 
-    let r = unsafe {
-        calibrate_fixed_freq_2_thread(
+    let r: Result<Vec<CalibrateResult2TNuma<BUCKET_SIZE, BUCKET_NUMBER>>, nix::Error> = unsafe {
+        calibrate_fixed_freq_2_thread_numa(
             pointer,
             64,                                      // FIXME : MAGIC
             min(array.len(), MAX_SEQUENCE) as isize, // MAGIC
-            &mut core_pairs.into_iter(),
+            &mut core_pairs.into_iter(),             // TODO change this
             &operations,
             CalibrationOptions {
                 hist_params: HistParams {
-                    bucket_number: CFLUSH_BUCKET_NUMBER,
-                    bucket_size: CFLUSH_BUCKET_SIZE,
+                    bucket_number: BUCKET_NUMBER,
+                    bucket_size: BUCKET_SIZE as usize,
                     iterations: CFLUSH_NUM_ITER,
                 },
                 verbosity: verbose_level,
@@ -245,6 +257,34 @@ fn main() {
             core_per_socket,
         )
     };
+
+    if let Ok(result) = r {
+        let names = operations
+            .iter()
+            .map(|op| OperationNames {
+                name: op.name.to_owned(),
+                display_name: op.display_name.to_owned(),
+            })
+            .collect();
+        let full_result = NumaCalibrationResult {
+            operations: names,
+            results: result,
+        };
+
+        use std::io::Write;
+
+        let time = Local::now();
+
+        let mut f1 = std::fs::File::create(format!(
+            "{}.NumaResults.msgpack.xz",
+            time.format("%Y-%m-%dT%H-%M-%S%z")
+        ))
+        .unwrap();
+        let mut buf = Vec::new();
+        let mut s = Serializer::new(&mut buf);
+        full_result.serialize(&mut s).unwrap();
+        xz_compress(&mut &buf[..], &mut f1).unwrap();
+    }
 
     //let mut analysis = HashMap::<ASV, ResultAnalysis>::new();
 
@@ -260,13 +300,13 @@ fn main() {
         .position(|op| op.name == hit_name)
         .unwrap();
 
-    let slicing = get_cache_attack_slicing(core_per_socket, cache_line_size);
+    //let slicing = get_cache_attack_slicing(core_per_socket, cache_line_size);
 
-    let h = if let Some(s) = slicing {
-        |addr: usize| -> usize { slicing.unwrap().hash(addr) }
-    } else {
-        panic!("No slicing function known");
-    };
+    //let h = if let Some(s) = slicing {
+    //    |addr: usize| -> usize { slicing.unwrap().hash(addr) }
+    //} else {
+    //    panic!("No slicing function known");
+    //};
 
     /* Analysis Flow
         Vec<CalibrationResult2T> (or Vec<CalibrationResult>) -> Corresponding ASVP + Analysis (use the type from two_thread_cal, or similar)

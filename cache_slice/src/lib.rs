@@ -89,7 +89,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
     Ok(results)
 }
 
-fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
+unsafe fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     // Note, we need to add the workaround for one missing perf counter here.
     let performance_counters = if let Some(p) = get_performance_counters_core() {
         p

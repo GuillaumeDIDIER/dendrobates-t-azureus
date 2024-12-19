@@ -172,6 +172,7 @@ fn main() {
     //println!("Number of cores per socket: {}", cps_str);
 
     let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)]
+        .trim()
         .parse()
         .unwrap_or(0);
 
@@ -390,8 +391,8 @@ fn main() {
             *accumulator += error_preds;
         },
     )
-    .remove(&())
-    .unwrap();
+        .remove(&())
+        .unwrap();
 
     // Thresholds aka HashMap<subset of ASVP,ThresholdError> ---------------------------------------
 

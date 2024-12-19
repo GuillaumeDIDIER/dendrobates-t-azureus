@@ -2,9 +2,10 @@
 
 use crate::complex_addressing::{cache_slicing, CacheAttackSlicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
+use alloc::boxed::Box;
 
-use cpuid::MicroArchitecture;
 use core::cmp::min;
+use cpuid::MicroArchitecture;
 
 use core::arch::x86_64 as arch_x86;
 #[cfg(feature = "no_std")]
@@ -15,13 +16,16 @@ pub use crate::calibrate_2t::*;
 
 extern crate alloc;
 use crate::calibration::Verbosity::*;
+use crate::classifiers::ErrorPredictor;
+use crate::histograms::StaticHistogram;
 use alloc::vec;
 use alloc::vec::Vec;
-use itertools::Itertools;
-use core::hash::Hash;
+use core::hash::{Hash, Hasher};
 use core::ops::{Add, AddAssign};
 #[cfg(feature = "no_std")]
 pub use hashbrown::HashMap;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "use_std")]
 pub use std::collections::HashMap;
 
@@ -246,7 +250,19 @@ pub struct CalibrateResult {
     pub median: Vec<u64>,
     pub min: Vec<u64>,
     pub max: Vec<u64>,
-    pub count: Vec<u32>
+    pub count: Vec<u32>,
+}
+
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
+pub struct StaticHistCalibrateResult<const WIDTH: u64, const N: usize> {
+    pub page: VPN,
+    pub offset: isize,
+    pub histogram: Vec<StaticHistogram<WIDTH, N>>,
+    pub median: Vec<u64>,
+    pub min: Vec<u64>,
+    pub max: Vec<u64>,
+    pub count: Vec<u64>,
 }
 
 pub struct CalibrateOperation<'a> {
@@ -555,6 +571,103 @@ pub type VPN = usize;
 pub type Slice = usize;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+
+pub struct CoreLocParameters {
+    pub socket: bool,
+    pub core: bool,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+
+pub struct LocationParameters {
+    attacker: CoreLocParameters,
+    victim: CoreLocParameters,
+    memory_numa_node: bool,
+    memory_slice: bool,
+    memory_vpn: bool,
+}
+
+/**
+Simple topological location of a core
+
+Note, this should eventually be improved to match the complete CPUID topology v2 leaf levels.
+*/
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct CoreLocation {
+    pub socket: u8,
+    pub core: u16,
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct AVMLocation {
+    pub attacker: CoreLocation,
+    pub victim: CoreLocation,
+    pub memory_numa_node: u8,
+    pub memory_slice: u8,
+    pub memory_vpn: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PartialLocation {
+    pub params: LocationParameters,
+    location: AVMLocation,
+}
+
+impl PartialEq for PartialLocation {
+    fn eq(&self, other: &Self) -> bool {
+        (self.params == other.params)
+            && (!self.params.attacker.socket
+                || self.location.attacker.socket == other.location.attacker.socket)
+            && (!self.params.attacker.core
+                || self.location.attacker.core == other.location.attacker.core)
+            && (!self.params.victim.socket
+                || self.location.victim.socket == other.location.victim.socket)
+            && (!self.params.victim.core || self.location.victim.core == other.location.victim.core)
+            && (!self.params.memory_numa_node
+                || self.location.memory_numa_node == other.location.memory_numa_node)
+            && (!self.params.memory_slice
+                || self.location.memory_slice == other.location.memory_slice)
+            && (!self.params.memory_vpn || self.location.memory_vpn == other.location.memory_vpn)
+    }
+}
+
+impl Eq for PartialLocation {}
+
+impl Hash for PartialLocation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.params.hash(state);
+        if self.params.attacker.socket {
+            self.location.attacker.socket.hash(state);
+        }
+        if self.params.attacker.core {
+            self.location.attacker.core.hash(state);
+        }
+        if self.params.victim.socket {
+            self.location.victim.socket.hash(state);
+        }
+        if self.params.victim.core {
+            self.location.victim.core.hash(state);
+        }
+        if self.params.memory_numa_node {
+            self.location.memory_numa_node.hash(state);
+        }
+        if self.params.memory_slice {
+            self.location.memory_slice.hash(state);
+        }
+        if self.params.memory_vpn {
+            self.location.memory_vpn.hash(state);
+        }
+    }
+}
+
+/* #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
+pub struct MemoryLocation {
+    pub slice: u8,
+    pub numa_node: u8,
+    pub vpn: usize,
+} */
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
 pub struct ASVP {
     pub attacker: usize,
     pub slice: Slice,
@@ -594,16 +707,18 @@ pub struct AV {
     pub attacker: usize,
     pub victim: usize,
 }
+/*
 
 #[derive(Debug, Clone)]
-pub struct RawHistogram {
+pub struct HitMissRawHistogram {
     pub hit: Vec<u32>,
     pub miss: Vec<u32>,
 }
 
 // ALL Histogram deal in buckets : FIXME we should clearly distinguish bucket vs time.
 // Thresholds are less than equal.
-impl RawHistogram {
+impl HitMissRawHistogram {
+    // This might be inefficient.
     pub fn from(
         mut calibrate_result: CalibrateResult,
         hit_index: usize,
@@ -613,7 +728,7 @@ impl RawHistogram {
         let hit = calibrate_result.histogram.swap_remove(hit_index);
         calibrate_result.histogram.push(Vec::default());
         let miss = calibrate_result.histogram.swap_remove(miss_index);
-        RawHistogram { hit, miss }
+        HitMissRawHistogram { hit, miss }
     }
 
     pub fn empty(len: usize) -> Self {
@@ -628,15 +743,15 @@ impl RawHistogram {
 
 // Tough case, both references.
 
-impl Add for &RawHistogram {
-    type Output = RawHistogram;
+impl Add for &HitMissRawHistogram {
+    type Output = HitMissRawHistogram;
 
-    fn add(self, rhs: &RawHistogram) -> Self::Output {
+    fn add(self, rhs: &HitMissRawHistogram) -> Self::Output {
         assert_eq!(self.hit.len(), rhs.hit.len());
         assert_eq!(self.miss.len(), rhs.miss.len());
         assert_eq!(self.hit.len(), self.miss.len());
         let len = self.hit.len();
-        let mut r = RawHistogram {
+        let mut r = HitMissRawHistogram {
             hit: vec![0; len],
             miss: vec![0; len],
         };
@@ -650,7 +765,7 @@ impl Add for &RawHistogram {
 
 // most common case re-use of self is possible. (Or a reduction to such a case)
 
-impl AddAssign<&RawHistogram> for RawHistogram {
+impl AddAssign<&HitMissRawHistogram> for HitMissRawHistogram {
     //type Rhs = &RawHistogram;
     fn add_assign(&mut self, rhs: &Self) {
         assert_eq!(self.hit.len(), rhs.hit.len());
@@ -666,8 +781,8 @@ impl AddAssign<&RawHistogram> for RawHistogram {
 
 // Fallback to most common case
 
-impl Add for RawHistogram {
-    type Output = RawHistogram;
+impl Add for HitMissRawHistogram {
+    type Output = HitMissRawHistogram;
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
@@ -675,8 +790,8 @@ impl Add for RawHistogram {
     }
 }
 
-impl Add<&Self> for RawHistogram {
-    type Output = RawHistogram;
+impl Add<&Self> for HitMissRawHistogram {
+    type Output = HitMissRawHistogram;
 
     fn add(mut self, rhs: &Self) -> Self::Output {
         self += rhs;
@@ -684,20 +799,21 @@ impl Add<&Self> for RawHistogram {
     }
 }
 
-impl Add<RawHistogram> for &RawHistogram {
-    type Output = RawHistogram;
+impl Add<HitMissRawHistogram> for &HitMissRawHistogram {
+    type Output = HitMissRawHistogram;
 
-    fn add(self, mut rhs: RawHistogram) -> Self::Output {
+    fn add(self, mut rhs: HitMissRawHistogram) -> Self::Output {
         rhs += self;
         rhs
     }
 }
 
-impl AddAssign<Self> for RawHistogram {
+impl AddAssign<Self> for HitMissRawHistogram {
     fn add_assign(&mut self, rhs: Self) {
         *self += &rhs;
     }
 }
+*/
 
 pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
     let len = vector.len();
@@ -711,18 +827,11 @@ pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
     res
 }
 
-#[derive(Debug, Clone)]
-pub struct HistogramCumSum {
-    pub num_hit: u32,
-    pub num_miss: u32,
-    pub hit: Vec<u32>,
-    pub miss: Vec<u32>,
-    pub hit_cum_sum: Vec<u32>,
-    pub miss_cum_sum: Vec<u32>,
-}
-
+/*
+// TODO Refactor, this histogram should not know about how classifier work, and classifier should be the one exploiting it.
+// FIXME Histograms are the one responsible for time <-> bucket mapping decisions too.
 impl HistogramCumSum {
-    pub fn from(raw_histogram: RawHistogram) -> Self {
+    pub fn from(raw_histogram: HitMissRawHistogram) -> Self {
         let len = raw_histogram.miss.len();
 
         assert_eq!(raw_histogram.hit.len(), len);
@@ -747,7 +856,7 @@ impl HistogramCumSum {
         hit_index: usize,
         miss_index: usize,
     ) -> Self {
-        Self::from(RawHistogram::from(calibrate_result, hit_index, miss_index))
+        Self::from(HitMissRawHistogram::from(calibrate_result, hit_index, miss_index))
     }
 
     pub fn error_for_threshold(&self, threshold: Threshold) -> ErrorPrediction {
@@ -875,6 +984,7 @@ impl AddAssign<Self> for HistogramCumSum {
         *self += &rhs;
     }
 }
+*/
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ErrorPrediction {
@@ -955,6 +1065,7 @@ impl AddAssign<Self> for ErrorPrediction {
     }
 }
 
+/*
 #[derive(Debug, Clone)]
 pub struct ErrorPredictions {
     pub histogram: HistogramCumSum,
@@ -1111,20 +1222,15 @@ impl AddAssign<Self> for ErrorPredictions {
         *self += &rhs;
     }
 }
+*/
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ThresholdError {
-    pub threshold: Threshold,
-    pub error: ErrorPrediction,
-}
-
+/*
 #[derive(Debug, Clone)]
-pub struct PotentialThresholds {
-    pub threshold_errors: Vec<ThresholdError>,
-}
+pub struct PotentialClassifiers<const WIDTH: u64, const N: usize> (Vec<(Box<dyn ErrorPredictor<WIDTH, N>>, ErrorPrediction)>);
 
-impl PotentialThresholds {
-    pub fn median(mut self) -> Option<ThresholdError> {
+
+impl<const WIDTH: u64, const N: usize> PotentialClassifiers<WIDTH, N> {
+    pub fn median(mut self) -> Option<(Box<dyn ErrorPredictor<WIDTH, N>>, ErrorPrediction)> {
         if self.threshold_errors.len() > 0 {
             let index = (self.threshold_errors.len() - 1) / 2;
             self.threshold_errors.push(Default::default());
@@ -1166,26 +1272,7 @@ impl PotentialThresholds {
         Self { threshold_errors }
     }
 }
-
-// Thresholds are less than equal.
-// usize for bucket, u64 for time.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Threshold {
-    pub bucket_index: usize,
-    pub miss_faster_than_hit: bool,
-}
-
-impl Threshold {
-    // FIXME !!!!
-    fn to_time(&self, bucket: usize) -> u64 {
-        bucket as u64
-    }
-
-    pub fn is_hit(&self, time: u64) -> bool {
-        self.miss_faster_than_hit && time >= self.to_time(self.bucket_index)
-            || !self.miss_faster_than_hit && time < self.to_time(self.bucket_index)
-    }
-}
+*/
 
 pub fn map_values<K, U, V, F>(input: HashMap<K, U>, f: F) -> HashMap<K, V>
 where
@@ -1256,7 +1343,6 @@ pub fn compute_threshold_error() -> (Threshold, ()) {
 
 #[cfg(test)]
 mod tests {
-
     use crate::calibration::map_values;
     #[cfg(feature = "no_std")]
     use hashbrown::HashMap;

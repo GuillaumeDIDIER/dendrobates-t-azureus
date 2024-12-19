@@ -24,10 +24,18 @@ const TE_CYBER_COBAYE: [isize; 4] = [0x1cc480, 0x1cc080, 0x1cbc80, 0x1cb880];
 
 const TE_CITRON_VERT: [isize; 4] = [0x1b5d40, 0x1b5940, 0x1b5540, 0x1b5140];
 
+// On Taran CAO2
+// 00000000001c2d40 r Te0
+// 00000000001c2940 r Te1
+// 00000000001c2540 r Te2
+// 00000000001c2140 r Te3
+const TE_TARAN_CAO: [isize; 4] = [0x1c2d40, 0x1c2940, 0x1c2540, 0x1c2140];
+
+
 fn main() {
     let openssl_path = Path::new(env!("OPENSSL_DIR")).join("lib/libcrypto.so");
 
-    let te = TE_CITRON_VERT;
+    let te = TE_TARAN_CAO;
 
     let mut side_channel_naivefr = NaiveFlushAndReload::new(Threshold {
         bucket_index: 220,

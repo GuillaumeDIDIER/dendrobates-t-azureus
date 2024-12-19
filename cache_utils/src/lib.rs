@@ -1,7 +1,9 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![feature(linked_list_cursors)]
+#![feature(step_trait)]
 #![allow(clippy::missing_safety_doc)]
 #![deny(unsafe_op_in_unsafe_fn)]
+extern crate alloc;
 
 use core::arch::x86_64 as arch_x86;
 use core::ptr;
@@ -28,8 +30,12 @@ pub mod frequency;
 #[cfg(feature = "use_std")]
 mod calibrate_2t;
 
+mod classifiers;
+mod histograms;
 #[cfg(feature = "use_std")]
 pub mod ip_tool;
+pub mod numa;
+pub mod numa_analysis;
 
 // rdtsc no fence
 pub unsafe fn rdtsc_nofence() -> u64 {
@@ -71,7 +77,8 @@ pub fn find_core_per_socket() -> u8 {
 
     //println!("Number of cores per socket: {}", cps_str);
 
-    let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)] // FIXME, for cases such as '   24  '
+    let core_per_socket: u8 = core_per_socket_str[0..(core_per_socket_str.len() - 1)]
+        .trim()
         .parse()
         .unwrap_or(0);
     core_per_socket

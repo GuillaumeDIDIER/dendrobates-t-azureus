@@ -1,15 +1,15 @@
 #![cfg(feature = "use_std")]
+extern crate std;
 
 use core::borrow::{Borrow, BorrowMut};
 use core::mem::size_of;
 use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
+use core::ptr;
 use core::ptr::NonNull;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use std::convert::TryFrom;
 use nix::sys::mman;
-use core::ptr;
-
+use std::convert::TryFrom;
 
 /* from linux kernel headers.
 #define HUGETLB_FLAG_ENCODE_SHIFT       26
@@ -34,30 +34,36 @@ impl<T> MMappedMemory<T> {
         initializer: impl Fn(usize) -> T,
     ) -> Result<MMappedMemory<T>, nix::Error> {
         assert_ne!(size_of::<T>(), 0);
-        match unsafe {
+        let prot = if executable {
+            mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE | mman::ProtFlags::PROT_EXEC
+        } else {
+            mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE
+        };
+        let r = unsafe {
             mman::mmap_anonymous(
                 None,
                 NonZeroUsize::try_from(size * size_of::<T>()).unwrap(),
-                mman::ProtFlags::PROT_READ | mman::ProtFlags::PROT_WRITE,
+                prot,
                 mman::MapFlags::MAP_PRIVATE
-                    | mman::MapFlags::MAP_ANONYMOUS
                     | if huge {
-                    mman::MapFlags::MAP_HUGETLB
-                } else {
-                    mman::MapFlags::MAP_ANONYMOUS
-                },
+                        mman::MapFlags::MAP_HUGETLB | mman::MapFlags::MAP_ANONYMOUS
+                    } else {
+                        mman::MapFlags::MAP_ANONYMOUS
+                    },
             )
-        }
-        {
+        };
+        match r {
             Ok(p) => {
-                let mut s : MMappedMemory<T> = MMappedMemory { pointer: p.cast(), size };
+                let mut s: MMappedMemory<T> = MMappedMemory {
+                    pointer: p.cast(),
+                    size,
+                };
                 for i in 0..s.size {
                     unsafe { ptr::write(s.pointer.as_ptr().add(i), initializer(i)) };
                 }
                 Ok(s)
-            } Err(e) => {
-                Err(e)
             }
+            Err(e) => Err(e),
         }
     }
     /*
@@ -157,4 +163,3 @@ impl<T> BorrowMut<[T]> for MMappedMemory<T> {
 
 // It owns the memory, so it should be safe to send.
 unsafe impl<T> Send for MMappedMemory<T> {}
-
