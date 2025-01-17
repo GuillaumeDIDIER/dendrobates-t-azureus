@@ -17,4 +17,6 @@ members = [
     "CacheObserver",
     "dendrobates-t-azureus",
     "cache_slice",
+    "calibration_analysis",
+    "calibration_results",
 ]

@@ -6,19 +6,20 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread, calibration_result_to_ASVP, flush_and_reload,
+    accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP, flush_and_reload,
     get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
     reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    HistParams, Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE,
-    CFLUSH_NUM_ITER, SP, SVP,
+    Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{flush, maccess, noop};
+use cache_utils::{flush, maccess, noop, numa};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
+use calibration_results::calibration_2t::CalibrateResult2TNuma;
+use calibration_results::numa::NumaNode;
 use std::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -131,13 +132,15 @@ fn main() {
     // TODO this is where we generate the big list of parameters
 
     // Generate core iterator
-    let mut core_pairs: Vec<(usize, usize)> = Vec::new();
+    let mut core_pairs: Vec<(NumaNode, usize, usize)> = Vec::new();
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+
+    let node = numa::available_nodes().unwrap().into_iter().next().unwrap();
 
     for i in 0..CpuSet::count() {
         for j in 0..CpuSet::count() {
             if old.is_set(i).unwrap() && old.is_set(j).unwrap() {
-                core_pairs.push((i, j));
+                core_pairs.push((node, i, j));
                 println!("{},{}", i, j);
             }
         }
@@ -226,21 +229,21 @@ fn main() {
         },*/
     ];
 
-    let r = unsafe {
-        calibrate_fixed_freq_2_thread(
+    let r: Result<
+        Vec<CalibrateResult2TNuma<CFLUSH_BUCKET_SIZE, CFLUSH_BUCKET_NUMBER>>,
+        nix::Error,
+    > = unsafe {
+        calibrate_fixed_freq_2_thread_numa(
             pointer,
             64,                                      // FIXME : MAGIC
             min(array.len(), MAX_SEQUENCE) as isize, // MAGIC
             &mut core_pairs.into_iter(),
             &operations,
             CalibrationOptions {
-                hist_params: HistParams {
-                    bucket_number: CFLUSH_BUCKET_NUMBER,
-                    bucket_size: CFLUSH_BUCKET_SIZE,
-                    iterations: CFLUSH_NUM_ITER,
-                },
+                iterations: CFLUSH_NUM_ITER,
                 verbosity: verbose_level,
                 optimised_addresses: true,
+                measure_hash: false,
             },
             core_per_socket,
         )

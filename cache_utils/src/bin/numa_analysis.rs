@@ -1,4 +1,4 @@
-use cache_utils::numa_analysis::{NumaCalibrationResult, BUCKET_NUMBER, BUCKET_SIZE};
+use calibration_results::numa_results::{NumaCalibrationResult, BUCKET_NUMBER, BUCKET_SIZE};
 use lzma_rs::{xz_compress, xz_decompress};
 use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};

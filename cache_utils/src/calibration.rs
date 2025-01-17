@@ -17,15 +17,18 @@ pub use crate::calibrate_2t::*;
 extern crate alloc;
 use crate::calibration::Verbosity::*;
 use crate::classifiers::ErrorPredictor;
-use crate::histograms::StaticHistogram;
 use alloc::vec;
 use alloc::vec::Vec;
+use calibration_results::calibration::VPN;
 use core::hash::{Hash, Hasher};
 use core::ops::{Add, AddAssign};
-#[cfg(feature = "no_std")]
+#[cfg(all(feature = "no_std", not(feature = "use_std")))]
 pub use hashbrown::HashMap;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+//#[cfg(feature = "serde_support")]
+//use serde::{Deserialize, Serialize};
+#[cfg(feature = "use_std")]
+extern crate std;
 #[cfg(feature = "use_std")]
 pub use std::collections::HashMap;
 
@@ -37,24 +40,20 @@ pub enum Verbosity {
     Debug,
 }
 
-pub struct HistParams {
-    pub iterations: u32,
-    pub bucket_size: usize,
-    pub bucket_number: usize,
-}
-
 pub struct CalibrationOptions {
-    pub hist_params: HistParams,
+    pub iterations: u32,
     pub verbosity: Verbosity,
     pub optimised_addresses: bool,
+    pub measure_hash: bool,
 }
 
 impl CalibrationOptions {
-    pub fn new(hist_params: HistParams, verbosity: Verbosity) -> CalibrationOptions {
+    pub fn new(iterations: u32, verbosity: Verbosity) -> CalibrationOptions {
         CalibrationOptions {
-            hist_params,
+            iterations,
             verbosity,
             optimised_addresses: false,
+            measure_hash: false,
         }
     }
 }
@@ -62,7 +61,8 @@ impl CalibrationOptions {
 pub unsafe fn only_reload(p: *const u8) -> u64 {
     let t = unsafe { rdtsc_fence() };
     unsafe { maccess(p) };
-    (unsafe { rdtsc_fence() } - t)
+    let r = unsafe { rdtsc_fence() } - t;
+    r
 }
 
 pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
@@ -81,7 +81,8 @@ pub unsafe fn reload_and_flush(p: *const u8) -> u64 {
 pub unsafe fn only_flush(p: *const u8) -> u64 {
     let t = unsafe { rdtsc_fence() };
     unsafe { flush(p) };
-    (unsafe { rdtsc_fence() } - t)
+    let r = unsafe { rdtsc_fence() } - t;
+    r
 }
 
 pub unsafe fn load_and_flush(p: *const u8) -> u64 {
@@ -152,7 +153,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     for i in 0..(4 << 10) {
         for _ in 0..(1 << 10) {
             let d = unsafe { only_reload(pointer.offset(i & (!0x3f))) } as usize;
-            hit_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE) as usize] += 1;
+            hit_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE)] += 1;
         }
     }
 
@@ -161,7 +162,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     for i in 0..(4 << 10) {
         for _ in 0..(1 << 10) {
             let d = unsafe { flush_and_reload(pointer.offset(i & (!0x3f))) } as usize;
-            miss_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE) as usize] += 1;
+            miss_histogram[min(BUCKET_NUMBER - 1, d / BUCKET_SIZE)] += 1;
         }
     }
 
@@ -186,7 +187,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     println!("Miss min {}", miss_min_i * BUCKET_SIZE);
     println!("Max hit {}", hit_max_i * BUCKET_SIZE);
 
-    let mut min = u32::max_value();
+    let mut min = u32::MAX;
     let mut min_i = 0;
     for i in hit_max_i..miss_min_i {
         if min > hit_histogram[i] + miss_histogram[i] {
@@ -200,12 +201,13 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     (min_i * BUCKET_SIZE) as u64
 }
 
-pub const CFLUSH_BUCKET_SIZE: usize = 1;
+pub const CFLUSH_BUCKET_SIZE: u64 = 1;
 pub const CFLUSH_BUCKET_NUMBER: usize = 1000;
 
 pub const CFLUSH_NUM_ITER: u32 = 1 << 10;
 pub const CLFLUSH_NUM_ITERATION_AV: u32 = 1 << 8;
 
+/*<const WIDTH: u64, const N: usize>*/
 pub fn calibrate_flush(
     array: &[u8],
     cache_line_size: usize,
@@ -217,7 +219,7 @@ pub fn calibrate_flush(
         panic!("not aligned nicely");
     }
 
-    calibrate_impl_fixed_freq(
+    calibrate_impl_fixed_freq::<CFLUSH_BUCKET_SIZE, CFLUSH_BUCKET_NUMBER>(
         pointer,
         cache_line_size,
         array.len() as isize,
@@ -233,11 +235,7 @@ pub fn calibrate_flush(
                 display_name: "clflush miss",
             },
         ],
-        HistParams {
-            bucket_number: CFLUSH_BUCKET_NUMBER,
-            bucket_size: CFLUSH_BUCKET_SIZE,
-            iterations: CFLUSH_NUM_ITER,
-        },
+        CFLUSH_NUM_ITER,
         verbose_level,
     )
 }
@@ -253,55 +251,37 @@ pub struct CalibrateResult {
     pub count: Vec<u32>,
 }
 
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct StaticHistCalibrateResult<const WIDTH: u64, const N: usize> {
-    pub page: VPN,
-    pub offset: isize,
-    pub histogram: Vec<StaticHistogram<WIDTH, N>>,
-    pub median: Vec<u64>,
-    pub min: Vec<u64>,
-    pub max: Vec<u64>,
-    pub count: Vec<u64>,
-}
-
 pub struct CalibrateOperation<'a> {
     pub op: unsafe fn(*const u8) -> u64,
     pub name: &'a str,
     pub display_name: &'a str,
 }
 
-pub unsafe fn calibrate(
+pub unsafe fn calibrate<const WIDTH: u64, const N: usize>(
     p: *const u8,
     increment: usize,
     len: isize,
     operations: &[CalibrateOperation],
-    buckets_num: usize,
-    bucket_size: usize,
     num_iterations: u32,
     verbosity_level: Verbosity,
 ) -> Vec<CalibrateResult> {
-    calibrate_impl_fixed_freq(
+    calibrate_impl_fixed_freq::<WIDTH, N>(
         p,
         increment,
         len,
         operations,
-        HistParams {
-            bucket_number: buckets_num,
-            bucket_size,
-            iterations: num_iterations,
-        },
+        num_iterations,
         verbosity_level,
     )
 }
 
 pub const SPURIOUS_THRESHOLD: u32 = 1;
-fn calibrate_impl_fixed_freq(
+fn calibrate_impl_fixed_freq<const WIDTH: u64, const N: usize>(
     p: *const u8,
     increment: usize,
     len: isize,
     operations: &[CalibrateOperation],
-    hist_params: HistParams,
+    iterations: u32,
     verbosity_level: Verbosity,
 ) -> Vec<CalibrateResult> {
     if verbosity_level >= Thresholds {
@@ -314,8 +294,8 @@ fn calibrate_impl_fixed_freq(
         );
     }
 
-    let to_bucket = |time: u64| -> usize { time as usize / hist_params.bucket_size };
-    let from_bucket = |bucket: usize| -> u64 { (bucket * hist_params.bucket_size) as u64 };
+    let to_bucket = |time: u64| -> usize { (time / WIDTH) as usize };
+    let from_bucket = |bucket: usize| -> u64 { (bucket as u64) * WIDTH };
 
     // FIXME : Core per socket
     let slicing = if let Some(uarch) = MicroArchitecture::get_micro_architecture() {
@@ -406,10 +386,10 @@ fn calibrate_impl_fixed_freq(
         calibrate_result.histogram.reserve(operations.len());
 
         for op in operations {
-            let mut hist = vec![0; hist_params.bucket_number];
-            for _ in 0..hist_params.iterations {
+            let mut hist = vec![0; N];
+            for _ in 0..iterations {
                 let time = unsafe { (op.op)(pointer) };
-                let bucket = min(hist_params.bucket_number - 1, to_bucket(time));
+                let bucket = min(N - 1, to_bucket(time));
                 hist[bucket] += 1;
             }
             calibrate_result.histogram.push(hist);
@@ -420,10 +400,10 @@ fn calibrate_impl_fixed_freq(
         let median_thresholds: Vec<u32> = calibrate_result
             .histogram
             .iter()
-            .map(|h| (hist_params.iterations - h[hist_params.bucket_number - 1]) / 2)
+            .map(|h| (iterations - h[N - 1]) / 2)
             .collect();
 
-        for j in 0..hist_params.bucket_number - 1 {
+        for j in 0..N - 1 {
             if verbosity_level >= RawResult {
                 print!("RESULT:{:p},", pointer);
                 if let Some(h) = hash {
@@ -542,7 +522,7 @@ pub fn calibrate_L3_miss_hit(
     }
     let pointer = (&array[0]) as *const u8;
 
-    let r = calibrate_impl_fixed_freq(
+    let r = calibrate_impl_fixed_freq::<2, 512>(
         pointer,
         cache_line_size,
         array.len() as isize,
@@ -551,11 +531,7 @@ pub fn calibrate_L3_miss_hit(
             name: "l3_hit",
             display_name: "L3 hit",
         }],
-        HistParams {
-            bucket_number: 512,
-            bucket_size: 2,
-            iterations: 1 << 11,
-        },
+        1 << 11,
         verbose_level,
     );
 
@@ -567,7 +543,6 @@ pub fn calibrate_L3_miss_hit(
    Easily put any combination, use None to signal Any possible value, Some to signal fixed value.
 */
 
-pub type VPN = usize;
 pub type Slice = usize;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
@@ -607,56 +582,129 @@ pub struct AVMLocation {
     pub memory_vpn: usize,
 }
 
+trait PartialLocation {
+    fn get_params(&self) -> &LocationParameters;
+    fn get_location(&self) -> &AVMLocation;
+}
+
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PartialLocation {
-    pub params: LocationParameters,
+pub struct PartialLocationOwned {
+    params: LocationParameters,
     location: AVMLocation,
 }
 
-impl PartialEq for PartialLocation {
-    fn eq(&self, other: &Self) -> bool {
-        (self.params == other.params)
-            && (!self.params.attacker.socket
-                || self.location.attacker.socket == other.location.attacker.socket)
-            && (!self.params.attacker.core
-                || self.location.attacker.core == other.location.attacker.core)
-            && (!self.params.victim.socket
-                || self.location.victim.socket == other.location.victim.socket)
-            && (!self.params.victim.core || self.location.victim.core == other.location.victim.core)
-            && (!self.params.memory_numa_node
-                || self.location.memory_numa_node == other.location.memory_numa_node)
-            && (!self.params.memory_slice
-                || self.location.memory_slice == other.location.memory_slice)
-            && (!self.params.memory_vpn || self.location.memory_vpn == other.location.memory_vpn)
+pub struct PartialLocationRef<'a> {
+    params: &'a LocationParameters,
+    location: AVMLocation,
+}
+
+trait PartialEqImpl {
+    fn eq_impl(&self, other: &Self) -> bool;
+}
+
+impl<T> PartialEqImpl for T
+where
+    T: PartialLocation,
+{
+    fn eq_impl(&self, other: &Self) -> bool {
+        let self_params = self.get_params();
+        let other_params = other.get_params();
+        let self_location = self.get_location();
+        let other_location = self.get_location();
+
+        (self_params == other_params)
+            && (!self_params.attacker.socket
+                || self_location.attacker.socket == other_location.attacker.socket)
+            && (!self_params.attacker.core
+                || self_location.attacker.core == other_location.attacker.core)
+            && (!self_params.victim.socket
+                || self_location.victim.socket == other_location.victim.socket)
+            && (!self_params.victim.core || self_location.victim.core == other_location.victim.core)
+            && (!self_params.memory_numa_node
+                || self_location.memory_numa_node == other_location.memory_numa_node)
+            && (!self_params.memory_slice
+                || self_location.memory_slice == other_location.memory_slice)
+            && (!self_params.memory_vpn || self_location.memory_vpn == other_location.memory_vpn)
     }
 }
 
-impl Eq for PartialLocation {}
+impl PartialEq for PartialLocationOwned {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_impl(other)
+    }
+}
 
-impl Hash for PartialLocation {
+impl<'a> PartialEq for PartialLocationRef<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_impl(other)
+    }
+}
+
+impl PartialLocation for PartialLocationOwned {
+    fn get_params(&self) -> &LocationParameters {
+        &self.params
+    }
+
+    fn get_location(&self) -> &AVMLocation {
+        &self.location
+    }
+}
+
+impl<'a> PartialLocation for PartialLocationRef<'a> {
+    fn get_params(&self) -> &LocationParameters {
+        self.params
+    }
+
+    fn get_location(&self) -> &AVMLocation {
+        &self.location
+    }
+}
+
+trait HashImpl {
+    fn hash_impl<H: Hasher>(&self, state: &mut H);
+}
+
+impl<T> HashImpl for T
+where
+    T: PartialLocation,
+{
+    fn hash_impl<H: Hasher>(&self, state: &mut H) {
+        let self_params = self.get_params();
+        let self_location = self.get_location();
+        self_params.hash(state);
+        if self_params.attacker.socket {
+            self_location.attacker.socket.hash(state);
+        }
+        if self_params.attacker.core {
+            self_location.attacker.core.hash(state);
+        }
+        if self_params.victim.socket {
+            self_location.victim.socket.hash(state);
+        }
+        if self_params.victim.core {
+            self_location.victim.core.hash(state);
+        }
+        if self_params.memory_numa_node {
+            self_location.memory_numa_node.hash(state);
+        }
+        if self_params.memory_slice {
+            self_location.memory_slice.hash(state);
+        }
+        if self_params.memory_vpn {
+            self_location.memory_vpn.hash(state);
+        }
+    }
+}
+
+impl Hash for PartialLocationOwned {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.params.hash(state);
-        if self.params.attacker.socket {
-            self.location.attacker.socket.hash(state);
-        }
-        if self.params.attacker.core {
-            self.location.attacker.core.hash(state);
-        }
-        if self.params.victim.socket {
-            self.location.victim.socket.hash(state);
-        }
-        if self.params.victim.core {
-            self.location.victim.core.hash(state);
-        }
-        if self.params.memory_numa_node {
-            self.location.memory_numa_node.hash(state);
-        }
-        if self.params.memory_slice {
-            self.location.memory_slice.hash(state);
-        }
-        if self.params.memory_vpn {
-            self.location.memory_vpn.hash(state);
-        }
+        self.hash_impl(state)
+    }
+}
+
+impl<'a> Hash for PartialLocationRef<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash_impl(state)
     }
 }
 
@@ -1344,8 +1392,10 @@ pub fn compute_threshold_error() -> (Threshold, ()) {
 #[cfg(test)]
 mod tests {
     use crate::calibration::map_values;
-    #[cfg(feature = "no_std")]
+    #[cfg(all(feature = "no_std", not(feature = "use_std")))]
     use hashbrown::HashMap;
+    #[cfg(feature = "use_std")]
+    extern crate std;
     #[cfg(feature = "use_std")]
     use std::collections::HashMap;
 

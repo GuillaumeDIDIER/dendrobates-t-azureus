@@ -1,12 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use cache_utils::cache_info::get_cache_info;
-use cache_utils::complex_addressing::cache_slicing;
+use cache_utils::complex_addressing::{cache_slicing, CacheAttackSlicing};
 use cpuid::MicroArchitecture;
 
+use cache_utils::find_core_per_socket;
 use std::process::Command;
 use std::str::from_utf8;
-use cache_utils::find_core_per_socket;
 
 pub fn main() {
     println!("{:#?}", get_cache_info());
@@ -42,14 +42,24 @@ pub fn main() {
                 vendor_family_model_stepping.1,
                 vendor_family_model_stepping.2,
             );
-            println!("{:?}", slicing.image((1 << 12) - 1));
-            println!("{:?}", slicing.kernel_compl_basis((1 << 12) - 1));
-            println!("{:?}", slicing.image_antecedent((1 << 12) - 1));
+            println!("{:?}", slicing);
+            let attack_slicing = CacheAttackSlicing::from(slicing, 64);
+            println!("{:?}", attack_slicing);
+            println!("{:?}", attack_slicing.image((1 << 12) - 1));
+            println!("{:?}", attack_slicing.kernel_compl_basis((1 << 12) - 1));
+            println!("{:?}", attack_slicing.image_antecedent((1 << 12) - 1));
+        } else {
+            println!("No vendor family stepping");
         }
+    } else {
+        println!("Unknown uarch");
     }
 
-    #[cfg(feature = "numa")]  {
-        use numactl_sys::{numa_available, numa_bitmask_isbitset, numa_bitmask_weight, bitmask, numa_all_nodes_ptr};
+    #[cfg(feature = "numa")]
+    {
+        use numactl_sys::{
+            bitmask, numa_all_nodes_ptr, numa_available, numa_bitmask_isbitset, numa_bitmask_weight,
+        };
 
         let numa_available = unsafe { numa_available() };
         if numa_available < 0 {

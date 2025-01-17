@@ -2,6 +2,7 @@
 extern crate std;
 
 use crate::numa::NumaError;
+pub use calibration_results::numa::numa_impl::*;
 use core::cmp::PartialEq;
 use core::ffi::c_uint;
 use core::fmt::{Display, Formatter};
@@ -61,12 +62,6 @@ enum NumaState {
 }
 
 static NUMA: Mutex<NumaState> = Mutex::new(NumaState::Uninitialized);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct NumaNode {
-    pub index: c_uint,
-}
 
 pub fn available_nodes() -> Result<HashSet<NumaNode>, NumaError> {
     let mut option = NUMA.lock().unwrap();
@@ -146,10 +141,4 @@ Bits in the tonodes mask can be set by calls to numa_bitmask_setbit().
 pub fn reset_memory_node() -> Result<(), NumaError> {
     unsafe { numa_set_membind(numa_all_nodes_ptr) };
     Ok(())
-}
-
-impl Display for NumaNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.index)
-    }
 }

@@ -2,20 +2,22 @@ extern crate alloc;
 
 use core::iter::Step;
 use core::ops::{Index, IndexMut};
-
 #[cfg(feature = "serde_support")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde_support")]
 use serde_big_array::BigArray;
+use std::fmt::Debug;
 /**********
  * Traits *
  **********/
 
-pub trait Bucket: Into<u64> + TryFrom<u64> + Ord + Eq + Copy {}
+pub trait Bucket: Into<u64> + TryFrom<u64> + Ord + Eq + Copy + Send + Sync + Debug {}
 
 /***********
  * Structs *
  ***********/
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct NaiveBucketU64(u64);
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct SimpleBucketU64<const WIDTH: u64, const N: usize>(usize);
@@ -24,7 +26,7 @@ pub struct SimpleBucketU64<const WIDTH: u64, const N: usize>(usize);
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct StaticHistogram<const WIDTH: u64, const N: usize> {
-    #[serde(with = "BigArray")]
+    #[cfg_attr(feature = "serde_support", serde(with = "BigArray"))]
     data: [u32; N],
 }
 
@@ -41,6 +43,27 @@ pub struct StaticHistogramCumSum<const WIDTH: u64, const N: usize> {
 /***********
  *  Impls  *
  ***********/
+
+/* Naive Bucket */
+impl From<u64> for NaiveBucketU64 {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl Into<u64> for NaiveBucketU64 {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+impl Into<usize> for NaiveBucketU64 {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl Bucket for NaiveBucketU64 {}
 
 /* Simple Bucket*/
 
@@ -86,11 +109,7 @@ impl<const WIDTH: u64, const N: usize> Step for SimpleBucketU64<WIDTH, N> {
 
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         if let Some(n) = Step::forward_checked(start.0, count) {
-            if n < N {
-                Some(Self(n))
-            } else {
-                None
-            }
+            if n < N { Some(Self(n)) } else { None }
         } else {
             None
         }

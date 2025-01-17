@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![feature(linked_list_cursors)]
-#![feature(step_trait)]
 #![allow(clippy::missing_safety_doc)]
 #![deny(unsafe_op_in_unsafe_fn)]
 extern crate alloc;
@@ -28,10 +27,9 @@ pub mod prefetcher;
 pub mod frequency;
 
 #[cfg(feature = "use_std")]
-mod calibrate_2t;
+pub mod calibrate_2t;
 
-mod classifiers;
-mod histograms;
+pub mod classifiers;
 #[cfg(feature = "use_std")]
 pub mod ip_tool;
 pub mod numa;

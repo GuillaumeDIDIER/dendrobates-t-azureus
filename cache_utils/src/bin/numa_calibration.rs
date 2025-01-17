@@ -7,21 +7,21 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread, calibrate_fixed_freq_2_thread_numa,
-    calibration_result_to_ASVP, flush_and_reload, get_cache_attack_slicing, load_and_flush,
-    map_values, only_flush, only_reload, reduce, reload_and_flush, CalibrateOperation2T,
-    CalibrateResult2T, CalibrateResult2TNuma, CalibrationOptions, ErrorPrediction, HistParams,
+    accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP, flush_and_reload,
+    get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
+    reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
     Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::numa;
 use cache_utils::{flush, maccess, noop};
+use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
-use cache_utils::numa_analysis::{
+use calibration_results::numa_results::{
     NumaCalibrationResult, OperationNames, BUCKET_NUMBER, BUCKET_SIZE,
 };
 use chrono::Local;
@@ -246,13 +246,10 @@ fn main() {
             &mut core_pairs.into_iter(),             // TODO change this
             &operations,
             CalibrationOptions {
-                hist_params: HistParams {
-                    bucket_number: BUCKET_NUMBER,
-                    bucket_size: BUCKET_SIZE as usize,
-                    iterations: CFLUSH_NUM_ITER,
-                },
+                iterations: CFLUSH_NUM_ITER,
                 verbosity: verbose_level,
                 optimised_addresses: true,
+                measure_hash: false,
             },
             core_per_socket,
         )
@@ -270,8 +267,6 @@ fn main() {
             operations: names,
             results: result,
         };
-
-        use std::io::Write;
 
         let time = Local::now();
 

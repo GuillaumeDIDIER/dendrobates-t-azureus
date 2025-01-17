@@ -2,23 +2,24 @@ extern crate std;
 
 use crate::calibration::Verbosity::{RawResult, Thresholds};
 use crate::calibration::{
-    get_cache_attack_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap,
-    StaticHistCalibrateResult, ASVP, SPURIOUS_THRESHOLD,
+    get_cache_attack_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
+    SPURIOUS_THRESHOLD,
 };
 use crate::complex_addressing::CacheAttackSlicing;
-use crate::histograms::{SimpleBucketU64, StaticHistogram};
 use crate::numa;
 use crate::numa::NumaNode;
 use alloc::vec;
 use cache_slice::determine_slice;
 use cache_slice::utils::core_per_package;
+use calibration_results::calibration::StaticHistCalibrateResult;
+use calibration_results::histograms::{SimpleBucketU64, StaticHistogram};
 use core::arch::x86_64 as arch_x86;
 use itertools::Itertools;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 use nix::Error;
-#[cfg(feature = "serde_support")]
-use serde::{Deserialize, Serialize};
+
+use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use std::cmp::min;
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
@@ -43,15 +44,6 @@ pub struct CalibrateResult2T {
                                                        // TODO
 }
 
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct CalibrateResult2TNuma<const WIDTH: u64, const N: usize> {
-    pub numa_node: NumaNode,
-    pub main_core: usize,
-    pub helper_core: usize,
-    pub res: Vec<StaticHistCalibrateResult<WIDTH, N>>,
-}
-
 pub unsafe fn calibrate_fixed_freq_2_thread_numa<
     I: Iterator<Item = (NumaNode, usize, usize)>,
     T,
@@ -66,7 +58,15 @@ pub unsafe fn calibrate_fixed_freq_2_thread_numa<
     options: CalibrationOptions,
     core_per_socket: u8,
 ) -> Result<Vec<CalibrateResult2TNuma<WIDTH, N>>, nix::Error> {
-    calibrate_fixed_freq_2_thread_numa_impl(p, increment, len, locations, operations, options)
+    calibrate_fixed_freq_2_thread_numa_impl(
+        p,
+        increment,
+        len,
+        locations,
+        operations,
+        options,
+        core_per_socket,
+    )
 }
 
 fn calibrate_fixed_freq_2_thread_numa_impl<
@@ -80,7 +80,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     len: isize,
     locations: &mut I,
     operations: &[CalibrateOperation2T<T>],
-    options: CalibrationOptions,
+    mut options: CalibrationOptions,
+    core_per_socket: u8,
 ) -> Result<Vec<CalibrateResult2TNuma<WIDTH, N>>, nix::Error> {
     if options.verbosity >= Thresholds {
         println!(
@@ -92,21 +93,12 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         );
     }
 
-    if options.hist_params.bucket_size as u64 != WIDTH {
-        // TODO change structure of options.
-        panic!(
-            "Wrong parameter value, options.hist_params.bucket_size, found {}, expected {}",
-            options.hist_params.bucket_size, WIDTH
-        );
-    }
+    let cache_line_length = 64; // FIXME MAGIC
 
-    if options.hist_params.bucket_number != N {
-        // TODO change structure of options.
-        panic!(
-            "Wrong parameter value, options.hist_params.bucket_number, found {}, expected {}",
-            options.hist_params.bucket_number, N
-        );
-    }
+    let slicing = match get_cache_attack_slicing(core_per_socket, cache_line_length) {
+        Some(v) => v,
+        None => panic!("Unable to determine cache slicing !"),
+    };
 
     let mut ret = Vec::new();
 
@@ -126,7 +118,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
 
     if options.verbosity >= Thresholds {
         println!(
-            "CSV: numa_node, main_core, helper_core, address, {} min, {} median, {} max",
+            "CSV: numa_node, main_core, helper_core, address, hash, {} min, {} median, {} max",
             operations
                 .iter()
                 .map(|operation| operation.name)
@@ -144,12 +136,21 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
 
     if options.verbosity >= RawResult {
         println!(
-            "RESULT: numa_node, main_core, helper_core, address, bucket, time_min, time_max, {}",
+            "RESULT: numa_node, main_core, helper_core, address, hash, bucket, time_min, time_max, {}",
             operations
                 .iter()
                 .map(|operation| operation.name)
                 .format(",")
         );
+    }
+
+    let image_antecedent = slicing.image_antecedent(len as usize - 1);
+
+    match slicing {
+        CacheAttackSlicing::ComplexAddressing(_) | CacheAttackSlicing::SimpleAddressing(_) => {
+            options.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
+        }
+        _ => {}
     }
 
     let mut current_numa_node = None;
@@ -213,7 +214,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         // do the calibration
         let mut calibrate_result_vec = Vec::new();
 
-        let offsets = (0..len as isize).step_by(increment);
+        //let offsets = (0..len as isize).step_by(increment);
+        let offsets = image_antecedent.values().copied();
 
         /*
         let offsets: Box<dyn Iterator<Item = isize>> = match image_antecedent {
@@ -226,12 +228,14 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
             let pointer = unsafe { p.offset(i) };
             params.address = pointer;
 
-            //let hash = slicing.hash(pointer as usize);
-            //let hash = determine_slice(pointer, main_core as u8, nb_cores).unwrap();
+            let mut hash = slicing.hash(pointer as usize);
+            if options.measure_hash {
+                hash = determine_slice(pointer, main_core as u8, nb_cores).unwrap();
+            }
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);
-                //print!(" (hash: {:x})", hash);
+                print!(" (hash: {:x})", hash);
                 println!();
             }
 
@@ -239,6 +243,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
             let mut calibrate_result = StaticHistCalibrateResult {
                 page: get_vpn(pointer),
                 offset: i,
+                hash,
                 histogram: Vec::new(),
                 median: vec![0; operations.len()],
                 min: vec![0; operations.len()],
@@ -253,16 +258,15 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                     params.op = op.prepare;
                     let mut rejected: u32 = 0;
                     let mut histogram = StaticHistogram::<WIDTH, N>::empty();
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         main_turn_handle.next();
                         params = main_turn_handle.wait();
                         let _time = unsafe { (op.op)(op.t, pointer) };
                     }
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         main_turn_handle.next();
                         params = main_turn_handle.wait();
                         let time = unsafe { (op.op)(op.t, pointer) };
-                        // histogram[&time] += 1; // This is currently broken as out-of-bound results will panic.
                         match histogram.get_mut(time) {
                             Some(b) => {
                                 *b += 1;
@@ -279,12 +283,12 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                 for op in operations {
                     let mut rejected: u32 = 0;
                     let mut histogram = StaticHistogram::<WIDTH, N>::empty();
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let _time = unsafe { (op.op)(op.t, pointer) };
                     }
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let time = unsafe { (op.op)(op.t, pointer) };
@@ -306,16 +310,14 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
             let median_thresholds: Vec<u32> = calibrate_result
                 .histogram
                 .iter()
-                .map(|h| {
-                    (options.hist_params.iterations - h[&SimpleBucketU64::<WIDTH, N>::MAX]) / 2
-                })
+                .map(|h| (options.iterations - h[&SimpleBucketU64::<WIDTH, N>::MAX]) / 2)
                 .collect();
 
             for j in SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX {
                 if options.verbosity >= RawResult {
                     print!(
-                        "RESULT: {}, {}, {}, {:p}, ",
-                        numa_node, main_core, helper_core, pointer
+                        "RESULT: {}, {}, {}, {:p}, {:x}",
+                        numa_node, main_core, helper_core, pointer, hash
                     );
                     //print!("{:x},", hash);
                     let bucket_index: usize = j.into();
@@ -370,8 +372,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                     );
                 }
                 print!(
-                    "CSV: {}, {}, {}, {:p}, ",
-                    numa_node, main_core, helper_core, pointer
+                    "CSV: {}, {}, {}, {:p}, {:x}",
+                    numa_node, main_core, helper_core, pointer, hash
                 );
                 //print!("{:x}, ", hash);
                 println!(
@@ -405,12 +407,21 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         }
     }
 
+    if let Err(e) = numa::reset_memory_node() {
+        eprintln!("Error reseting numa node: {:?}", e)
+    }
+
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
 
     Ok(ret)
 }
-
-pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>, T>(
+/*
+pub unsafe fn calibrate_fixed_freq_2_thread<
+    const WIDTH: u64,
+    const N: usize,
+    I: Iterator<Item = (usize, usize)>,
+    T,
+>(
     p: *const u8,
     increment: usize,
     len: isize,
@@ -419,7 +430,7 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>, 
     options: CalibrationOptions,
     core_per_socket: u8,
 ) -> Vec<CalibrateResult2T> {
-    calibrate_fixed_freq_2_thread_impl(
+    calibrate_fixed_freq_2_thread_impl::<WIDTH, N, I, T>(
         p,
         increment,
         len,
@@ -428,7 +439,7 @@ pub unsafe fn calibrate_fixed_freq_2_thread<I: Iterator<Item = (usize, usize)>, 
         options,
         core_per_socket,
     )
-}
+}*/
 
 const OPTIMISED_ADDR_ITER_FACTOR: u32 = 16;
 
@@ -440,9 +451,14 @@ struct HelperThreadParams {
 
 // TODO : Add the optimised address support
 // TODO : Modularisation / factorisation of some of the common code with the single threaded no_std version ?
-
+/*
 //#[cfg(feature = "use_std")]
-fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
+fn calibrate_fixed_freq_2_thread_impl<
+    const WIDTH: u64,
+    const N: usize,
+    I: Iterator<Item = (usize, usize)>,
+    T,
+>(
     p: *const u8,
     cache_line_length: usize,
     len: isize,
@@ -461,10 +477,10 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
         );
     }
 
-    let bucket_size = options.hist_params.bucket_size;
+    let bucket_size = WIDTH;
 
-    let to_bucket = |time: u64| -> usize { time as usize / bucket_size };
-    let from_bucket = |bucket: usize| -> u64 { (bucket * bucket_size) as u64 };
+    let to_bucket = |time: u64| -> usize { (time / bucket_size) as usize };
+    let from_bucket = |bucket: usize| -> u64 { (bucket as u64) * bucket_size };
 
     let slicing = match get_cache_attack_slicing(core_per_socket, cache_line_length) {
         Some(v) => v,
@@ -519,7 +535,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
 
     match slicing {
         CacheAttackSlicing::ComplexAddressing(_) | CacheAttackSlicing::SimpleAddressing(_) => {
-            options.hist_params.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
+            options.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
         }
         _ => {}
     }
@@ -595,11 +611,11 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             params.address = pointer;
 
             //let hash = slicing.hash(pointer as usize);
-            let hash = determine_slice(pointer, main_core as u8, nb_cores).unwrap();
+            //let hash = determine_slice(pointer, main_core as u8, nb_cores).unwrap();
 
             if options.verbosity >= Thresholds {
                 print!("Calibration for {:p}", pointer);
-                print!(" (hash: {:x})", hash);
+                //print!(" (hash: {:x})", hash);
                 println!();
             }
 
@@ -619,34 +635,34 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
                 for op in operations {
                     params = main_turn_handle.wait();
                     params.op = op.prepare;
-                    let mut hist = vec![0; options.hist_params.bucket_number];
-                    for _ in 0..options.hist_params.iterations {
+                    let mut hist = vec![0; N];
+                    for _ in 0..options.iterations {
                         main_turn_handle.next();
                         params = main_turn_handle.wait();
                         let _time = unsafe { (op.op)(op.t, pointer) };
                     }
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         main_turn_handle.next();
                         params = main_turn_handle.wait();
                         let time = unsafe { (op.op)(op.t, pointer) };
-                        let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
+                        let bucket = min(N - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
                     calibrate_result.histogram.push(hist);
                 }
             } else {
                 for op in operations {
-                    let mut hist = vec![0; options.hist_params.bucket_number];
-                    for _ in 0..options.hist_params.iterations {
+                    let mut hist = vec![0; N];
+                    for _ in 0..options.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let _time = unsafe { (op.op)(op.t, pointer) };
                     }
-                    for _ in 0..options.hist_params.iterations {
+                    for _ in 0..options.iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let time = unsafe { (op.op)(op.t, pointer) };
-                        let bucket = min(options.hist_params.bucket_number - 1, to_bucket(time));
+                        let bucket = min(N - 1, to_bucket(time));
                         hist[bucket] += 1;
                     }
                     calibrate_result.histogram.push(hist);
@@ -657,12 +673,10 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
             let median_thresholds: Vec<u32> = calibrate_result
                 .histogram
                 .iter()
-                .map(|h| {
-                    (options.hist_params.iterations - h[options.hist_params.bucket_number - 1]) / 2
-                })
+                .map(|h| (options.iterations - h[N - 1]) / 2)
                 .collect();
 
-            for j in 0..options.hist_params.bucket_number - 1 {
+            for j in 0..N - 1 {
                 if options.verbosity >= RawResult {
                     print!("RESULT:{},{},{:p},", main_core, helper_core, pointer);
                     print!("{:x},", hash);
@@ -750,7 +764,7 @@ fn calibrate_fixed_freq_2_thread_impl<I: Iterator<Item = (usize, usize)>, T>(
     // return the result
     // TODO
 }
-
+*/
 fn calibrate_fixed_freq_2_thread_helper(
     turn_handle: Arc<Mutex<TurnHandle<HelperThreadParams>>>,
     helper_core: usize,
