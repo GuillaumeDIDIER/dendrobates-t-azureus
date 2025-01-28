@@ -18,5 +18,5 @@ members = [
     "dendrobates-t-azureus",
     "cache_slice",
     "calibration_analysis",
-    "calibration_results",
+    "calibration_results", "numa_utils", "numa_types",
 ]

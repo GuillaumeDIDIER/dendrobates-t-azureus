@@ -14,7 +14,7 @@ use basic_timing_cache_channel::{
 };
 use cache_side_channel::CacheStatus::{Hit, Miss};
 use cache_side_channel::{
-    set_affinity, CacheStatus, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
+    set_affinity, CacheStatus, ChannelHandle, LocationSpec, MultipleAddrCacheSideChannel,
     SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{only_reload, Threshold, PAGE_LEN};

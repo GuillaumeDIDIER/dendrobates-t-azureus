@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde_support")]
 use serde_big_array::BigArray;
 use std::fmt::Debug;
+use std::ops::AddAssign;
 /**********
  * Traits *
  **********/
@@ -183,6 +184,14 @@ impl<const WIDTH: u64, const N: usize> IndexMut<u64> for StaticHistogram<WIDTH, 
     fn index_mut(&mut self, index: u64) -> &mut Self::Output {
         let bucket = SimpleBucketU64::try_from(index).expect("Invalid time");
         &mut self[&bucket]
+    }
+}
+
+impl<const WIDTH: u64, const N: usize> AddAssign<&Self> for StaticHistogram<WIDTH, N> {
+    fn add_assign(&mut self, rhs: &Self) {
+        for i in 0..N {
+            self.data[i] += rhs.data[i];
+        }
     }
 }
 

@@ -2,7 +2,8 @@
 use basic_timing_cache_channel::TopologyAwareError;
 use cache_side_channel::CacheStatus::Hit;
 use cache_side_channel::{
-    set_affinity, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel, SingleAddrCacheSideChannel,
+    set_affinity, ChannelHandle, LocationSpec, MultipleAddrCacheSideChannel,
+    SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::PAGE_LEN;
 use cache_utils::ip_tool::{Function, TIMED_MACCESS};

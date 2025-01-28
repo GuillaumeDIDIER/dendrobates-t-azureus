@@ -54,7 +54,7 @@ impl<T> MMappedMemory<T> {
         };
         match r {
             Ok(p) => {
-                let mut s: MMappedMemory<T> = MMappedMemory {
+                let s: MMappedMemory<T> = MMappedMemory {
                     pointer: p.cast(),
                     size,
                 };

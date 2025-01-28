@@ -7,13 +7,10 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP, flush_and_reload,
-    get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
-    reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
+    calibrate_fixed_freq_2_thread_numa, flush_and_reload, load_and_flush, only_flush, only_reload,
+    reload_and_flush, CalibrateOperation2T, CalibrationOptions, Verbosity, CLFLUSH_NUM_ITER,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::numa;
 use cache_utils::{flush, maccess, noop};
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use nix::sched::{sched_getaffinity, CpuSet};
@@ -26,12 +23,9 @@ use calibration_results::numa_results::{
 };
 use chrono::Local;
 use lzma_rs::xz_compress;
-use rmp_serde::{Deserializer, Serializer};
-use serde::{Deserialize, Serialize};
+use rmp_serde::Serializer;
+use serde::Serialize;
 use std::cmp::min;
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::io::Cursor;
 use std::process::Command;
 use std::str::from_utf8;
 
@@ -140,15 +134,15 @@ fn main() {
 
     // TODO this is where we generate the big list of parameters
 
-    let available_numa_nodes = numa::available_nodes().unwrap();
+    let available_numa_nodes = numa_utils::available_nodes().unwrap();
     // Generate core iterator
-    let mut core_pairs: Vec<(numa::NumaNode, usize, usize)> = Vec::new();
+    let mut locations: Vec<(numa_utils::NumaNode, usize, usize)> = Vec::new();
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     for i in available_numa_nodes {
         for j in 0..CpuSet::count() {
             for k in 0..CpuSet::count() {
                 if old.is_set(j).unwrap() && old.is_set(k).unwrap() {
-                    core_pairs.push((i, j, k));
+                    locations.push((i, j, k));
                     println!("{},{}", j, k);
                 }
             }
@@ -243,10 +237,10 @@ fn main() {
             pointer,
             64,                                      // FIXME : MAGIC
             min(array.len(), MAX_SEQUENCE) as isize, // MAGIC
-            &mut core_pairs.into_iter(),             // TODO change this
+            &mut locations.into_iter(),              // TODO change this
             &operations,
             CalibrationOptions {
-                iterations: CFLUSH_NUM_ITER,
+                iterations: CLFLUSH_NUM_ITER,
                 verbosity: verbose_level,
                 optimised_addresses: true,
                 measure_hash: false,

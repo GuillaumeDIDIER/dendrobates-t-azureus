@@ -1,10 +1,11 @@
 #![feature(specialization)]
-#![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use bit_field::BitField;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
+use numa_types::NumaNode;
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 pub mod table_side_channel;
@@ -26,15 +27,17 @@ pub enum SideChannelError {
     FatalError(ChannelFatalError),
     AddressNotReady(*const u8),
     AddressNotCalibrated(*const u8),
+    Retry,
 }
 
 pub trait ChannelHandle {
     fn to_const_u8_pointer(&self) -> *const u8;
 }
 
-pub trait CoreSpec {
+pub trait LocationSpec {
     fn main_core(&self) -> CpuSet;
     fn helper_core(&self) -> CpuSet;
+    fn numa_nodes(&self) -> HashSet<NumaNode>;
 }
 
 pub fn restore_affinity(cpu_set: &CpuSet) {
@@ -48,7 +51,7 @@ pub fn set_affinity(cpu_set: &CpuSet) -> Result<CpuSet, nix::Error> {
     Ok(old)
 }
 
-pub trait SingleAddrCacheSideChannel: CoreSpec + Debug {
+pub trait SingleAddrCacheSideChannel: LocationSpec + Debug {
     type Handle: ChannelHandle;
     //type SingleChannelFatalError: Debug;
     /// # Safety
@@ -73,7 +76,7 @@ pub trait SingleAddrCacheSideChannel: CoreSpec + Debug {
     ) -> Result<Vec<Self::Handle>, ChannelFatalError>;
 }
 
-pub trait MultipleAddrCacheSideChannel: CoreSpec + Debug {
+pub trait MultipleAddrCacheSideChannel: LocationSpec + Debug {
     type Handle: ChannelHandle;
     const MAX_ADDR: u32;
     /// # Safety
@@ -138,7 +141,7 @@ impl<T: MultipleAddrCacheSideChannel> SingleAddrCacheSideChannel for T {
 }
 */
 // From covert_channel_evaluation
-pub trait CovertChannel: Send + Sync + CoreSpec + Debug {
+pub trait CovertChannel: Send + Sync + LocationSpec + Debug {
     type CovertChannelHandle;
     const BIT_PER_PAGE: usize;
     unsafe fn transmit(&self, handle: &mut Self::CovertChannelHandle, bits: &mut BitIterator);

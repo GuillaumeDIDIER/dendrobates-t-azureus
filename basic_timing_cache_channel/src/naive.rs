@@ -3,28 +3,31 @@ use cache_side_channel::table_side_channel::{
     SingleTableCacheSideChannel, TableAttackResult, TableCacheSideChannel,
 };
 use cache_side_channel::{
-    BitIterator, CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, CovertChannel,
+    BitIterator, CacheStatus, ChannelFatalError, ChannelHandle, CovertChannel, LocationSpec,
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
-use cache_utils::calibration::{get_vpn, only_flush, only_reload, HashMap, Threshold, VPN};
+use cache_utils::calibration::{only_flush, only_reload};
+use cache_utils::classifiers::{HitClassifier, Threshold};
 use cache_utils::flush;
+use calibration_results::histograms::NaiveBucketU64;
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
 use nix::unistd::Pid;
+use numa_utils::{available_nodes, NumaNode};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 // Parameters required : The threshold.
 #[derive(Debug)]
 pub struct NaiveTimingChannel<T: TimingChannelPrimitives> {
-    threshold: Threshold,
-    current: HashMap<VPN, *const u8>,
+    threshold: Threshold<NaiveBucketU64>,
     main_core: CpuSet,
     helper_core: CpuSet,
     channel_primitive: T,
 }
 
 pub struct NaiveTimingChannelHandle {
-    vpn: VPN, // what is this field used for
+    //vpn: VPN, // what is this field used for
     addr: *const u8,
 }
 
@@ -38,10 +41,9 @@ unsafe impl<T: TimingChannelPrimitives + Send> Send for NaiveTimingChannel<T> {}
 unsafe impl<T: TimingChannelPrimitives + Sync> Sync for NaiveTimingChannel<T> {}
 
 impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
-    pub fn new(threshold: Threshold) -> Self {
+    pub fn new(threshold: Threshold<NaiveBucketU64>) -> Self {
         Self {
             threshold,
-            current: Default::default(),
             main_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
             helper_core: sched_getaffinity(Pid::from_raw(0)).unwrap(),
             channel_primitive: Default::default(),
@@ -78,7 +80,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         if T::NEED_RESET && reset {
             unsafe { flush(handle.addr) };
         }
-        if self.threshold.is_hit(t) {
+        if self.threshold.is_hit(NaiveBucketU64::from(t)) {
             Ok(CacheStatus::Hit)
         } else {
             Ok(CacheStatus::Miss)
@@ -126,12 +128,12 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         &mut self,
         addr: *const u8,
     ) -> Result<NaiveTimingChannelHandle, ChannelFatalError> {
-        let vpn = get_vpn(addr);
+        //let vpn = get_vpn(addr);
         /*if self.current.get(&vpn).is_some() {
             return Err(ChannelFatalError::Oops);
         } else {
             self.current.insert(vpn, addr);*/
-        Ok(NaiveTimingChannelHandle { vpn, addr })
+        Ok(NaiveTimingChannelHandle { /*vpn,*/ addr })
         //}
     }
 
@@ -175,7 +177,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         if T::NEED_RESET && reset {
             unsafe { flush(handle.addr) };
         }
-        if self.threshold.is_hit(t) {
+        if self.threshold.is_hit(NaiveBucketU64::from(t)) {
             Ok((CacheStatus::Hit, t))
         } else {
             Ok((CacheStatus::Miss, t))
@@ -183,13 +185,17 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
     }
 }
 
-impl<T: TimingChannelPrimitives> CoreSpec for NaiveTimingChannel<T> {
+impl<T: TimingChannelPrimitives> LocationSpec for NaiveTimingChannel<T> {
     fn main_core(&self) -> CpuSet {
         self.main_core
     }
 
     fn helper_core(&self) -> CpuSet {
         self.helper_core
+    }
+
+    fn numa_nodes(&self) -> HashSet<NumaNode> {
+        available_nodes().unwrap()
     }
 }
 

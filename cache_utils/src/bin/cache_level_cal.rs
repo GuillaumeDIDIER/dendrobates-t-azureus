@@ -4,7 +4,7 @@ use cache_utils::calibration::{
     accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP, flush_and_reload,
     get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
     reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    Verbosity, ASP, ASVP, AV, CFLUSH_BUCKET_NUMBER, CFLUSH_BUCKET_SIZE, CFLUSH_NUM_ITER, SP, SVP,
+    Verbosity, ASP, ASVP, AV, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop, numa};
@@ -15,7 +15,7 @@ use core::arch::x86_64 as arch_x86;
 
 use cache_utils::ip_tool::Function;
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use calibration_results::numa::NumaNode;
+use numa_utils::::NumaNode;
 use core::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -254,7 +254,7 @@ fn main() {
     ];
 
     let r: Result<
-        Vec<CalibrateResult2TNuma<CFLUSH_BUCKET_SIZE, CFLUSH_BUCKET_NUMBER>>,
+        Vec<CalibrateResult2TNuma<CLFLUSH_BUCKET_SIZE, CLFLUSH_BUCKET_NUMBER>>,
         nix::Error,
     > = unsafe {
         calibrate_fixed_freq_2_thread_numa(
@@ -264,7 +264,7 @@ fn main() {
             &mut core_pairs.into_iter(),
             &operations,
             CalibrationOptions {
-                iterations: CFLUSH_NUM_ITER,
+                iterations: CLFLUSH_NUM_ITER,
                 verbosity: verbose_level,
                 optimised_addresses: true,
                 measure_hash: false,

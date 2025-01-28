@@ -1,8 +1,11 @@
 #![allow(clippy::missing_safety_doc)]
 
+extern crate alloc; //#[cfg(feature = "serde_support")]
+                    //use serde::{Deserialize, Serialize};
+#[cfg(feature = "use_std")]
+extern crate std;
 use crate::complex_addressing::{cache_slicing, CacheAttackSlicing, CacheSlicing};
 use crate::{flush, maccess, rdtsc_fence};
-use alloc::boxed::Box;
 
 use core::cmp::min;
 use cpuid::MicroArchitecture;
@@ -14,7 +17,6 @@ use polling_serial::{serial_print as print, serial_println as println};
 #[cfg(feature = "use_std")]
 pub use crate::calibrate_2t::*;
 
-extern crate alloc;
 use crate::calibration::Verbosity::*;
 use crate::classifiers::ErrorPredictor;
 use alloc::vec;
@@ -25,10 +27,7 @@ use core::ops::{Add, AddAssign};
 #[cfg(all(feature = "no_std", not(feature = "use_std")))]
 pub use hashbrown::HashMap;
 use itertools::Itertools;
-//#[cfg(feature = "serde_support")]
-//use serde::{Deserialize, Serialize};
-#[cfg(feature = "use_std")]
-extern crate std;
+use numa_utils::NumaNode;
 #[cfg(feature = "use_std")]
 pub use std::collections::HashMap;
 
@@ -201,10 +200,10 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
     (min_i * BUCKET_SIZE) as u64
 }
 
-pub const CFLUSH_BUCKET_SIZE: u64 = 1;
-pub const CFLUSH_BUCKET_NUMBER: usize = 1000;
+pub const CLFLUSH_BUCKET_SIZE: u64 = 1;
+pub const CLFLUSH_BUCKET_NUMBER: usize = 1000;
 
-pub const CFLUSH_NUM_ITER: u32 = 1 << 10;
+pub const CLFLUSH_NUM_ITER: u32 = 1 << 10;
 pub const CLFLUSH_NUM_ITERATION_AV: u32 = 1 << 8;
 
 /*<const WIDTH: u64, const N: usize>*/
@@ -219,7 +218,7 @@ pub fn calibrate_flush(
         panic!("not aligned nicely");
     }
 
-    calibrate_impl_fixed_freq::<CFLUSH_BUCKET_SIZE, CFLUSH_BUCKET_NUMBER>(
+    calibrate_impl_fixed_freq::<CLFLUSH_BUCKET_SIZE, CLFLUSH_BUCKET_NUMBER>(
         pointer,
         cache_line_size,
         array.len() as isize,
@@ -235,7 +234,7 @@ pub fn calibrate_flush(
                 display_name: "clflush miss",
             },
         ],
-        CFLUSH_NUM_ITER,
+        CLFLUSH_NUM_ITER,
         verbose_level,
     )
 }
@@ -555,11 +554,12 @@ pub struct CoreLocParameters {
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Default)]
 
 pub struct LocationParameters {
-    attacker: CoreLocParameters,
-    victim: CoreLocParameters,
-    memory_numa_node: bool,
-    memory_slice: bool,
-    memory_vpn: bool,
+    pub attacker: CoreLocParameters,
+    pub victim: CoreLocParameters,
+    pub memory_numa_node: bool,
+    pub memory_slice: bool,
+    pub memory_vpn: bool,
+    pub memory_offset: bool,
 }
 
 /**
@@ -577,22 +577,99 @@ pub struct CoreLocation {
 pub struct AVMLocation {
     pub attacker: CoreLocation,
     pub victim: CoreLocation,
-    pub memory_numa_node: u8,
+    pub memory_numa_node: NumaNode,
     pub memory_slice: u8,
     pub memory_vpn: usize,
+    pub memory_offset: isize,
 }
 
-trait PartialLocation {
+impl LocationParameters {
+    pub fn is_subset(&self, other: &Self) -> bool {
+        (self.attacker.socket && !other.attacker.socket)
+            || (self.attacker.core && !other.attacker.core)
+            || (self.victim.socket && !other.victim.socket)
+            || (self.victim.core && !other.victim.core)
+            || (self.memory_numa_node && !other.memory_numa_node)
+            || (self.memory_slice && !other.memory_slice)
+            || (self.memory_vpn && !other.memory_vpn)
+            || (self.memory_offset && !other.memory_offset)
+    }
+}
+
+pub trait PartialLocation {
     fn get_params(&self) -> &LocationParameters;
     fn get_location(&self) -> &AVMLocation;
+
+    fn get_attacker_socker(&self) -> Option<u8> {
+        if self.get_params().attacker.socket {
+            Some(self.get_location().attacker.socket)
+        } else {
+            None
+        }
+    }
+
+    fn get_attacker_core(&self) -> Option<u16> {
+        if self.get_params().attacker.core {
+            Some(self.get_location().attacker.core)
+        } else {
+            None
+        }
+    }
+
+    fn get_victim_socker(&self) -> Option<u8> {
+        if self.get_params().attacker.socket {
+            Some(self.get_location().attacker.socket)
+        } else {
+            None
+        }
+    }
+
+    fn get_victim_core(&self) -> Option<u16> {
+        if self.get_params().victim.core {
+            Some(self.get_location().victim.core)
+        } else {
+            None
+        }
+    }
+    fn get_numa_node(&self) -> Option<NumaNode> {
+        if self.get_params().memory_numa_node {
+            Some(self.get_location().memory_numa_node)
+        } else {
+            None
+        }
+    }
+
+    fn get_slice(&self) -> Option<u8> {
+        if self.get_params().memory_slice {
+            Some(self.get_location().memory_slice)
+        } else {
+            None
+        }
+    }
+
+    fn get_vpn(&self) -> Option<usize> {
+        if self.get_params().memory_vpn {
+            Some(self.get_location().memory_vpn)
+        } else {
+            None
+        }
+    }
+    fn get_offset(&self) -> Option<isize> {
+        if self.get_params().memory_offset {
+            Some(self.get_location().memory_offset)
+        } else {
+            None
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Eq)]
 pub struct PartialLocationOwned {
     params: LocationParameters,
     location: AVMLocation,
 }
 
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct PartialLocationRef<'a> {
     params: &'a LocationParameters,
     location: AVMLocation,
@@ -625,6 +702,8 @@ where
             && (!self_params.memory_slice
                 || self_location.memory_slice == other_location.memory_slice)
             && (!self_params.memory_vpn || self_location.memory_vpn == other_location.memory_vpn)
+            && (!self_params.memory_offset
+                || self_location.memory_offset == other_location.memory_offset)
     }
 }
 
@@ -693,6 +772,9 @@ where
         if self_params.memory_vpn {
             self_location.memory_vpn.hash(state);
         }
+        if self_params.memory_offset {
+            self_location.memory_offset.hash(state);
+        }
     }
 }
 
@@ -705,6 +787,56 @@ impl Hash for PartialLocationOwned {
 impl<'a> Hash for PartialLocationRef<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash_impl(state)
+    }
+}
+
+/*
+// Broken due to lifetime issues
+trait PartialLocationProjection: Sized {
+    fn try_project<'s, 'a>(&'s self, params: &'a LocationParameters) -> Option<Self<'a>>;
+    fn project<'s, 'a>(&'s self, params: &'a LocationParameters) -> Self<'a> {
+        self.try_project(params).expect("Impossible projection")
+    }
+}*/
+
+impl PartialLocationOwned {
+    pub fn new(params: LocationParameters, location: AVMLocation) -> Self {
+        Self { params, location }
+    }
+    fn try_project(&self, params: &LocationParameters) -> Option<Self> {
+        if !params.is_subset(&self.params) {
+            None
+        } else {
+            let mut res = self.clone();
+            res.params = params.clone();
+            Some(res)
+        }
+    }
+    pub fn project(&self, params: &LocationParameters) -> Self {
+        self.try_project(params).expect("Impossible projection")
+    }
+}
+
+impl<'a> PartialLocationRef<'a> {
+    pub fn new(params: &'a LocationParameters, location: AVMLocation) -> Self {
+        Self { params, location }
+    }
+    fn try_project<'s, 'b>(
+        &'s self,
+        params: &'b LocationParameters,
+    ) -> Option<PartialLocationRef<'b>> {
+        if !params.is_subset(&self.params) {
+            None
+        } else {
+            let res = PartialLocationRef {
+                params,
+                location: self.location.clone(),
+            };
+            Some(res)
+        }
+    }
+    pub fn project<'s, 'b>(&'s self, params: &'b LocationParameters) -> PartialLocationRef<'b> {
+        self.try_project(params).expect("Impossible projection")
     }
 }
 

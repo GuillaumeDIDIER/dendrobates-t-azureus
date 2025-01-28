@@ -1,5 +1,5 @@
 use crate::calibration::StaticHistCalibrateResult;
-use crate::numa::NumaNode;
+use numa_types::NumaNode;
 #[cfg(feature = "serde_support")]
 use serde::{Deserialize, Serialize};
 

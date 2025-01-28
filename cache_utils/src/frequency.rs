@@ -29,7 +29,7 @@ pub fn get_freq_cpufreq_kernel() -> Result<u64, Error> {
     // TODO Add memorization
     match unsafe { sched_getcpu() }.try_into() {
         Ok(cpu) => Ok(unsafe { cpufreq_get_freq_kernel(cpu) }),
-        Err(e) => Err(Unimplemented),
+        Err(_e) => Err(Unimplemented),
     }
 }
 

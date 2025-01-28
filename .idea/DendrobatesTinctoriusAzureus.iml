@@ -46,6 +46,8 @@
       <sourceFolder url="file://$MODULE_DIR$/cache_slice/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/calibration_analysis/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/calibration_results/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/numa_utils/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/numa_types/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/cache_info/target" />
       <excludeFolder url="file://$MODULE_DIR$/cache_utils/target" />
       <excludeFolder url="file://$MODULE_DIR$/kernel/target" />

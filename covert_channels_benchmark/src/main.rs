@@ -26,8 +26,6 @@ const NUM_PAGE_MAX: usize = 32;
 
 const NUM_ITER: usize = 16;
 
-const CALIBRATION_STRAT: CalibrationStrategy = CalibrationStrategy::ASVP;
-
 struct BenchmarkStats {
     raw_res: Vec<(CovertChannelBenchmarkResult, usize, usize)>,
     average_p: f64,

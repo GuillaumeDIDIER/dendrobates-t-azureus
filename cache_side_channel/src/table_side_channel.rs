@@ -1,5 +1,5 @@
 use crate::{
-    CacheStatus, ChannelFatalError, ChannelHandle, CoreSpec, MultipleAddrCacheSideChannel,
+    CacheStatus, ChannelFatalError, ChannelHandle, LocationSpec, MultipleAddrCacheSideChannel,
     SideChannelError, SingleAddrCacheSideChannel,
 };
 
@@ -21,7 +21,7 @@ impl TableAttackResult {
     }
 }
 
-pub trait TableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
+pub trait TableCacheSideChannel<Handle: ChannelHandle>: LocationSpec + Debug {
     //type ChannelFatalError: Debug;
     /// # Safety
     ///
@@ -43,7 +43,7 @@ pub trait TableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
         Handle: 'c;
 }
 
-pub trait SingleTableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
+pub trait SingleTableCacheSideChannel<Handle: ChannelHandle>: LocationSpec + Debug {
     //type ChannelFatalError: Debug;
     /// # Safety
     ///
@@ -64,7 +64,7 @@ pub trait SingleTableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
     where
         Handle: 'c;
 }
-pub trait MultipleTableCacheSideChannel<Handle: ChannelHandle>: CoreSpec + Debug {
+pub trait MultipleTableCacheSideChannel<Handle: ChannelHandle>: LocationSpec + Debug {
     //type ChannelFatalError: Debug;
     /// # Safety
     ///
@@ -116,6 +116,7 @@ impl<T: SingleAddrCacheSideChannel> SingleTableCacheSideChannel<T::Handle> for T
                     SideChannelError::FatalError(e) => return Err(e),
                     SideChannelError::AddressNotReady(_addr) => panic!(),
                     SideChannelError::AddressNotCalibrated(_addr) => unimplemented!(),
+                    SideChannelError::Retry => unsafe { self.prepare_single(addr).unwrap() },
                 },
             }
             for _iteration in 0..100 {
@@ -179,7 +180,7 @@ impl<T: MultipleAddrCacheSideChannel> MultipleTableCacheSideChannel<T::Handle> f
     /// addresses must contain only valid pointers to read.
     unsafe fn attack_multi<'a, 'b, 'c, 'd>(
         &'a mut self,
-        mut addresses: &'b mut Vec<&'c mut T::Handle>,
+        addresses: &'b mut Vec<&'c mut T::Handle>,
         victim: &'d dyn Fn(),
         num_iteration: u32,
     ) -> Result<Vec<TableAttackResult>, ChannelFatalError>
@@ -206,6 +207,9 @@ impl<T: MultipleAddrCacheSideChannel> MultipleTableCacheSideChannel<T::Handle> f
             match unsafe { MultipleAddrCacheSideChannel::prepare(self, &mut batch) } {
                 Ok(_) => {}
                 Err(e) => match e {
+                    SideChannelError::Retry => unsafe {
+                        MultipleAddrCacheSideChannel::prepare(self, &mut batch).unwrap()
+                    },
                     SideChannelError::NeedRecalibration => unimplemented!(),
                     SideChannelError::FatalError(e) => return Err(e),
                     SideChannelError::AddressNotReady(_addr) => panic!(),
@@ -219,7 +223,7 @@ impl<T: MultipleAddrCacheSideChannel> MultipleTableCacheSideChannel<T::Handle> f
                     }
                 },
             }
-            for i in 0..num_iteration {
+            for _i in 0..num_iteration {
                 MultipleAddrCacheSideChannel::victim(self, victim);
 
                 let r = unsafe { MultipleAddrCacheSideChannel::test(self, &mut batch, true) }; // Fixme error handling

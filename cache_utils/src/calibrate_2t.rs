@@ -2,12 +2,10 @@ extern crate std;
 
 use crate::calibration::Verbosity::{RawResult, Thresholds};
 use crate::calibration::{
-    get_cache_attack_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
-    SPURIOUS_THRESHOLD,
+    get_cache_attack_slicing, get_vpn, AVMLocation, CalibrateResult, CalibrationOptions,
+    CoreLocation, HashMap, ASVP, SPURIOUS_THRESHOLD,
 };
 use crate::complex_addressing::CacheAttackSlicing;
-use crate::numa;
-use crate::numa::NumaNode;
 use alloc::vec;
 use cache_slice::determine_slice;
 use cache_slice::utils::core_per_package;
@@ -18,9 +16,9 @@ use itertools::Itertools;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 use nix::Error;
+use numa_utils::NumaNode;
 
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use std::cmp::min;
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -172,7 +170,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         }
 
         if current_numa_node != Some(numa_node) {
-            match numa::set_memory_node(numa_node) {
+            match numa_utils::set_memory_node(numa_node) {
                 Ok(_) => {}
                 Err(e) => {
                     panic!(
@@ -407,7 +405,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         }
     }
 
-    if let Err(e) = numa::reset_memory_node() {
+    if let Err(e) = numa_utils::reset_memory_node() {
         eprintln!("Error reseting numa node: {:?}", e)
     }
 
@@ -809,6 +807,50 @@ fn calibrate_fixed_freq_2_thread_helper(
 }
 
 // ------------------- Analysis ------------------
+
+// TODO: Do a reduction on conflicting calibration_granularity entries
+pub fn calibration_result_to_location_map<
+    const WIDTH: u64,
+    const N: usize,
+    T,
+    Analysis: Fn(StaticHistCalibrateResult<WIDTH, N>) -> T,
+>(
+    results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
+    analysis: Analysis, /*Todo slicing*/
+    slice_mapping: &impl Fn(usize) -> u8,
+    core_location: &impl Fn(usize) -> CoreLocation, // This is the caller's job,
+                                                    // he can use numa_node_of_cpu as an approximation, or use CPUID.
+                                                    // NB, this aso means we need to dump that info from the machines, for the analysis.
+) -> HashMap<AVMLocation, T> {
+    let mut analysis_result = HashMap::new();
+    for calibrate_2t_result in results {
+        let node = calibrate_2t_result.numa_node;
+        let attacker = calibrate_2t_result.main_core;
+        let victim = calibrate_2t_result.helper_core;
+        let attacker_location = core_location(attacker);
+        let victim_location = core_location(victim);
+        for r in calibrate_2t_result.res {
+            let offset = r.offset;
+            let vpn = r.page;
+            let slice = slice_mapping(r.hash);
+            let analysed = analysis(r);
+            let location = AVMLocation {
+                attacker: attacker_location,
+                victim: victim_location,
+                memory_numa_node: node,
+                memory_slice: slice,
+                memory_vpn: vpn,
+                memory_offset: offset,
+            };
+            if analysis_result.contains_key(&location) {
+                panic!("Duplicate Location");
+            } else {
+                analysis_result.insert(location, analysed);
+            }
+        }
+    }
+    analysis_result
+}
 
 pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
     results: Vec<CalibrateResult2T>,

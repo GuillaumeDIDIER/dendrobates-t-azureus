@@ -4,5 +4,4 @@
 pub mod calibration;
 pub mod calibration_2t;
 pub mod histograms;
-pub mod numa;
 pub mod numa_results;

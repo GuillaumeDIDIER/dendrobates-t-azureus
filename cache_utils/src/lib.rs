@@ -32,7 +32,6 @@ pub mod calibrate_2t;
 pub mod classifiers;
 #[cfg(feature = "use_std")]
 pub mod ip_tool;
-pub mod numa;
 pub mod numa_analysis;
 
 // rdtsc no fence

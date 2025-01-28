@@ -1,11 +1,13 @@
-#![cfg(all(feature = "numa", feature = "use_std"))]
+#![cfg(feature = "numa")]
+
+/* Code */
+
 extern crate std;
 
-use crate::numa::NumaError;
-pub use calibration_results::numa::numa_impl::*;
+use crate::NumaError;
 use core::cmp::PartialEq;
-use core::ffi::c_uint;
-use core::fmt::{Display, Formatter};
+use core::ffi::{c_int, c_uint};
+pub use numa_types::numa_impl::*;
 use numactl_sys;
 use numactl_sys::{
     bitmask, numa_all_nodes_ptr, numa_available, numa_bitmask_alloc, numa_bitmask_clearall,
@@ -63,6 +65,10 @@ enum NumaState {
 
 static NUMA: Mutex<NumaState> = Mutex::new(NumaState::Uninitialized);
 
+/**
+Return a HashSet of the available Numa nodes
+(Also works in Non Numa builds returning a single dummy node)
+*/
 pub fn available_nodes() -> Result<HashSet<NumaNode>, NumaError> {
     let mut option = NUMA.lock().unwrap();
     if *option == NumaState::Failed {
@@ -141,4 +147,13 @@ Bits in the tonodes mask can be set by calls to numa_bitmask_setbit().
 pub fn reset_memory_node() -> Result<(), NumaError> {
     unsafe { numa_set_membind(numa_all_nodes_ptr) };
     Ok(())
+}
+
+pub fn numa_node_of_cpu(cpu: usize) -> Result<NumaNode, NumaError> {
+    let n = unsafe { numactl_sys::numa_node_of_cpu(cpu as c_int) };
+    if n < 0 {
+        Err(NumaError::IllegalNode)
+    } else {
+        Ok(NumaNode { index: n as c_uint })
+    }
 }

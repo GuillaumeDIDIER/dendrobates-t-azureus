@@ -15,6 +15,8 @@ use alloc::vec::Vec;
  * Threshold only have N-1 possible meaningful values, thus Threshold i, means classes 0 to i (inclusive) are below, and class i+1 - N are above.
  */
 use calibration_results::histograms::{Bucket, SimpleBucketU64, StaticHistogramCumSum};
+use core::borrow::Borrow;
+use core::cmp::Ordering;
 use core::fmt::Debug;
 use itertools::Itertools;
 
@@ -39,7 +41,7 @@ pub trait ErrorPredictor<const WIDTH: u64, const N: usize>:
 }
 
 pub trait ErrorPredictionsBuilder<const WIDTH: u64, const N: usize>: Send + Sync {
-    type E: ErrorPredictor<WIDTH, N> + 'static;
+    type E: ErrorPredictor<WIDTH, N> + 'static + Clone;
     fn enumerate_error_predictions(
         &self,
         hits: &StaticHistogramCumSum<WIDTH, N>,
@@ -66,6 +68,11 @@ pub trait ErrorPredictionsBuilder<const WIDTH: u64, const N: usize>: Send + Sync
         hits: &StaticHistogramCumSum<WIDTH, N>,
         miss: &StaticHistogramCumSum<WIDTH, N>,
     ) -> Option<(Self::E, ErrorPrediction)>;
+
+    fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
+        &self,
+        classifiers: Vec<(T, U)>,
+    ) -> Option<(T, U)>;
 }
 
 pub trait DynErrorPredictionsBuilder<const WIDTH: u64, const N: usize> {
@@ -152,6 +159,22 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictor<WIDTH, N>
     }
 }
 
+impl<const WIDTH: u64, const N: usize> PartialOrd for Threshold<SimpleBucketU64<WIDTH, N>> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const WIDTH: u64, const N: usize> Ord for Threshold<SimpleBucketU64<WIDTH, N>> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.miss_faster_than_hit.cmp(&other.miss_faster_than_hit) {
+            Ordering::Less => Ordering::Less,
+            Ordering::Equal => self.bucket_index.cmp(&other.bucket_index),
+            Ordering::Greater => Ordering::Greater,
+        }
+    }
+}
+
 impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
     for SimpleThresholdBuilder<WIDTH, N>
 {
@@ -196,7 +219,20 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
         if n == 0 {
             None
         } else {
-            Some(min_classifiers[n - 1 / 2])
+            Some(min_classifiers[(n - 1) / 2])
+        }
+    }
+
+    fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
+        &self,
+        mut classifiers: Vec<(T, U)>,
+    ) -> Option<(T, U)> {
+        let n = classifiers.len();
+        if n == 0 {
+            None
+        } else {
+            classifiers.sort_by(|a, b| (*a).0.borrow().cmp(b.0.borrow()));
+            Some(classifiers[(n - 1) / 2])
         }
     }
 }
@@ -361,6 +397,31 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
         let index = (indexes.len() - 1) / 2;
 
         Some(min_classifiers[index])
+    }
+
+    fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
+        &self,
+        classifiers: Vec<(T, U)>,
+    ) -> Option<(T, U)> {
+        let n = classifiers.len();
+        if n == 0 {
+            return None;
+        }
+        // 2. Find the classifier minimizing the distance to the others ?
+        let mut total_distance = vec![0usize; n];
+        for i in 0..n {
+            for j in 0..n {
+                total_distance[i] += distance(classifiers[i].0.borrow(), classifiers[j].0.borrow())
+            }
+        }
+        let indexes = total_distance
+            .into_iter()
+            .enumerate()
+            .min_set_by_key(|(_, k)| *k);
+        assert!(indexes.len() > 0);
+        let index = (indexes.len() - 1) / 2;
+
+        Some(classifiers[index])
     }
 }
 

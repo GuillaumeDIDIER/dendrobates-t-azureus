@@ -129,7 +129,7 @@ impl WXAllocator {
             }
             const PAGE_SIZE: usize = 1 << 12;
             let size = (length + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
-            let new_page = MMappedMemory::try_new(size, false, true, |size| 0xcc as u8);
+            let new_page = MMappedMemory::try_new(size, false, true, |_size| 0xcc as u8);
             match new_page {
                 Err(_) => return Err(()),
                 Ok(new_page) => {

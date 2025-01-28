@@ -9,4 +9,7 @@ edition = "2021"
 [dependencies]
 cache_utils = { path = "../cache_utils" }
 cache_side_channel = { path = "../cache_side_channel" }
+calibration_results = { path = "../calibration_results" }
 nix = "0.29.0"
+rand = "0.9.0"
+numa_utils = { path = "../numa_utils" }
