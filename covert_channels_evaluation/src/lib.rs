@@ -82,7 +82,7 @@ fn transmit_thread<T: CovertChannel>(
     num_bytes: usize,
     mut params: CovertChannelParams<T>,
 ) -> (u64, std::time::Instant, Vec<u8>) {
-    let old_affinity = set_affinity(&(*params.covert_channel).helper_core());
+    let _old_affinity = set_affinity(&(*params.covert_channel).helper_core());
 
     let mut result = Vec::new();
     result.reserve(num_bytes);
@@ -91,7 +91,7 @@ fn transmit_thread<T: CovertChannel>(
         result.push(byte);
     }
 
-    let mut bit_sent = 0;
+    let mut _bit_sent = 0;
     let mut bit_iter = BitIterator::new(&result);
     let start_time = std::time::Instant::now();
     let start = unsafe { rdtsc_fence() };
@@ -99,7 +99,7 @@ fn transmit_thread<T: CovertChannel>(
         for page in params.handles.iter_mut() {
             let mut handle = page.wait();
             unsafe { params.covert_channel.transmit(&mut *handle, &mut bit_iter) };
-            bit_sent += T::BIT_PER_PAGE;
+            _bit_sent += T::BIT_PER_PAGE;
             page.next();
             if bit_iter.at_end() {
                 break;
@@ -117,6 +117,10 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     // Allocate pages
 
     let old_affinity = set_affinity(&channel.main_core()).unwrap();
+    let nodes = channel.numa_nodes();
+    numa_utils::set_memory_nodes(nodes).unwrap();
+
+    // TODO, restore old numa nodes afterwards.
 
     let size = num_pages * PAGE_SIZE;
     let m = MMappedMemory::new(size, false, false, |i| (i / PAGE_SIZE) as u8);
@@ -156,7 +160,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
             received_bits.extend(&mut bits.iter());
             while received_bits.len() >= u8::BIT_LENGTH {
                 let mut byte = 0;
-                for i in 0..u8::BIT_LENGTH {
+                for _i in 0..u8::BIT_LENGTH {
                     byte <<= 1;
                     let bit = received_bits.pop_front().unwrap();
                     byte |= bit as u8;

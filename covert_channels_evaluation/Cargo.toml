@@ -13,3 +13,7 @@ turn_lock = { path = "../turn_lock" }
 cache_utils = { path = "../cache_utils" }
 # nix = "0.28.0"
 cache_side_channel = { path = "../cache_side_channel" }
+numa_utils = { path = "../numa_utils" }
+
+[features]
+numa = ["numa_utils/numa"]

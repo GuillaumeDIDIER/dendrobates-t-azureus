@@ -12,7 +12,7 @@ use cache_utils::calibration::CLFLUSH_BUCKET_NUMBER;
 use cache_utils::calibration::CLFLUSH_BUCKET_SIZE;
 use num_rational::Rational64;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct FFPrimitives {}
 
 impl TimingChannelPrimitives for FFPrimitives {

@@ -27,6 +27,7 @@ use core::ops::{Add, AddAssign};
 #[cfg(all(feature = "no_std", not(feature = "use_std")))]
 pub use hashbrown::HashMap;
 use itertools::Itertools;
+use num_rational::Rational64;
 use numa_utils::NumaNode;
 #[cfg(feature = "use_std")]
 pub use std::collections::HashMap;
@@ -201,7 +202,7 @@ pub fn calibrate_access(array: &[u8; 4096]) -> u64 {
 }
 
 pub const CLFLUSH_BUCKET_SIZE: u64 = 1;
-pub const CLFLUSH_BUCKET_NUMBER: usize = 1000;
+pub const CLFLUSH_BUCKET_NUMBER: usize = 1500;
 
 pub const CLFLUSH_NUM_ITER: u32 = 1 << 10;
 pub const CLFLUSH_NUM_ITERATION_AV: u32 = 1 << 8;
@@ -585,14 +586,14 @@ pub struct AVMLocation {
 
 impl LocationParameters {
     pub fn is_subset(&self, other: &Self) -> bool {
-        (self.attacker.socket && !other.attacker.socket)
-            || (self.attacker.core && !other.attacker.core)
-            || (self.victim.socket && !other.victim.socket)
-            || (self.victim.core && !other.victim.core)
-            || (self.memory_numa_node && !other.memory_numa_node)
-            || (self.memory_slice && !other.memory_slice)
-            || (self.memory_vpn && !other.memory_vpn)
-            || (self.memory_offset && !other.memory_offset)
+        (!self.attacker.socket || other.attacker.socket)
+            && (!self.attacker.core || other.attacker.core)
+            && (!self.victim.socket || other.victim.socket)
+            && (!self.victim.core || other.victim.core)
+            && (!self.memory_numa_node || other.memory_numa_node)
+            && (!self.memory_slice || other.memory_slice)
+            && (!self.memory_vpn || other.memory_vpn)
+            && (!self.memory_offset || other.memory_offset)
     }
 }
 
@@ -1183,6 +1184,12 @@ impl ErrorPrediction {
     }
     pub fn error_rate(&self) -> f32 {
         (self.false_miss + self.false_hit) as f32 / (self.total() as f32)
+    }
+    pub fn error_ratio(&self) -> Rational64 {
+        Rational64::new(
+            (self.false_hit + self.false_miss) as i64,
+            self.total() as i64,
+        )
     }
 }
 

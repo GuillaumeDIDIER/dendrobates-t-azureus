@@ -17,6 +17,10 @@ pub fn set_memory_node(node: NumaNode) -> Result<(), NumaError> {
     Ok(())
 }
 
+pub fn set_memory_nodes(node: HashSet<NumaNode>) -> Result<(), NumaError> {
+    Ok(())
+}
+
 pub fn reset_memory_node() -> Result<(), NumaError> {
     Ok(())
 }

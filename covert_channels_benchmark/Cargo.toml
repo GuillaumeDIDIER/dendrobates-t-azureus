@@ -8,10 +8,13 @@ edition = "2021"
 
 [dependencies]
 covert_channels_evaluation = { path = "../covert_channels_evaluation" }
+cache_side_channel = { path = "../cache_side_channel" }
 flush_flush = { path = "../flush_flush" }
 flush_reload = { path = "../flush_reload" }
 nix = "0.29.0"
 basic_timing_cache_channel = { path = "../basic_timing_cache_channel" }
 cache_utils = { path = "../cache_utils" }
+num-rational = "0.4.2"
+numa_utils = { path = "../numa_utils", default-features = true }
 
 

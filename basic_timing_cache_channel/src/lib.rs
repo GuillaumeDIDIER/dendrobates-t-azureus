@@ -87,6 +87,7 @@ pub enum TopologyAwareError {
     Oops,
 }
 
+#[derive(Clone)]
 pub struct TopologyAwareTimingChannel<
     const WIDTH: u64,
     const N: usize,
@@ -148,7 +149,7 @@ impl<
     > TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
 {
     pub fn new(
-        fixed_location: (NumaNode, usize, usize), // Those might need to change to a simpler types (core numbers, numa node ?)
+        fixed_location: (Option<NumaNode>, Option<usize>, Option<usize>), // Those might need to change to a simpler types (core numbers, numa node ?)
         calibration_granularity: LocationParameters,
         threshold_granularity: LocationParameters,
         norm_threshold: NFThres,
@@ -157,6 +158,7 @@ impl<
         calibration_iterations: u32,
     ) -> Result<Self, TopologyAwareError> {
         if !threshold_granularity.is_subset(&calibration_granularity) {
+            //panic!("2");
             return Err(TopologyAwareError::UnsupportedParameterValue);
         }
         if let Some(slicing) = get_cache_attack_slicing(find_core_per_socket(), CACHE_LINE_LENGTH) {
@@ -168,11 +170,7 @@ impl<
                 slicing,
                 preferred_address: Default::default(),
                 t: Default::default(),
-                fixed_location: (
-                    Some(fixed_location.0),
-                    Some(fixed_location.1),
-                    Some(fixed_location.2),
-                ),
+                fixed_location: (fixed_location.0, fixed_location.1, fixed_location.2),
                 calibration_granularity,
                 calibration_epoch: 0,
                 threshold_granularity,
@@ -180,6 +178,7 @@ impl<
                 error_prediction_builder: e,
             })
         } else {
+            //panic!("3");
             Err(TopologyAwareError::NoSlicing)
         }
     }
@@ -389,18 +388,19 @@ impl<
         norm_location: NFLoc,
         e: E,
         calibration_iterations: u32,
-    ) -> Result<(Self, (NumaNode, usize, usize)), TopologyAwareError> {
+    ) -> Result<(Self, (Option<NumaNode>, Option<usize>, Option<usize>)), TopologyAwareError> {
         if !threshold_granularity.is_subset(&calibration_granularity) {
+            panic!("1");
             return Err(TopologyAwareError::UnsupportedParameterValue);
         }
 
-        if !threshold_granularity.attacker.core
+        /*if !threshold_granularity.attacker.core
             || threshold_granularity.victim.core
             || !threshold_granularity.memory_numa_node
         {
             println!("FIXME Unsupported lower granularity");
             return Err(TopologyAwareError::UnsupportedParameterValue);
-        }
+        }*/
 
         let m = MMappedMemory::new(PAGE_LEN, false, false, |i| i as u8);
         let array: &[u8] = m.slice();
@@ -421,9 +421,9 @@ impl<
         let per_location = reduce(
             res,
             |location| {
-                let numa = location.get_numa_node().unwrap();
-                let attacker = location.get_attacker_core().unwrap();
-                let victim = location.get_victim_core().unwrap();
+                let numa = location.get_numa_node();
+                let attacker = location.get_attacker_core();
+                let victim = location.get_victim_core();
                 (numa, attacker, victim)
             },
             || HashMap::new(),
@@ -452,8 +452,8 @@ impl<
 
         let location = (
             chosen_location.0,
-            chosen_location.1 as usize,
-            chosen_location.2 as usize,
+            chosen_location.1.map(|a| a as usize),
+            chosen_location.2.map(|a| a as usize),
         );
 
         // Set no threshold as calibrated on local array that will get dropped.
@@ -476,7 +476,7 @@ impl<
         norm_location: NFLoc,
         e: E,
         calibration_iterations: u32,
-    ) -> Result<(Self, CpuSet, NumaNode, usize), TopologyAwareError> {
+    ) -> Result<(Self, CpuSet, Option<NumaNode>, Option<usize>), TopologyAwareError> {
         // Generate core iterator
         let mut locations: Vec<(NumaNode, usize, usize)> = Vec::new();
 
@@ -517,7 +517,8 @@ impl<
         norm_location: NFLoc,
         e: E,
         calibration_iterations: u32,
-    ) -> Result<(Self, CpuSet, NumaNode, usize, usize), TopologyAwareError> {
+    ) -> Result<(Self, CpuSet, Option<NumaNode>, Option<usize>, Option<usize>), TopologyAwareError>
+    {
         let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
         let mut locations: Vec<(NumaNode, usize, usize)> = Vec::new();
@@ -583,7 +584,7 @@ impl<
             || self.threshold_granularity.memory_offset
     }
 
-    fn build_partial_location<'s>(&'s self, addr: *const u8) -> PartialLocationOwned {
+    fn build_partial_location(&self, addr: *const u8) -> PartialLocationOwned {
         let vpn = get_vpn(addr);
         let attacker = self.fixed_location.1.unwrap_or_default();
         let victim = self.fixed_location.2.unwrap_or_default();
@@ -608,17 +609,17 @@ impl<
 
     // Updating the thread sched_affinity is up to the caller !
     pub fn set_cores(&mut self, main: usize, helper: usize) -> Result<(), TopologyAwareError> {
-        self.set_location(self.fixed_location.0.unwrap(), main, helper)
+        self.set_location(self.fixed_location.0, Some(main), Some(helper))
     }
     // Updating the thread sched_affinity is up to the caller !
     pub fn set_location(
         &mut self,
-        node: NumaNode,
-        main: usize,
-        helper: usize,
+        node: Option<NumaNode>,
+        main: Option<usize>,
+        helper: Option<usize>,
     ) -> Result<(), TopologyAwareError> {
         let old_location = self.fixed_location;
-        self.fixed_location = (Some(node), Some(main), Some(helper));
+        self.fixed_location = (node, main, helper);
         match self.recalibrate() {
             Ok(()) => Ok(()),
             Err(e) => {
@@ -628,18 +629,43 @@ impl<
         }
     }
 
+    fn build_location_vector(&self) -> Vec<(NumaNode, usize, usize)> {
+        let numa_nodes = if let Some(numa_node) = self.fixed_location.0 {
+            vec![numa_node]
+        } else {
+            numa_utils::available_nodes().unwrap().into_iter().collect()
+        };
+
+        let attackers = if let Some(attacker) = self.fixed_location.1 {
+            vec![attacker]
+        } else {
+            (0..CpuSet::count()).collect()
+        };
+
+        let victims = if let Some(victim) = self.fixed_location.2 {
+            vec![victim]
+        } else {
+            (0..CpuSet::count()).collect()
+        };
+
+        let mut locations = vec![];
+        for node in numa_nodes {
+            for attacker in &attackers {
+                for victim in &victims {
+                    locations.push((node, *attacker, *victim));
+                }
+            }
+        }
+        locations
+    }
+
     fn recalibrate(&mut self) -> Result<(), TopologyAwareError> {
         // unset readiness status.
         // Call calibration with core pairs with a single core pair
         // Use results \o/ (or error out)
 
         self.addresses.clear();
-
-        let locations = vec![(
-            self.fixed_location.0.unwrap(),
-            self.fixed_location.1.unwrap(),
-            self.fixed_location.2.unwrap(),
-        )];
+        let locations = self.build_location_vector();
 
         let m;
         let pages = if self.is_memory_target_sensitive() {
@@ -678,9 +704,6 @@ impl<
         };
         let hashmap = map_values(hashmap, |(e, n, _v), _k| (e, n));
         self.thresholds.extend(hashmap);
-        /*for (k, v) in hashmap {
-            self.thresholds.insert(k, v);
-        }*/
         self.calibration_epoch += 1;
         Ok(())
     }
@@ -704,7 +727,7 @@ impl<
                 Ok(CacheStatus::Miss)
             }
         } else {
-            Err(SideChannelError::Retry)
+            Ok(CacheStatus::Miss) //Err(SideChannelError::Retry)
         }
     }
 
@@ -877,11 +900,7 @@ impl<
         &mut self,
         addresses: impl IntoIterator<Item = *const u8> + Clone,
     ) -> Result<Vec<Self::Handle>, ChannelFatalError> {
-        let locations = vec![(
-            self.fixed_location.0.unwrap(),
-            self.fixed_location.1.unwrap(),
-            self.fixed_location.2.unwrap(),
-        )];
+        let locations = self.build_location_vector();
 
         let m;
         let pages = if self.is_memory_target_sensitive() {

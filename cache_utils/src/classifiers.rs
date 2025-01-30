@@ -99,7 +99,8 @@ pub struct Threshold<T: Bucket> {
     pub miss_faster_than_hit: bool,
 }
 
-struct SimpleThresholdBuilder<const WIDTH: u64, const N: usize>();
+#[derive(Debug, Clone)]
+pub struct SimpleThresholdBuilder<const WIDTH: u64, const N: usize>();
 
 impl<T: Bucket> HitClassifier<T> for Threshold<T> {
     fn is_hit(&self, bucket: T) -> bool {
@@ -255,6 +256,7 @@ pub struct DualThreshold<T: Bucket> {
     center_hit: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct DualThresholdBuilder<const WIDTH: u64, const N: usize>();
 
 impl<T: Bucket> DualThreshold<T> {

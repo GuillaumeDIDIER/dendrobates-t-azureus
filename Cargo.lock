@@ -189,6 +189,7 @@ dependencies = [
  "libc",
  "lzma-rs",
  "nix",
+ "num-rational",
  "numa_utils",
  "polling_serial",
  "rmp-serde",
@@ -288,11 +289,14 @@ name = "covert_channels_benchmark"
 version = "0.1.0"
 dependencies = [
  "basic_timing_cache_channel",
+ "cache_side_channel",
  "cache_utils",
  "covert_channels_evaluation",
  "flush_flush",
  "flush_reload",
  "nix",
+ "num-rational",
+ "numa_utils",
 ]
 
 [[package]]
@@ -302,6 +306,7 @@ dependencies = [
  "bit_field",
  "cache_side_channel",
  "cache_utils",
+ "numa_utils",
  "rand 0.8.5",
  "turn_lock",
 ]

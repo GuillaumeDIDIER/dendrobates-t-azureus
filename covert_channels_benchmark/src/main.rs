@@ -1,20 +1,17 @@
-#![feature(unsafe_block_in_unsafe_fn)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use std::io::{stdout, Write};
-
-//use basic_timing_cache_channel::{naive::NaiveTimingChannel, TopologyAwareTimingChannel};
-use basic_timing_cache_channel::{
-    CalibrationStrategy, TopologyAwareError, TopologyAwareTimingChannel,
+use cache_side_channel::set_affinity;
+use cache_utils::calibration::{
+    CoreLocParameters, ErrorPrediction, LocationParameters, CLFLUSH_NUM_ITER,
 };
-use cache_utils::calibration::Threshold;
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
-use flush_flush::naive::NaiveFlushAndFlush;
-use flush_flush::{FFPrimitives, FlushAndFlush, SingleFlushAndFlush};
-use flush_reload::naive::NaiveFlushAndReload;
-use flush_reload::FRPrimitives;
+use flush_flush::FlushAndFlush;
+use flush_reload::FlushAndReload;
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
+use num_rational::Rational64;
+use numa_utils::NumaNode;
+use std::io::{stdout, Write};
 
 const NUM_BYTES: usize = 1 << 12;
 
@@ -27,59 +24,83 @@ const NUM_PAGE_MAX: usize = 32;
 const NUM_ITER: usize = 16;
 
 struct BenchmarkStats {
-    raw_res: Vec<(CovertChannelBenchmarkResult, usize, usize)>,
-    average_p: f64,
-    var_p: f64,
-    average_C: f64,
-    var_C: f64,
-    average_T: f64,
-    var_T: f64,
+    raw_res: Vec<(
+        CovertChannelBenchmarkResult,
+        usize,
+        NumaNode,
+        usize,
+        usize,
+        usize,
+    )>,
+    average_p: Vec<f64>,
+    var_p: Vec<f64>,
+    average_C: Vec<f64>,
+    var_C: Vec<f64>,
+    average_T: Vec<f64>,
+    var_T: Vec<f64>,
 }
 
-fn run_benchmark<T: CovertChannel + 'static>(
+fn run_benchmark<T: CovertChannel + 'static + Clone>(
     name: &str,
-    constructor: impl Fn(usize, usize) -> (T, usize, usize),
+    constructor: impl Fn(NumaNode, usize, usize) -> T,
     num_iter: usize,
-    num_pages: usize,
+    num_pages: &Vec<usize>,
     old: CpuSet,
-    iterate_cores: bool,
+    iterate_locations: bool,
 ) -> BenchmarkStats {
     let mut results = Vec::new();
-    print!("Benchmarking {} with {} pages", name, num_pages);
-    let mut count = 0;
-    if iterate_cores {
-        for i in 0..CpuSet::count() {
+    let num_entries = num_pages.len();
+
+    let mut count = vec![0; num_entries];
+    if iterate_locations {
+        for i in numa_utils::available_nodes().unwrap() {
             for j in 0..CpuSet::count() {
-                if old.is_set(i).unwrap() && old.is_set(j).unwrap() && i != j {
-                    for _ in 0..num_iter {
-                        count += 1;
-                        print!(".");
-                        stdout().flush().expect("Failed to flush");
-                        let (channel, main_core, helper_core) = constructor(i, j);
-                        let r = benchmark_channel(channel, num_pages, NUM_BYTES);
-                        results.push((r, main_core, helper_core));
+                for k in 0..CpuSet::count() {
+                    if old.is_set(j).unwrap() && old.is_set(k).unwrap() && j != k {
+                        let channel = constructor(i, j, k);
+                        for (l, num_page) in num_pages.iter().enumerate() {
+                            print!(
+                                "Benchmarking {} location({},{},{})  with {} pages",
+                                name, i, j, k, num_page
+                            );
+
+                            for _ in 0..num_iter {
+                                count[l] += 1;
+                                print!(".");
+                                stdout().flush().expect("Failed to flush");
+
+                                let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
+                                results.push((r, *num_page, i, j, k, l));
+                            }
+                            println!()
+                        }
                     }
                 }
             }
         }
     } else {
-        for _ in 0..num_iter {
-            count += 1;
-            print!(".");
-            stdout().flush().expect("Failed to flush");
-            let (channel, main_core, helper_core) = constructor(0, 0);
-            let r = benchmark_channel(channel, num_pages, NUM_BYTES);
-            results.push((r, main_core, helper_core));
+        let channel = constructor(Default::default(), 0, 0);
+        for (i, num_page) in num_pages.iter().enumerate() {
+            print!("Benchmarking {} with {} pages", name, num_page);
+            for _ in 0..num_iter {
+                count[i] += 1;
+                print!(".");
+                stdout().flush().expect("Failed to flush");
+
+                let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
+                results.push((r, *num_page, Default::default(), 0, 0, i));
+            }
+            println!();
         }
     }
-    println!();
-    let mut average_p = 0.0;
-    let mut average_C = 0.0;
-    let mut average_T = 0.0;
+
+    let mut average_p = vec![0.0; num_entries];
+    let mut average_C = vec![0.0; num_entries];
+    let mut average_T = vec![0.0; num_entries];
     for result in results.iter() {
         println!(
-            "main: {} helper: {} result: {:?}",
-            result.1, result.2, result.0
+            "num_page: {}, node: {}, main: {}, helper: {}, result: {:?}",
+            result.1, result.2, result.3, result.4, result.0
         );
         println!(
             "C: {}, T: {}",
@@ -87,49 +108,53 @@ fn run_benchmark<T: CovertChannel + 'static>(
             result.0.true_capacity()
         );
         println!(
-            "Detailed:\"{}\",{},{},{},{},{},{}",
+            "Detailed:\"{}\",{},{},{},{},{},{},{}",
             name,
-            num_pages,
             result.1,
             result.2,
+            result.3,
+            result.4,
             result.0.csv(),
             result.0.capacity(),
             result.0.true_capacity()
         );
-        average_p += result.0.error_rate;
-        average_C += result.0.capacity();
-        average_T += result.0.true_capacity()
+        average_p[result.5] += result.0.error_rate;
+        average_C[result.5] += result.0.capacity();
+        average_T[result.5] += result.0.true_capacity()
     }
-    average_p /= count as f64;
-    average_C /= count as f64;
-    average_T /= count as f64;
-    println!(
-        "{} - {} Average p: {} C: {}, T: {}",
-        name, num_pages, average_p, average_C, average_T
-    );
-    let mut var_p = 0.0;
-    let mut var_C = 0.0;
-    let mut var_T = 0.0;
+    for i in 0..num_entries {
+        average_p[i] /= count[i] as f64;
+        average_C[i] /= count[i] as f64;
+        average_T[i] /= count[i] as f64;
+        println!(
+            "{} - {} Average p: {} C: {}, T: {}",
+            name, i, average_p[i], average_C[i], average_T[i]
+        );
+    }
+    let mut var_p = vec![0.0; num_entries];
+    let mut var_C = vec![0.0; num_entries];
+    let mut var_T = vec![0.0; num_entries];
     for result in results.iter() {
-        let p = result.0.error_rate - average_p;
-        var_p += p * p;
-        let C = result.0.capacity() - average_C;
-        var_C += C * C;
-        let T = result.0.true_capacity() - average_T;
-        var_T += T * T;
+        let p = result.0.error_rate - average_p[result.1];
+        var_p[result.5] += p * p;
+        let C = result.0.capacity() - average_C[result.1];
+        var_C[result.5] += C * C;
+        let T = result.0.true_capacity() - average_T[result.1];
+        var_T[result.5] += T * T;
     }
-    var_p /= count as f64;
-    var_C /= count as f64;
-    var_T /= count as f64;
-    println!(
-        "{} - {} Variance of p: {}, C: {}, T:{}",
-        name, num_pages, var_p, var_C, var_T
-    );
-    println!(
-        "CSV:\"{}\",{},{},{},{},{},{},{}",
-        name, num_pages, average_p, average_C, average_T, var_p, var_C, var_T
-    );
-
+    for i in 0..num_entries {
+        var_p[i] /= count[i] as f64;
+        var_C[i] /= count[i] as f64;
+        var_T[i] /= count[i] as f64;
+        println!(
+            "{} - {} Variance of p: {}, C: {}, T:{}",
+            name, i, var_p[i], var_C[i], var_T[i]
+        );
+        println!(
+            "CSV:\"{}\",{},{},{},{},{},{},{}",
+            name, i, average_p[i], average_C[i], average_T[i], var_p[i], var_C[i], var_T[i]
+        );
+    }
     BenchmarkStats {
         raw_res: results,
         average_p,
@@ -141,84 +166,265 @@ fn run_benchmark<T: CovertChannel + 'static>(
     }
 }
 
+fn norm_threshold(v: &Vec<ErrorPrediction>) -> Rational64 {
+    let mut result = Rational64::new(0, 1);
+    let mut count = 0;
+    for epred in v {
+        result += epred.error_ratio();
+        count += 1;
+    }
+    result / count
+}
+
+fn norm_location(v: &Vec<(Rational64, Vec<ErrorPrediction>)>) -> Rational64 {
+    let mut result = Rational64::new(0, 1);
+    let mut count = 0;
+    for entry in v {
+        result += entry.0;
+        count += 1;
+    }
+    result / count
+}
+
 fn main() {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     println!(
-        "Detailed:Benchmark,Pages,main_core,helper_core,{},C,T",
+        "Detailed:Benchmark,Pages,numa_node,main_core,helper_core,{},C,T",
         CovertChannelBenchmarkResult::csv_header()
     );
-    println!("CSV:Benchmark,Pages,main_core,helper_core,p,C,T,var_p,var_C,var_T");
+    println!("CSV:Benchmark,Pages,p,C,T,var_p,var_C,var_T");
 
-    for num_pages in 1..=32 {
-        let naive_ff = run_benchmark(
-            "Naive F+F",
-            |i, j| {
-                let mut r = NaiveFlushAndFlush::new(Threshold {
-                    bucket_index: 202,
-                    miss_faster_than_hit: true,
-                });
-                r.set_cores(i, j);
-                (r, i, j)
-            },
-            NUM_ITER,
-            num_pages,
-            old,
-            true,
-        );
+    let test1 = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: false,
+            core: false,
+        },
+        victim: CoreLocParameters {
+            socket: false,
+            core: false,
+        },
+        memory_numa_node: false,
+        memory_slice: false,
+        memory_vpn: false,
+        memory_offset: false,
+    };
 
-        let naive_fr = run_benchmark(
-            "Naive F+R",
-            |i, j| {
-                let mut r = NaiveFlushAndReload::new(Threshold {
-                    bucket_index: 250,
-                    miss_faster_than_hit: false,
-                });
+    let test2 = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        victim: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        memory_numa_node: true,
+        memory_slice: true,
+        memory_vpn: true,
+        memory_offset: true,
+    };
+    assert!(test1.is_subset(&test2));
 
-                r.set_cores(i, j);
-                (r, i, j)
-            },
-            NUM_ITER,
-            num_pages,
-            old,
-            true,
-        );
+    let num_pages = (1..=32).collect();
 
-        let ff = run_benchmark(
-            "Better F+F",
-            |i, j| {
-                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true, CALIBRATION_STRAT) {
-                    Ok((channel, _old, main_core, helper_core)) => {
-                        (channel, main_core, helper_core)
-                    }
-                    Err(e) => {
-                        panic!("{:?}", e);
-                    }
-                };
-                (r, i, j)
-            },
-            NUM_ITER,
-            num_pages,
-            old,
+    let (topology_unaware_ff_channel, old_mask, _node, _atttack, _victim) =
+        FlushAndFlush::new_any_location(
             false,
-        );
-
-        let fr = run_benchmark(
-            "Better F+R",
-            |i, j| {
-                let (mut r, i, j) = match FlushAndFlush::new_any_two_core(true, CALIBRATION_STRAT) {
-                    Ok((channel, _old, main_core, helper_core)) => {
-                        (channel, main_core, helper_core)
-                    }
-                    Err(e) => {
-                        panic!("{:?}", e);
-                    }
-                };
-                (r, i, j)
+            LocationParameters {
+                attacker: CoreLocParameters {
+                    socket: true,
+                    core: true,
+                },
+                victim: CoreLocParameters {
+                    socket: true,
+                    core: true,
+                },
+                memory_numa_node: true,
+                memory_slice: true,
+                memory_vpn: true,
+                memory_offset: true,
             },
-            NUM_ITER,
-            num_pages,
-            old,
+            LocationParameters {
+                attacker: CoreLocParameters {
+                    socket: false,
+                    core: false,
+                },
+                victim: CoreLocParameters {
+                    socket: false,
+                    core: false,
+                },
+                memory_numa_node: false,
+                memory_slice: false,
+                memory_vpn: false,
+                memory_offset: false,
+            },
+            norm_threshold,
+            norm_location,
+            cache_utils::classifiers::SimpleThresholdBuilder {},
+            CLFLUSH_NUM_ITER,
+        )
+        .unwrap();
+
+    set_affinity(&old_mask).unwrap();
+
+    let tolopology_unware_ff = run_benchmark(
+        "Topology Unaware F+F",
+        |i, j, k| {
+            let mut r = topology_unaware_ff_channel.clone();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+    );
+
+    let (topology_unaware_fr_channel, old_mask, _node, _atttack, _victim) =
+        FlushAndReload::new_any_location(
             false,
-        );
-    }
+            LocationParameters {
+                attacker: CoreLocParameters {
+                    socket: true,
+                    core: true,
+                },
+                victim: CoreLocParameters {
+                    socket: true,
+                    core: true,
+                },
+                memory_numa_node: true,
+                memory_slice: true,
+                memory_vpn: true,
+                memory_offset: true,
+            },
+            LocationParameters {
+                attacker: CoreLocParameters {
+                    socket: false,
+                    core: false,
+                },
+                victim: CoreLocParameters {
+                    socket: false,
+                    core: false,
+                },
+                memory_numa_node: false,
+                memory_slice: false,
+                memory_vpn: false,
+                memory_offset: false,
+            },
+            norm_threshold,
+            norm_location,
+            cache_utils::classifiers::SimpleThresholdBuilder {},
+            CLFLUSH_NUM_ITER,
+        )
+        .unwrap();
+    set_affinity(&old_mask).unwrap();
+
+    let tolopolgy_unware_fr = run_benchmark(
+        "Topology Unaware F+R",
+        |i, j, k| {
+            let mut r = topology_unaware_fr_channel.clone();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+    );
+
+    let singlethreshold_ff = run_benchmark(
+        "Topology Aware F+F",
+        |i, j, k| {
+            let (mut r, (node, attacker, victim)) = FlushAndFlush::new_with_locations(
+                vec![(i, j, k)].into_iter(),
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                cache_utils::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+    );
+
+    let fr = run_benchmark(
+        "Topology Aware F+R",
+        |i, j, k| {
+            let (mut r, (node, attacker, victim)) = FlushAndReload::new_with_locations(
+                vec![(i, j, k)].into_iter(),
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                cache_utils::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+    );
 }

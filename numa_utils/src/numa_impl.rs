@@ -136,6 +136,55 @@ pub fn set_memory_node(node: NumaNode) -> Result<(), NumaError> {
         Ok(())
     }
 }
+
+pub fn set_memory_nodes(nodes: HashSet<NumaNode>) -> Result<(), NumaError> {
+    let mut numa = NUMA.lock().unwrap();
+    let numa = match &mut *numa {
+        NumaState::Uninitialized => {
+            return Err(NumaError::Uninitialized);
+        }
+        NumaState::Failed => {
+            return Err(NumaError::FailedInit);
+        }
+        NumaState::Initialized(numa) => numa,
+    };
+
+    for node in &nodes {
+        if !numa.available_nodes.contains(&node) {
+            return Err(NumaError::IllegalNode);
+        }
+    }
+
+    let n = unsafe { numa_num_possible_nodes() };
+    let n = if n >= 0 {
+        n as u32
+    } else {
+        return Err(NumaError::FailedInit);
+    };
+
+    let old_bitmask = unsafe { numa_get_membind() };
+
+    let bitmask = unsafe { numa_bitmask_alloc(n) };
+    unsafe { numa_bitmask_clearall(bitmask) };
+    for node in nodes {
+        unsafe { numa_bitmask_setbit(bitmask, node.index) };
+    }
+
+    let ret = unsafe { numa_migrate_pages(0, old_bitmask, bitmask) };
+    if ret < 0 {
+        eprintln!("Error: {:?}", nix::errno::Errno::last());
+    }
+    unsafe { numa_set_membind(bitmask) };
+
+    unsafe { numa_bitmask_free(bitmask) };
+    unsafe { numa_bitmask_free(old_bitmask) };
+
+    if ret != 0 {
+        Err(NumaError::FailedMigration)
+    } else {
+        Ok(())
+    }
+}
 /*
 numa_migrate_pages() simply uses the migrate_pages system call to cause the pages of the calling task,
 or a specified task, to be migated from one set of nodes to another. See migrate_pages(2).
