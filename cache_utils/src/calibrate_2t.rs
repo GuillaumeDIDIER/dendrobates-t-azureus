@@ -154,6 +154,9 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     let mut current_numa_node = None;
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
+    let mut total_rejected: u64 = 0;
+    let mut total_tries: u64 = 0;
+
     for (numa_node, main_core, helper_core) in locations {
         // set main thread affinity
 
@@ -276,6 +279,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                     }
                     histogram[&SimpleBucketU64::<WIDTH, N>::MAX] += rejected; // This should probably be handled better.
                     calibrate_result.histogram.push(histogram);
+                    total_rejected += rejected as u64;
+                    total_tries += options.iterations as u64;
                 }
             } else {
                 for op in operations {
@@ -301,6 +306,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                     }
                     histogram[&SimpleBucketU64::<WIDTH, N>::MAX] += rejected; // This should probably be handled better.
                     calibrate_result.histogram.push(histogram);
+                    total_rejected += rejected as u64;
+                    total_tries += options.iterations as u64;
                 }
             }
             let mut sums = vec![0; operations.len()];
@@ -408,6 +415,15 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     if let Err(e) = numa_utils::reset_memory_node() {
         eprintln!("Error reseting numa node: {:?}", e)
     }
+
+    eprintln!(
+        "Total rejected {} out of {} tries",
+        total_rejected, total_tries
+    );
+    println!(
+        "Total rejected {} out of {} tries",
+        total_rejected, total_tries
+    );
 
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
 
