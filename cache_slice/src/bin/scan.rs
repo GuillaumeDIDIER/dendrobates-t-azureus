@@ -3,7 +3,6 @@ use cache_slice::utils::core_per_package;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
 
-
 pub fn main() {
     let nb_cores = core_per_package();
     println!("Found {} cores", nb_cores);
@@ -17,7 +16,6 @@ pub fn main() {
             core_set.push(i);
         }
     }
-
 
     for core in core_set {
         let mut cpu_set = CpuSet::new();

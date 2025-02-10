@@ -1,9 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use cache_side_channel::set_affinity;
-use cache_utils::calibration::{
-    CoreLocParameters, ErrorPrediction, LocationParameters, CLFLUSH_NUM_ITER,
-};
+use cache_utils::calibration::{ErrorPrediction, CLFLUSH_NUM_ITER};
+use calibration_results::calibration::{CoreLocParameters, LocationParameters};
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::FlushAndFlush;
 use flush_reload::FlushAndReload;
@@ -13,7 +12,8 @@ use num_rational::Rational64;
 use numa_utils::NumaNode;
 use std::io::{stdout, Write};
 
-const NUM_BYTES: usize = 1 << 12;
+//const NUM_BYTES: usize = 1 << 12;
+const NUM_BYTES: usize = 1 << 10;
 
 const NUM_PAGES: usize = 1;
 
@@ -21,7 +21,7 @@ const NUM_PAGES_2: usize = 4;
 
 const NUM_PAGE_MAX: usize = 32;
 
-const NUM_ITER: usize = 16;
+const NUM_ITER: usize = 2;
 
 struct BenchmarkStats {
     raw_res: Vec<(
@@ -59,20 +59,20 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
                     if old.is_set(j).unwrap() && old.is_set(k).unwrap() && j != k {
                         let channel = constructor(i, j, k);
                         for (l, num_page) in num_pages.iter().enumerate() {
-                            print!(
+                            eprint!(
                                 "Benchmarking {} location({},{},{})  with {} pages",
                                 name, i, j, k, num_page
                             );
 
                             for _ in 0..num_iter {
                                 count[l] += 1;
-                                print!(".");
+                                eprint!(".");
                                 stdout().flush().expect("Failed to flush");
 
                                 let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
                                 results.push((r, *num_page, i, j, k, l));
                             }
-                            println!()
+                            eprintln!()
                         }
                     }
                 }
@@ -81,16 +81,16 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
     } else {
         let channel = constructor(Default::default(), 0, 0);
         for (i, num_page) in num_pages.iter().enumerate() {
-            print!("Benchmarking {} with {} pages", name, num_page);
+            eprint!("Benchmarking {} with {} pages", name, num_page);
             for _ in 0..num_iter {
                 count[i] += 1;
-                print!(".");
+                eprint!(".");
                 stdout().flush().expect("Failed to flush");
 
                 let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
                 results.push((r, *num_page, Default::default(), 0, 0, i));
             }
-            println!();
+            eprintln!();
         }
     }
 
@@ -135,11 +135,11 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
     let mut var_C = vec![0.0; num_entries];
     let mut var_T = vec![0.0; num_entries];
     for result in results.iter() {
-        let p = result.0.error_rate - average_p[result.1];
+        let p = result.0.error_rate - average_p[result.5];
         var_p[result.5] += p * p;
-        let C = result.0.capacity() - average_C[result.1];
+        let C = result.0.capacity() - average_C[result.5];
         var_C[result.5] += C * C;
-        let T = result.0.true_capacity() - average_T[result.1];
+        let T = result.0.true_capacity() - average_T[result.5];
         var_T[result.5] += T * T;
     }
     for i in 0..num_entries {
@@ -194,144 +194,114 @@ fn main() {
     );
     println!("CSV:Benchmark,Pages,p,C,T,var_p,var_C,var_T");
 
-    let test1 = LocationParameters {
-        attacker: CoreLocParameters {
-            socket: false,
-            core: false,
-        },
-        victim: CoreLocParameters {
-            socket: false,
-            core: false,
-        },
-        memory_numa_node: false,
-        memory_slice: false,
-        memory_vpn: false,
-        memory_offset: false,
-    };
+    //let num_pages = (1..=32).collect();
+    let num_pages = (1..=3).collect();
 
-    let test2 = LocationParameters {
-        attacker: CoreLocParameters {
-            socket: true,
-            core: true,
-        },
-        victim: CoreLocParameters {
-            socket: true,
-            core: true,
-        },
-        memory_numa_node: true,
-        memory_slice: true,
-        memory_vpn: true,
-        memory_offset: true,
-    };
-    assert!(test1.is_subset(&test2));
-
-    let num_pages = (1..=32).collect();
-
-    let (topology_unaware_ff_channel, old_mask, _node, _atttack, _victim) =
-        FlushAndFlush::new_any_location(
-            false,
-            LocationParameters {
-                attacker: CoreLocParameters {
-                    socket: true,
-                    core: true,
+    /*    let (topology_unaware_ff_channel, old_mask, _node, _atttack, _victim) =
+            FlushAndFlush::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
                 },
-                victim: CoreLocParameters {
-                    socket: true,
-                    core: true,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
                 },
-                memory_numa_node: true,
-                memory_slice: true,
-                memory_vpn: true,
-                memory_offset: true,
+                norm_threshold,
+                norm_location,
+                cache_utils::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
+
+        set_affinity(&old_mask).unwrap();
+
+        let tolopology_unware_ff = run_benchmark(
+            "Topology Unaware F+F",
+            |i, j, k| {
+                let mut r = topology_unaware_ff_channel.clone();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
             },
-            LocationParameters {
-                attacker: CoreLocParameters {
-                    socket: false,
-                    core: false,
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+        );
+
+        let (topology_unaware_fr_channel, old_mask, _node, _atttack, _victim) =
+            FlushAndReload::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
                 },
-                victim: CoreLocParameters {
-                    socket: false,
-                    core: false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
                 },
-                memory_numa_node: false,
-                memory_slice: false,
-                memory_vpn: false,
-                memory_offset: false,
+                norm_threshold,
+                norm_location,
+                cache_utils::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
+        set_affinity(&old_mask).unwrap();
+
+        let tolopolgy_unware_fr = run_benchmark(
+            "Topology Unaware F+R",
+            |i, j, k| {
+                let mut r = topology_unaware_fr_channel.clone();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
             },
-            norm_threshold,
-            norm_location,
-            cache_utils::classifiers::SimpleThresholdBuilder {},
-            CLFLUSH_NUM_ITER,
-        )
-        .unwrap();
-
-    set_affinity(&old_mask).unwrap();
-
-    let tolopology_unware_ff = run_benchmark(
-        "Topology Unaware F+F",
-        |i, j, k| {
-            let mut r = topology_unaware_ff_channel.clone();
-            r.set_location(Some(i), Some(j), Some(k)).unwrap();
-            r
-        },
-        NUM_ITER,
-        &num_pages,
-        old,
-        true,
-    );
-
-    let (topology_unaware_fr_channel, old_mask, _node, _atttack, _victim) =
-        FlushAndReload::new_any_location(
-            false,
-            LocationParameters {
-                attacker: CoreLocParameters {
-                    socket: true,
-                    core: true,
-                },
-                victim: CoreLocParameters {
-                    socket: true,
-                    core: true,
-                },
-                memory_numa_node: true,
-                memory_slice: true,
-                memory_vpn: true,
-                memory_offset: true,
-            },
-            LocationParameters {
-                attacker: CoreLocParameters {
-                    socket: false,
-                    core: false,
-                },
-                victim: CoreLocParameters {
-                    socket: false,
-                    core: false,
-                },
-                memory_numa_node: false,
-                memory_slice: false,
-                memory_vpn: false,
-                memory_offset: false,
-            },
-            norm_threshold,
-            norm_location,
-            cache_utils::classifiers::SimpleThresholdBuilder {},
-            CLFLUSH_NUM_ITER,
-        )
-        .unwrap();
-    set_affinity(&old_mask).unwrap();
-
-    let tolopolgy_unware_fr = run_benchmark(
-        "Topology Unaware F+R",
-        |i, j, k| {
-            let mut r = topology_unaware_fr_channel.clone();
-            r.set_location(Some(i), Some(j), Some(k)).unwrap();
-            r
-        },
-        NUM_ITER,
-        &num_pages,
-        old,
-        true,
-    );
-
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+        );
+    */
     let singlethreshold_ff = run_benchmark(
         "Topology Aware F+F",
         |i, j, k| {

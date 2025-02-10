@@ -22,10 +22,14 @@ use calibration_results::numa_results::{
     NumaCalibrationResult, OperationNames, BUCKET_NUMBER, BUCKET_SIZE,
 };
 use chrono::Local;
+use cpuid::complex_addressing::{cache_slicing, CacheAttackSlicing};
+use cpuid::{CPUVendor, MicroArchitecture};
 use lzma_rs::xz_compress;
+use numa_utils::numa_node_of_cpu;
 use rmp_serde::Serializer;
 use serde::Serialize;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::process::Command;
 use std::str::from_utf8;
 
@@ -257,22 +261,40 @@ fn main() {
                 display_name: op.display_name.to_owned(),
             })
             .collect();
+        let vendor = CPUVendor::get_cpu_vendor();
+        let uarch = MicroArchitecture::get_micro_architecture().unwrap();
+        let family_model_stepping = MicroArchitecture::get_family_model_stepping().unwrap();
+        let slicing = cache_slicing(
+            uarch,
+            core_per_socket,
+            family_model_stepping.0,
+            family_model_stepping.1,
+            family_model_stepping.2,
+        );
+        let mut topology_info = HashMap::new();
+        for i in 0..CpuSet::count() {
+            if old.is_set(i).unwrap() {
+                topology_info.insert(i, numa_node_of_cpu(i).unwrap());
+            }
+        }
+
         let full_result = NumaCalibrationResult {
             operations: names,
             results: result,
+            topology_info,
+            micro_architecture: (family_model_stepping, uarch),
+            slicing: (slicing.clone(), CacheAttackSlicing::from(slicing, 64)),
         };
 
         let time = Local::now();
 
-        let mut f1 = std::fs::File::create(format!(
-            "{}.NumaResults.msgpack.xz",
-            time.format("%Y-%m-%dT%H-%M-%S%z")
-        ))
-        .unwrap();
-        let mut buf = Vec::new();
-        let mut s = Serializer::new(&mut buf);
-        full_result.serialize(&mut s).unwrap();
-        xz_compress(&mut &buf[..], &mut f1).unwrap();
+        full_result
+            .write_msgpack(format!(
+                "{}.{}",
+                time.format("%Y-%m-%dT%H-%M-%S%z"),
+                NumaCalibrationResult::EXTENSION
+            ))
+            .expect("Failed to write out results");
     }
 
     //let mut analysis = HashMap::<ASV, ResultAnalysis>::new();

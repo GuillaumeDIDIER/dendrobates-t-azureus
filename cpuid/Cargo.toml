@@ -7,12 +7,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-itertools = { version = "0.13.0", default-features = false }
+itertools = { version = "0.14.0", default-features = false }
+hashbrown = { version = "0.15.2", optional = true }
+serde = { version = "1.0.216", features = ["derive"], optional = true }
+
 
 [features]
 use_std = ["itertools/use_std"]
+no_std = ["hashbrown"]
+serde_support = ["serde"]
 
-default = ["use_std"]
+default = ["use_std", "serde_support"]
 
 [[bin]]
 name = "cpuid"

@@ -1,7 +1,8 @@
 use crate::complex_addressing::CacheSlicing::{
     ComplexAddressing, NoSlice, SimpleAddressing, Unsupported,
 };
-use cpuid::{CPUVendor, MicroArchitecture};
+
+use crate::{CPUVendor, MicroArchitecture};
 
 extern crate alloc;
 
@@ -13,22 +14,27 @@ use hashbrown::HashMap;
 use hashbrown::HashSet;
 
 #[cfg(feature = "use_std")]
-use std::vec::Vec;
-#[cfg(feature = "use_std")]
 use std::collections::HashMap;
 #[cfg(feature = "use_std")]
 use std::collections::HashSet;
+#[cfg(feature = "use_std")]
+use std::vec::Vec;
 
-#[derive(Debug, Copy, Clone)]
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct SimpleAddressingParams {
     pub shift: u8, // How many trailing zeros
     pub bits: u8,  // How many ones
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum CacheSlicing {
     Unsupported,
-    ComplexAddressing(&'static [usize]),
+    ComplexAddressing(Box<[usize]>),
     SimpleAddressing(SimpleAddressingParams),
     NoSlice,
 }
@@ -80,35 +86,39 @@ pub fn cache_slicing(
     match vendor {
         CPUVendor::Intel => {
             match uarch {
-                MicroArchitecture::KabyLake | MicroArchitecture::Skylake | MicroArchitecture::WhiskeyLake => ComplexAddressing(
+                MicroArchitecture::KabyLake
+                | MicroArchitecture::Skylake
+                | MicroArchitecture::WhiskeyLake => ComplexAddressing(Box::from(
                     &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
-                ),
+                )),
                 MicroArchitecture::CoffeeLake => {
                     if family_model_display == 0x6_9E {
                         // TODO stepping should probably be involved here
-                        ComplexAddressing(
+                        ComplexAddressing(Box::from(
                             &COFFEELAKE_R_i9_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
-                        )
+                        ))
                     } else {
-                        ComplexAddressing(
+                        ComplexAddressing(Box::from(
                             &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
-                        )
+                        ))
                     }
                 }
                 MicroArchitecture::SandyBridge
                 | MicroArchitecture::HaswellE
                 | MicroArchitecture::Broadwell
                 | MicroArchitecture::IvyBridge
-                | MicroArchitecture::IvyBridgeE => ComplexAddressing(
+                | MicroArchitecture::IvyBridgeE => ComplexAddressing(Box::from(
                     &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)],
-                ),
+                )),
                 MicroArchitecture::Haswell => {
                     if family_model_display == 0x06_46 {
-                        ComplexAddressing(&CRYSTAL_WELL_FUNCTIONS[0..((trailing_zeros) as usize)])
+                        ComplexAddressing(Box::from(
+                            &CRYSTAL_WELL_FUNCTIONS[0..((trailing_zeros) as usize)],
+                        ))
                     } else {
-                        ComplexAddressing(
+                        ComplexAddressing(Box::from(
                             &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros) as usize)],
-                        )
+                        ))
                     }
                 }
                 MicroArchitecture::Nehalem | MicroArchitecture::Westmere => {
@@ -138,7 +148,7 @@ impl CacheSlicing {
             SimpleAddressing(mask) => Some(((addr >> mask.shift) & ((1 << mask.bits) - 1)) as u8),
             ComplexAddressing(masks) => {
                 let mut res = 0;
-                for mask in *masks {
+                for mask in masks {
                     res <<= 1;
                     res |= hash(addr, *mask);
                 }
@@ -278,10 +288,11 @@ impl CacheSlicing {
 /**
 Type used to handle unsupported hash functions by using the Cache line addr as the Hash.
 */
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum CacheAttackSlicing {
     Unsupported(usize),
-    ComplexAddressing(&'static [usize]),
+    ComplexAddressing(Box<[usize]>),
     SimpleAddressing(SimpleAddressingParams),
     NoSlice,
 }
@@ -305,7 +316,7 @@ impl CacheAttackSlicing {
             }
             CacheAttackSlicing::ComplexAddressing(masks) => {
                 let mut res = 0;
-                for mask in *masks {
+                for mask in masks {
                     res <<= 1;
                     res |= hash(addr, *mask);
                 }

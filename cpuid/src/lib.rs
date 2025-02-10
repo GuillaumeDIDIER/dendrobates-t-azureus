@@ -6,18 +6,25 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+
+#[cfg(target_arch = "x86_64")]
 use core::arch::x86_64;
 
-//#[cfg(feature = "no_std")]
-//use cstr_core::{CStr, CString};
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Serialize};
 
 use crate::CPUVendor::{Intel, Unknown};
-use crate::MicroArchitecture::{Airmont, Bonnell, Broadwell, CannonLake, CascadeLake, CoffeeLake, CooperLake, Core, Goldmont, GoldmontPlus, Haswell, HaswellE, IceLake, IvyBridge, IvyBridgeE, KabyLake, KnightsLanding, KnightsMill, Nehalem, NetBurst, Penryn, PentiumM, Saltwell, SandyBridge, Silvermont, Skylake, SkylakeServer, Tremont, Westmere, Yonah, P5, P6, WhiskeyLake};
+use crate::MicroArchitecture::{
+    Airmont, Bonnell, Broadwell, CannonLake, CascadeLake, CoffeeLake, CooperLake, Core, Goldmont,
+    GoldmontPlus, Haswell, HaswellE, IceLake, IvyBridge, IvyBridgeE, KabyLake, KnightsLanding,
+    KnightsMill, Nehalem, NetBurst, Penryn, PentiumM, Saltwell, SandyBridge, Silvermont, Skylake,
+    SkylakeServer, Tremont, Westmere, WhiskeyLake, Yonah, P5, P6,
+};
 
-//#[cfg(feature = "std")]
-//use std::ffi::{CStr, CString};
+pub mod complex_addressing;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum CPUVendor {
     None,
     Intel,
@@ -26,6 +33,7 @@ pub enum CPUVendor {
 }
 
 impl CPUVendor {
+    #[cfg(target_arch = "x86_64")]
     pub fn get_cpu_vendor() -> CPUVendor {
         // if has cpuid if  x86_64::__cp
         if true {
@@ -39,8 +47,14 @@ impl CPUVendor {
         }
         // else
     }
+
+    #[cfg(target_arch = "x86_64")]
     pub fn decode_cpu_vendor(cpuid_result: x86_64::CpuidResult) -> CPUVendor {
-        let feature_string = [cpuid_result.ebx, cpuid_result.edx, cpuid_result.ecx]
+        Self::decode_cpu_vendor_regs(cpuid_result.ebx, cpuid_result.ecx, cpuid_result.edx)
+    }
+
+    pub fn decode_cpu_vendor_regs(ebx: u32, ecx: u32, edx: u32) -> CPUVendor {
+        let feature_string = [ebx, edx, ecx]
             .iter()
             .map(|&u| u.to_le_bytes())
             .collect::<Vec<_>>()
@@ -53,7 +67,8 @@ impl CPUVendor {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum MicroArchitecture {
     P5,
     P6, // Models:
@@ -180,18 +195,18 @@ impl MicroArchitecture {
                 // 7th generation Intel® CoreTM processors based on Kaby Lake microarchitecture, 8th and 9th generation
                 // Intel® CoreTM processors based on Coffee Lake microarchitecture, Intel® Xeon® E processors based on
                 // Coffee Lake microarchitecture
-                0x06_8E => {
-                    match stepping {
-                        9 => KabyLake,
-                        10 => CoffeeLake,
-                        11 | 12 => WhiskeyLake,
-                        _ => {return None;}
+                0x06_8E => match stepping {
+                    9 => KabyLake,
+                    10 => CoffeeLake,
+                    11 | 12 => WhiskeyLake,
+                    _ => {
+                        return None;
                     }
-                }
+                },
                 0x06_9E => {
                     if stepping <= 9 {
                         KabyLake
-                    } else if stepping <= 13{
+                    } else if stepping <= 13 {
                         CoffeeLake
                     } else {
                         return None;
@@ -288,6 +303,8 @@ impl MicroArchitecture {
             _ => None,
         }
     }
+
+    #[cfg(target_arch = "x86_64")]
     pub fn get_family_model_stepping() -> Option<(CPUVendor, u32, u32)> {
         let vendor = CPUVendor::get_cpu_vendor();
         // Warning this might not support AMD
@@ -310,6 +327,8 @@ impl MicroArchitecture {
             None
         }
     }
+
+    #[cfg(target_arch = "x86_64")]
     pub fn get_micro_architecture() -> Option<MicroArchitecture> {
         if let Some((vendor, family_model_display, stepping)) =
             MicroArchitecture::get_family_model_stepping()

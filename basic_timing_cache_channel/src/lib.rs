@@ -19,20 +19,23 @@ use cache_side_channel::{
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP,
-    calibration_result_to_location_map, get_cache_attack_slicing, get_vpn, map_values, only_flush,
-    only_reload, reduce, AVMLocation, CalibrateOperation2T, CalibrationOptions, CoreLocation,
-    ErrorPrediction, HashMap, LocationParameters, PartialLocation, PartialLocationOwned, Verbosity,
-    ASVP, AV, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER,
-    CLFLUSH_NUM_ITERATION_AV, PAGE_LEN, PAGE_SHIFT, SP,
+    calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn, map_values, only_flush,
+    only_reload, reduce, CalibrateOperation2T, CalibrationOptions, ErrorPrediction, HashMap,
+    Verbosity, PAGE_LEN, PAGE_SHIFT,
 };
-use cache_utils::classifiers::{ErrorPredictionsBuilder, ErrorPredictor, HitClassifier, Threshold};
-use cache_utils::complex_addressing::CacheAttackSlicing;
+use cache_utils::classifiers::{ErrorPredictionsBuilder, ErrorPredictor, HitClassifier};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{find_core_per_socket, flush, maccess};
-use calibration_results::calibration::{StaticHistCalibrateResult, VPN};
-use calibration_results::calibration_2t::CalibrateResult2TNuma;
+use calibration_results::calibration::{
+    AVMLocation, CoreLocation, LocationParameters, PartialLocation, PartialLocationOwned,
+    StaticHistCalibrateResult, VPN,
+};
+use calibration_results::calibration_2t::{
+    calibration_result_to_location_map, calibration_result_to_location_map_parallel,
+    CalibrateResult2TNuma,
+};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
+use cpuid::complex_addressing::CacheAttackSlicing;
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
 use nix::unistd::Pid;
@@ -266,6 +269,8 @@ impl<
             };
             if let Ok(mut r) = r {
                 calibrate_results2t_vec.append(&mut r);
+            } else {
+                panic!("calibration failed");
             }
         }
 
@@ -280,7 +285,7 @@ impl<
 
         let calibration_analysis = calibration_result_to_location_map(
             calibrate_results2t_vec,
-            |calibration_results_1run: StaticHistCalibrateResult<WIDTH, N>| {
+            &|calibration_results_1run: StaticHistCalibrateResult<WIDTH, N>| {
                 let mut hits = None;
                 let mut miss = None;
                 for (i, hist) in calibration_results_1run.histogram.into_iter().enumerate() {
@@ -445,7 +450,7 @@ impl<
             },
         );
 
-        let (chosen_location, hashmap) = per_location
+        let (chosen_location, (hashmap, _v)) = per_location
             .into_iter()
             .min_by_key(|(k, (_h, v))| norm_location(v))
             .unwrap();
@@ -466,7 +471,13 @@ impl<
             e,
             calibration_iterations,
         )
-        .map(|this| (this, location))
+        .map(|mut this| {
+            if !this.is_memory_target_sensitive() {
+                let thresholds = map_values(hashmap, |(e, n, v), _k| (e, n));
+                this.thresholds = thresholds;
+            }
+            (this, location)
+        })
     }
 
     pub fn new_any_single_core(
@@ -620,12 +631,23 @@ impl<
     ) -> Result<(), TopologyAwareError> {
         let old_location = self.fixed_location;
         self.fixed_location = (node, main, helper);
-        match self.recalibrate() {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                self.fixed_location = old_location;
-                Err(e)
+        if (self.fixed_location.0 != old_location.0 && self.threshold_granularity.memory_numa_node)
+            || (self.fixed_location.1 != old_location.1 && self.threshold_granularity.attacker.core)
+            || (self.fixed_location.2 != old_location.2 && self.threshold_granularity.victim.core)
+            || (self.fixed_location.1.map(numa_node_of_cpu) != old_location.1.map(numa_node_of_cpu)
+                && self.threshold_granularity.attacker.socket)
+            || (self.fixed_location.2.map(numa_node_of_cpu) != old_location.2.map(numa_node_of_cpu)
+                && self.threshold_granularity.victim.socket)
+        {
+            match self.recalibrate() {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    self.fixed_location = old_location;
+                    Err(e)
+                }
             }
+        } else {
+            Ok(())
         }
     }
 

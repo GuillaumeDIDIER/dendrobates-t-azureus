@@ -2,16 +2,16 @@ extern crate std;
 
 use crate::calibration::Verbosity::{RawResult, Thresholds};
 use crate::calibration::{
-    get_cache_attack_slicing, get_vpn, AVMLocation, CalibrateResult, CalibrationOptions,
-    CoreLocation, HashMap, ASVP, SPURIOUS_THRESHOLD,
+    get_cache_attack_slicing, get_vpn, CalibrateResult, CalibrationOptions, HashMap, ASVP,
+    SPURIOUS_THRESHOLD,
 };
-use crate::complex_addressing::CacheAttackSlicing;
 use alloc::vec;
 use cache_slice::determine_slice;
 use cache_slice::utils::core_per_package;
 use calibration_results::calibration::StaticHistCalibrateResult;
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram};
 use core::arch::x86_64 as arch_x86;
+use cpuid::complex_addressing::CacheAttackSlicing;
 use itertools::Itertools;
 use nix::sched::{sched_getaffinity, sched_setaffinity, CpuSet};
 use nix::unistd::Pid;
@@ -143,7 +143,10 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     }
 
     let image_antecedent = slicing.image_antecedent(len as usize - 1);
-
+    //assert!(image_antecedent.contains_key(&0));
+    //let mut sorted = image_antecedent.keys().copied().collect::<Vec<usize>>();
+    //sorted.sort();
+    //println!("Image antecedent: {:?}", sorted);
     match slicing {
         CacheAttackSlicing::ComplexAddressing(_) | CacheAttackSlicing::SimpleAddressing(_) => {
             options.iterations *= OPTIMISED_ADDR_ITER_FACTOR;
@@ -416,10 +419,6 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         eprintln!("Error reseting numa node: {:?}", e)
     }
 
-    eprintln!(
-        "Total rejected {} out of {} tries",
-        total_rejected, total_tries
-    );
     println!(
         "Total rejected {} out of {} tries",
         total_rejected, total_tries
@@ -823,50 +822,6 @@ fn calibrate_fixed_freq_2_thread_helper(
 }
 
 // ------------------- Analysis ------------------
-
-// TODO: Do a reduction on conflicting calibration_granularity entries
-pub fn calibration_result_to_location_map<
-    const WIDTH: u64,
-    const N: usize,
-    T,
-    Analysis: Fn(StaticHistCalibrateResult<WIDTH, N>) -> T,
->(
-    results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
-    analysis: Analysis, /*Todo slicing*/
-    slice_mapping: &impl Fn(usize) -> u8,
-    core_location: &impl Fn(usize) -> CoreLocation, // This is the caller's job,
-                                                    // he can use numa_node_of_cpu as an approximation, or use CPUID.
-                                                    // NB, this aso means we need to dump that info from the machines, for the analysis.
-) -> HashMap<AVMLocation, T> {
-    let mut analysis_result = HashMap::new();
-    for calibrate_2t_result in results {
-        let node = calibrate_2t_result.numa_node;
-        let attacker = calibrate_2t_result.main_core;
-        let victim = calibrate_2t_result.helper_core;
-        let attacker_location = core_location(attacker);
-        let victim_location = core_location(victim);
-        for r in calibrate_2t_result.res {
-            let offset = r.offset;
-            let vpn = r.page;
-            let slice = slice_mapping(r.hash);
-            let analysed = analysis(r);
-            let location = AVMLocation {
-                attacker: attacker_location,
-                victim: victim_location,
-                memory_numa_node: node,
-                memory_slice: slice,
-                memory_vpn: vpn,
-                memory_offset: offset,
-            };
-            if analysis_result.contains_key(&location) {
-                panic!("Duplicate Location");
-            } else {
-                analysis_result.insert(location, analysed);
-            }
-        }
-    }
-    analysis_result
-}
 
 pub fn calibration_result_to_ASVP<T, Analysis: Fn(CalibrateResult) -> T>(
     results: Vec<CalibrateResult2T>,

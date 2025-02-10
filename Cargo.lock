@@ -38,6 +38,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,6 +86,7 @@ dependencies = [
  "cache_side_channel",
  "cache_utils",
  "calibration_results",
+ "cpuid",
  "nix",
  "numa_utils",
  "rand 0.9.0",
@@ -183,7 +190,7 @@ dependencies = [
  "calibration_results",
  "chrono",
  "cpuid",
- "hashbrown",
+ "hashbrown 0.11.2",
  "itertools 0.12.1",
  "lazy_static",
  "libc",
@@ -191,6 +198,7 @@ dependencies = [
  "nix",
  "num-rational",
  "numa_utils",
+ "numactl-sys",
  "polling_serial",
  "rmp-serde",
  "serde",
@@ -217,10 +225,15 @@ dependencies = [
 name = "calibration_results"
 version = "0.1.0"
 dependencies = [
+ "cpuid",
+ "hashbrown 0.15.2",
+ "lzma-rs",
  "numa_types",
+ "rayon",
  "rmp-serde",
  "serde",
  "serde-big-array",
+ "static_assertions",
 ]
 
 [[package]]
@@ -291,6 +304,7 @@ dependencies = [
  "basic_timing_cache_channel",
  "cache_side_channel",
  "cache_utils",
+ "calibration_results",
  "covert_channels_evaluation",
  "flush_flush",
  "flush_reload",
@@ -315,7 +329,9 @@ dependencies = [
 name = "cpuid"
 version = "0.1.0"
 dependencies = [
- "itertools 0.13.0",
+ "hashbrown 0.15.2",
+ "itertools 0.14.0",
+ "serde",
 ]
 
 [[package]]
@@ -380,6 +396,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
+name = "equivalent"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
+
+[[package]]
 name = "flush_flush"
 version = "0.1.0"
 dependencies = [
@@ -398,6 +420,12 @@ dependencies = [
  "cache_utils",
  "num-rational",
 ]
+
+[[package]]
+name = "foldhash"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0d2fde1f7b3d48b8395d5f2de76c18a528bd6a9cdde438df747bfcba3e05d6f"
 
 [[package]]
 name = "funty"
@@ -444,6 +472,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -480,6 +519,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
