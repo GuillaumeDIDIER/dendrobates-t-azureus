@@ -206,7 +206,7 @@ fn main() {
             display_name: "clflush local hit - n",
             t: &(),
         },
-        /* CalibrateOperation2T {
+        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: flush_and_reload_wrap,
             name: "reload_miss",
@@ -233,7 +233,7 @@ fn main() {
             name: "reload_local_hit",
             display_name: "reload local hit",
             t: &(),
-        },*/
+        },
     ];
 
     let r: Result<Vec<CalibrateResult2TNuma<BUCKET_SIZE, BUCKET_NUMBER>>, nix::Error> = unsafe {
