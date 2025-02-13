@@ -292,7 +292,7 @@ fn main() {
             .write_msgpack(format!(
                 "{}.{}",
                 time.format("%Y-%m-%dT%H-%M-%S%z"),
-                NumaCalibrationResult::EXTENSION
+                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
             ))
             .expect("Failed to write out results");
     }
