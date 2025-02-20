@@ -48,7 +48,7 @@ pub const BUCKET_SIZE: u64 = 1;
     feature = "serde_support"
 ))]
 impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
-    pub const EXTENSION: &'static str = ".NumaResults.msgpack.xz";
+    pub const EXTENSION: &'static str = "NumaResults.msgpack.xz";
     pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, ()> {
         let buf = match std::fs::read(path) {
             Ok(d) => d,
