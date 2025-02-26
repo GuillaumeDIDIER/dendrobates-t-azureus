@@ -156,7 +156,7 @@ fn main() {
     // operations
     // Call calibrate 2T \o/
 
-    let verbose_level = Verbosity::Threshold;
+    let verbose_level = Verbosity::Thresholds;
 
     let pointer = (&array[0]) as *const u8;
     if pointer as usize & (cache_line_size - 1) != 0 {
