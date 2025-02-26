@@ -35,7 +35,8 @@ pub fn core_per_package() -> u16 {
                 assert_eq!(t_per_core, None);
                 t_per_core = Some(level.processors());
             }
-            _ => { // TODO identify the right level ?
+            _ => {
+                // TODO identify the right level ?
                 if let Some(t_per_package) = t_per_package {
                     assert!(t_per_package <= level.processors())
                 }

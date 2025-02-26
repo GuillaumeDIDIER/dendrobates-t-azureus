@@ -27,10 +27,12 @@ sudo-g5k sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
 
 xz *.txt
 
+
 popd
 
 mkdir ./variable_freq
-cp *.xz ./variable_freq/
+cp /tmp/numa_cal_variable/*.xz ./variable_freq/
+
 rm -Rf /tmp/numa_cal_variable
 
 mkdir -p /tmp/numa_cal_fixed
@@ -54,7 +56,7 @@ popd
 
 
 mkdir ./fixed_freq
-cp *.xz ./fixed_freq/
+cp /tmp/numa_cal/fixed/*.xz ./fixed_freq/
 rm -Rf /tmp/numa_cal_fixed
 
 

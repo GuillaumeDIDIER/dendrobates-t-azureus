@@ -47,7 +47,7 @@ pub fn create_example_mapping(
     let frame = PhysFrame::containing_address(PhysAddr::new(0xb8000));
     let flags = Flags::PRESENT | Flags::WRITABLE;
 
-    let map_to_result = unsafe {mapper.map_to(page, frame, flags, frame_allocator)};
+    let map_to_result = unsafe { mapper.map_to(page, frame, flags, frame_allocator) };
     map_to_result.expect("map_to failed").flush();
 }
 

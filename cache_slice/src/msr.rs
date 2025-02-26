@@ -1,12 +1,15 @@
 use core::mem::size_of;
 use std::format;
 use std::fs::{File, OpenOptions};
+use std::io::{Error, Result};
 use std::os::unix::fs::FileExt;
-use std::io::{Result, Error};
 
 pub fn write_msr_on_cpu(msr: u64, cpu: u8, value: u64) -> Result<()> {
     let path = format!("/dev/cpu/{}/msr", cpu);
-    let file: File = OpenOptions::new().write(true).open(path).expect("Failed to open MSR, are you running as root ?");
+    let file: File = OpenOptions::new()
+        .write(true)
+        .open(path)
+        .expect("Failed to open MSR, are you running as root ?");
     match file.write_at(&value.to_ne_bytes(), msr) {
         Ok(size) => {
             if size == size_of::<u64>() {
@@ -15,13 +18,16 @@ pub fn write_msr_on_cpu(msr: u64, cpu: u8, value: u64) -> Result<()> {
                 Err(Error::other("Failed to write complete value"))
             }
         }
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }
 
 pub fn read_msr_on_cpu(msr: u64, cpu: u8) -> Result<u64> {
     let path = format!("/dev/cpu/{}/msr", cpu);
-    let file: File = OpenOptions::new().read(true).open(path).expect("Failed to open MSR, are you running as root ?");
+    let file: File = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .expect("Failed to open MSR, are you running as root ?");
     let mut read_data = [0u8; size_of::<u64>()];
     match file.read_at(&mut read_data, msr) {
         Ok(size) => {
@@ -31,7 +37,7 @@ pub fn read_msr_on_cpu(msr: u64, cpu: u8) -> Result<u64> {
                 Err(Error::other("Failed to write complete value"))
             }
         }
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }
 
