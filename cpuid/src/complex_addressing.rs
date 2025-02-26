@@ -88,6 +88,7 @@ pub fn cache_slicing(
             match uarch {
                 MicroArchitecture::KabyLake
                 | MicroArchitecture::Skylake
+                | MicroArchitecture::AmberLake
                 | MicroArchitecture::WhiskeyLake => ComplexAddressing(Box::from(
                     &SANDYBRIDGE_TO_SKYLAKE_FUNCTIONS[0..((trailing_zeros + 1) as usize)],
                 )),

@@ -155,28 +155,46 @@ pub enum MicroArchitecture {
     // The Intel® Pentium® Silver processor series, the Intel® Celeron® processor J series, and the Intel® Celeron®
     // processor N series are based on the Goldmont Plus microarchitecture.
     Tremont, // Atom ?
+    WhiskeyLake,
+    AmberLake,
     CoffeeLake,
     // The 8th generation Intel® CoreTM processors, 9th generation Intel® CoreTM processors, and Intel® Xeon® E proces-
     // sors are based on the Coffee Lake microarchitecture and support Intel 64 architecture.
     KnightsMill,
     // The Intel® Xeon PhiTM Processor 7215, 7285, 7295 Series is based on the Knights Mill microarchitecture and
     // supports Intel 64 architecture.
-    CascadeLake,
-    CannonLake, // Only in volume 4 ??
-    WhiskeyLake,
-    // The 2nd generation Intel® Xeon® Processor Scalable Family is based on the Cascade Lake product and supports
-    // Intel 64 architecture.
-    IceLake,
-    // The 10th generation Intel® CoreTM processors are based on the Ice Lake microarchitecture and support Intel 64
-    // architecture.
-    SkylakeServer,
 
+
+    SkylakeServer,
     // The Intel® Xeon® Processor Scalable Family is based on the Skylake Server microarchitecture. Proces-
     // sors based on the Skylake microarchitecture can be identified using CPUID’s DisplayFamily_DisplayModel
     // signature, which can be found in Table 2-1 of CHAPTER 2 of Intel® 64 and IA-32 Architectures Software
     // Developer’s Manual, Volume 4.
-    CooperLake, // Future Xeon Scalable ?? (To be checked)
-                // TODO: Check server architecture post Skylake (wikichip ?), add AMD
+
+    CascadeLake,
+    // The 2nd generation Intel® Xeon® Processor Scalable Family is based on the Cascade Lake product and supports
+    // Intel 64 architecture.
+    CooperLake,
+
+    CannonLake, // Only in volume 4 ??
+
+
+    IceLake,
+    // The 10th generation Intel® CoreTM processors are based on the Ice Lake microarchitecture and support Intel 64
+    // architecture.
+
+    IceLakeServer,
+
+    /* TODO Hybrids */
+
+    CometLake,
+
+    RocketLake,
+
+    SapphireRapids,
+    EmeraldRapids,
+    GraniteRapids,
+
 }
 
 impl MicroArchitecture {
@@ -189,6 +207,14 @@ impl MicroArchitecture {
             Intel => Some(match family_model_display {
                 0x06_85 => KnightsMill, // Intel® Xeon PhiTM Processor 7215, 7285, 7295 Series based on Knights Mill microarchitecture
                 0x06_57 => KnightsLanding, // Intel® Xeon PhiTM Processor 3200, 5200, 7200 Series based on Knights Landing microarchitecture
+
+                0x06_AD | 0x06_AE => GraniteRapids,
+                0x06_CF => EmeraldRapids,
+                0x06_8F => SapphireRapids,
+
+                0x06_A7 => RocketLake,
+                0x06_A5 | 0x06_A6 => CometLake,
+
                 0x06_7D | 0x06_7E => IceLake, // 10th generation Intel® CoreTM processors based on Ice Lake microarchitecture
                 0x06_66 => CannonLake, // Intel® CoreTM processors based on Cannon Lake microarchitecture
 
@@ -213,7 +239,7 @@ impl MicroArchitecture {
                     }
                 }
                 // Future Intel® Xeon® processors based on Ice Lake microarchitecture
-                0x06_6A | 0x06_6C => IceLake, // Check Server Ahem
+                0x06_6A | 0x06_6C => IceLakeServer,
 
                 // Intel® Xeon® Processor Scalable Family based on Skylake microarchitecture, 2nd generation Intel®
                 // Xeon® Processor Scalable Family based on Cascade Lake product, and future Cooper Lake product
@@ -222,8 +248,10 @@ impl MicroArchitecture {
                         SkylakeServer
                     } else if stepping <= 7 {
                         CascadeLake
-                    } else {
+                    } else if stepping == 11{
                         CooperLake
+                    } else {
+                        None
                     }
                 }
                 // 6th generation Intel Core processors and Intel Xeon processor E3-1500m v5 product family and E3-
