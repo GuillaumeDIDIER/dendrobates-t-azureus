@@ -13,6 +13,8 @@ echo $cache_utils
 sudo-g5k apt install msr-tools
 sudo-g5k modprobe msr
 
+lstopo --of xml > topo.xml
+lscpu > cpu.txt
 
 mkdir -p /tmp/numa_cal_variable
 pushd /tmp/numa_cal_variable
