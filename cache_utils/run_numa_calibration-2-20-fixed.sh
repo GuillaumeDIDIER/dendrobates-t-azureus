@@ -16,24 +16,24 @@ sudo-g5k modprobe msr
 lstopo --of xml > topo.xml
 lscpu > cpu.txt
 
-mkdir -p /tmp/numa_cal_variable
-pushd /tmp/numa_cal_variable
+#mkdir -p /tmp/numa_cal_variable
+#pushd /tmp/numa_cal_variable
 
-sudo-g5k sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+#sudo-g5k sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
+#$cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
 
-sudo-g5k sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+#sudo-g5k sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
 
-xz *.txt
+#xz *.txt
 
 
-popd
+#popd
 
-mkdir ./variable_freq
-cp /tmp/numa_cal_variable/*.xz ./variable_freq/
+#mkdir ./variable_freq
+#cp /tmp/numa_cal_variable/*.xz ./variable_freq/
 
-rm -Rf /tmp/numa_cal_variable
+#rm -Rf /tmp/numa_cal_variable
 
 mkdir -p /tmp/numa_cal_fixed
 pushd /tmp/numa_cal_fixed
