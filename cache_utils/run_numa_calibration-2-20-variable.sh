@@ -35,28 +35,28 @@ cp /tmp/numa_cal_variable/*.xz ./variable_freq/
 
 rm -Rf /tmp/numa_cal_variable
 
-mkdir -p /tmp/numa_cal_fixed
-pushd /tmp/numa_cal_fixed
+#mkdir -p /tmp/numa_cal_fixed
+#pushd /tmp/numa_cal_fixed
 
-sudo-g5k wrmsr -a 420 0xf
+#sudo-g5k wrmsr -a 420 0xf
 
-sudo-g5k cpupower frequency-set -g performance
-sudo-g5k sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-sudo-g5k sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+#sudo-g5k cpupower frequency-set -g performance
+#sudo-g5k sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+#sudo-g5k sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
+#$cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
 
-sudo-g5k sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-sudo-g5k sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
-sudo-g5k wrmsr -a 420 0
+#sudo-g5k sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+#sudo-g5k sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+#sudo-g5k wrmsr -a 420 0
 
-xz *.txt
+#xz *.txt
 
-popd
+#popd
 
 
-mkdir ./fixed_freq
-cp /tmp/numa_cal_fixed/*.xz ./fixed_freq/
-rm -Rf /tmp/numa_cal_fixed
+#mkdir ./fixed_freq
+#cp /tmp/numa_cal_fixed/*.xz ./fixed_freq/
+#rm -Rf /tmp/numa_cal_fixed
 
 
