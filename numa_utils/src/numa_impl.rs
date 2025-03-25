@@ -8,7 +8,9 @@ use crate::NumaError;
 use core::cmp::PartialEq;
 use core::ffi::{c_int, c_uint};
 pub use numa_types::numa_impl::*;
+#[cfg(target_os = "linux")]
 use numactl_sys;
+#[cfg(target_os = "linux")]
 use numactl_sys::{
     bitmask, numa_all_nodes_ptr, numa_available, numa_bitmask_alloc, numa_bitmask_clearall,
     numa_bitmask_free, numa_bitmask_isbitset, numa_bitmask_setbit, numa_get_membind,
@@ -25,7 +27,9 @@ struct Numa {
     max_node: c_uint,
 }
 
+
 impl Numa {
+    #[cfg(target_os = "linux")]
     fn initialize() -> Option<Numa> {
         let numa_available = unsafe { numa_available() };
         if numa_available < 0 {
@@ -69,6 +73,7 @@ static NUMA: Mutex<NumaState> = Mutex::new(NumaState::Uninitialized);
 Return a HashSet of the available Numa nodes
 (Also works in Non Numa builds returning a single dummy node)
 */
+#[cfg(target_os = "linux")]
 pub fn available_nodes() -> Result<HashSet<NumaNode>, NumaError> {
     let mut option = NUMA.lock().unwrap();
     if *option == NumaState::Failed {
@@ -91,7 +96,7 @@ pub fn available_nodes() -> Result<HashSet<NumaNode>, NumaError> {
         unreachable!()
     }
 }
-
+#[cfg(target_os = "linux")]
 pub fn set_memory_node(node: NumaNode) -> Result<(), NumaError> {
     let mut numa = NUMA.lock().unwrap();
     let numa = match &mut *numa {
@@ -136,7 +141,7 @@ pub fn set_memory_node(node: NumaNode) -> Result<(), NumaError> {
         Ok(())
     }
 }
-
+#[cfg(target_os = "linux")]
 pub fn set_memory_nodes(nodes: HashSet<NumaNode>) -> Result<(), NumaError> {
     let mut numa = NUMA.lock().unwrap();
     let numa = match &mut *numa {
@@ -193,11 +198,12 @@ or with numa_bitmask_alloc() using an n value returned from numa_num_possible_no
 A task's current node set can be gotten by calling numa_get_membind().
 Bits in the tonodes mask can be set by calls to numa_bitmask_setbit().
 */
+#[cfg(target_os = "linux")]
 pub fn reset_memory_node() -> Result<(), NumaError> {
     unsafe { numa_set_membind(numa_all_nodes_ptr) };
     Ok(())
 }
-
+#[cfg(target_os = "linux")]
 pub fn numa_node_of_cpu(cpu: usize) -> Result<NumaNode, NumaError> {
     let n = unsafe { numactl_sys::numa_node_of_cpu(cpu as c_int) };
     if n < 0 {

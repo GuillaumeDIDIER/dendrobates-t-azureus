@@ -8,6 +8,7 @@ pub(crate) enum CpuClass {
     // Add further CPUs later on
 }
 
+#[cfg(target_arch = "x86_64")]
 pub(crate) fn determine_cpu_class() -> Option<CpuClass> {
     let cpuid = CpuId::new();
     let info = if let Some(info) = cpuid.get_feature_info() {
@@ -45,7 +46,7 @@ pub(crate) fn determine_cpu_class() -> Option<CpuClass> {
         _ => None,
     }
 }
-
+#[cfg(target_arch = "x86_64")]
 pub(crate) fn get_performance_counters_xeon() -> Option<&'static XeonPerfCounters> {
     let cpuid = CpuId::new();
     let info = if let Some(info) = cpuid.get_feature_info() {
@@ -65,6 +66,7 @@ pub(crate) fn get_performance_counters_xeon() -> Option<&'static XeonPerfCounter
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 pub(crate) fn get_performance_counters_core() -> Option<&'static CorePerfCounters> {
     let cpuid = CpuId::new();
     let info = if let Some(info) = cpuid.get_feature_info() {

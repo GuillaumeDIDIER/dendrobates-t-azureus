@@ -1,9 +1,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(target_arch = "x86_64")]
 use crate::arch::CpuClass::{IntelCore, IntelXeon, IntelXeonSP};
+#[cfg(target_arch = "x86_64")]
 use crate::arch::{get_performance_counters_core, get_performance_counters_xeon};
+#[cfg(target_arch = "x86_64")]
 use crate::msr::{read_msr_on_cpu, write_msr_on_cpu};
 use crate::Error::{InvalidParameter, UnsupportedCPU};
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::_mm_clflush;
 
 mod arch;
@@ -24,13 +28,13 @@ impl From<std::io::Error> for Error {
 }
 
 const NUM_POKE: usize = 100000;
-
+#[cfg(target_arch = "x86_64")]
 unsafe fn poke(addr: *const u8) {
     for _i in 0..NUM_POKE {
         unsafe { _mm_clflush(addr) };
     }
 }
-
+#[cfg(target_arch = "x86_64")]
 unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<u64>, Error> {
     let performance_counters = if let Some(p) = get_performance_counters_xeon() {
         p
@@ -116,7 +120,7 @@ unsafe fn monitor_xeon(addr: *const u8, cpu: u8, max_cbox: usize) -> Result<Vec<
 
     Ok(results)
 }
-
+#[cfg(target_arch = "x86_64")]
 unsafe fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
     // Note, we need to add the workaround for one missing perf counter here.
     let performance_counters = if let Some(p) = get_performance_counters_core() {
@@ -206,6 +210,7 @@ unsafe fn monitor_core(addr: *const u8, cpu: u8) -> Result<Vec<u64>, Error> {
 }
 
 // Note: max_cbox is not used on Intel Core.
+#[cfg(target_arch = "x86_64")]
 pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result<Vec<u64>, Error> {
     match arch::determine_cpu_class() {
         Some(IntelCore) => unsafe { monitor_core(addr, cpu) },
@@ -217,7 +222,7 @@ pub unsafe fn monitor_address(addr: *const u8, cpu: u8, max_cbox: u16) -> Result
         None => Err(UnsupportedCPU),
     }
 }
-
+#[cfg(target_arch = "x86_64")]
 pub fn determine_slice(addr: *const u8, core: u8, nb_cores: u16) -> Option<usize> {
     let res = unsafe { monitor_address(addr, core, nb_cores) }.unwrap();
 

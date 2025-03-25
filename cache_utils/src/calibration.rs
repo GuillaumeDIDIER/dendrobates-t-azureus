@@ -1,4 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
+#![cfg(target_arch = "x86_64")]
+
 
 extern crate alloc; //#[cfg(feature = "serde_support")]
                     //use serde::{Deserialize, Serialize};

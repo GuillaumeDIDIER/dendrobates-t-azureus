@@ -6,10 +6,15 @@ edition = "2024"
 [dependencies]
 serde = { version = "1.0.217", features = ["derive"], optional = true }
 nix = { version = "0.29.0", optional = true }
-numactl-sys = { path = "../../numactl-sys", optional = true }
 numa_types = { path = "../numa_types" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+numactl-sys = { path = "../../numactl-sys", optional = true }
 
 [features]
 serde_support = ["serde", "numa_types/serde_support"]
-numa = ["numa_types/numa", "nix", "numactl-sys"]
+numa = ["numa_types/numa", "nix"]
 default = ["numa", "serde_support"]
+
+[target.'cfg(target_os = "linux")'.features]
+numa = ["numa_types/numa", "nix", "numactl-sys"]

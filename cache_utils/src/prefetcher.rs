@@ -1,3 +1,5 @@
+#![cfg(target_arch = "x86_64")]
+
 use x86_64::registers::model_specific::Msr;
 
 /*
@@ -21,6 +23,7 @@ pub fn prefetcher_status() -> bool {
     value & 0xf != 0xf
 }
 
+/* TODO support newer arch */
 pub fn enable_prefetchers(status: bool) {
     let mut msr = Msr::new(MSR_MISC_FEATURE8CONTROL);
     let mut value = unsafe { msr.read() } & !0xf;

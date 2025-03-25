@@ -1,3 +1,4 @@
+#![cfg(target_arch = "x86_64")]
 use raw_cpuid::{CpuId, CpuIdReaderNative, ExtendedTopologyIter, TopologyType};
 
 fn get_topology_iterator() -> ExtendedTopologyIter<CpuIdReaderNative> {

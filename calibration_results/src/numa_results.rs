@@ -49,18 +49,18 @@ pub const BUCKET_SIZE: u64 = 1;
 ))]
 impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
     pub const EXTENSION: &'static str = "NumaResults.msgpack.xz";
-    pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, ()> {
+    pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
         let buf = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
-                return Err(());
+                return Err(String::from("Failed to open path"));
             }
         };
         let mut data = Vec::new();
         let mut cursor = std::io::Cursor::new(&mut data);
         xz_decompress(&mut &buf[..], &mut cursor).unwrap();
         let mut deserializer = Deserializer::new(&data[..]);
-        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer).map_err(|_e| {})
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer).map_err(|e| {format!("{:?}", e)})
     }
 
     pub fn write_msgpack(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
