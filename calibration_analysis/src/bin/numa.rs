@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::env::args;
 use std::fs;
 use std::io::Cursor;
-
+use calibration_results::calibration::{CoreLocation, StaticHistCalibrateResult};
 /*
 Design to do, we need to extract, for both FR and FF the raw calibration results (HashMap<AVMLoc, Histograms>)
 -> From there we can compute the consolidations for all possible models.
@@ -16,6 +16,13 @@ Design to do, we need to extract, for both FR and FF the raw calibration results
 -> Separately, we want to make some histograms, and also try to figure out a way to compare stuffs ?
 
  */
+
+struct CacheOps<T> {
+    flush_hit: T,
+    flush_miss: T,
+    reload_hit: T,
+    reload_miss: T,
+}
 
 pub fn run_numa_analysis<const WIDTH: u64, const N: usize>(
     data: NumaCalibrationResult<WIDTH, N>,
@@ -26,39 +33,66 @@ pub fn run_numa_analysis<const WIDTH: u64, const N: usize>(
     let slicings = data.slicing;
     let operations = data.operations;
     let uarch = data.micro_architecture;
-    //let location_map = calibration_result_to_location_map_parallel(results, &|static_hist_result| { () }, &(), &());
-    unimplemented!()
+
+    let core_location = |core: usize| unsafe {
+        // Eventually we need to integrate https://docs.rs/raw-cpuid/latest/raw_cpuid/struct.ExtendedTopologyIter.html
+        let node = topology_info[&core].into();
+        CoreLocation {
+            socket: node,
+            core: core as u16,
+        }
+    };
+
+    let location_map = calibration_result_to_location_map_parallel(results, &|static_hist_result| { () }, &|addr| {slicings.1.hash(addr).try_into().expect("Slice index doesn't fit u8")}, &core_location);
+    /*
+    let calibration_analysis = calibration_result_to_location_map(
+        calibrate_results2t_vec,
+        &|calibration_results_1run: StaticHistCalibrateResult<WIDTH, N>| {
+            let mut hits = None;
+            let mut miss = None;
+            for (i, hist) in calibration_results_1run.histogram.into_iter().enumerate() {
+                if i == HIT_INDEX {
+                    hits = Some(hist);
+                } else if i == MISS_INDEX {
+                    miss = Some(hist);
+                }
+            }
+            (hits.unwrap(), miss.unwrap())
+        },
+        &h,
+        &core_location,
+    );
+    */
+
+    // 1. For each location, extract, FLUSH_HIT / FLUSH_MISS - RELOAD_HIT / RELOAD_MISS
+    // 2. From there, compute the various reductions from thresholding, without losing the initial data.
+    //    (This will require careful use of references, and probably warrants some sort of helper, given we have 34 different configs)
+    // 3. Use the reductions to determine thresholds.
+    // 4. Compute the expected errors, with average, min, max and stddev.
+    println!("Number of entries: {}", location_map.iter().count());
+    /* TODO Outstanding statistic question on how to validate if both types of cache cleanup (nope vs explicit flush) give the same distributions
+    */
+
+
+    //unimplemented!()
 }
 
 fn run_analysis_from_file(name: &str) -> Result<(), ()> {
-    /*eprintln!("Analysing file {}", name);
-    let result = {
-        let mut file = match fs::File::open(format!("{}.msgpack", name)) {
-            Ok(d) => d,
-            Err(e) => {
-                return Err(());
-            }
-        };
-        let mut deserializer = Deserializer::new(&mut file);
-        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::deserialize(&mut deserializer).unwrap()
+    let path = if name.ends_with(&NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION) {
+        name.to_owned()
+    } else {
+        format!(
+            "{}.{}",
+            name,
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
+        )
     };
-    eprintln!("Read and deserialized {}.msgpack", name);
-    /*{
-        let mut buf = Vec::new();
-        let mut s = Serializer::new(&mut buf);
-        result.serialize(&mut s).unwrap();
-        let mut f1 = std::fs::File::create(format!("{}.msgpack.xz", name)).unwrap();
-        xz_compress(&mut &buf[..], &mut f1).expect("Failed to compress data to the output file")
-        f1.flush().unwrap();
-    }
-    eprintln!("Serialized and wrote {}.msgpack.xz", name);*/*/
-    let path = format!(
-        "{}.{}",
-        name,
-        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
-    );
-    let new_result = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&path)
-        .expect(&format!("Failed to read msgpack file {}", &path));
+
+    let new_result = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&path);
+    let new_result = match new_result {
+        Ok(r) => {r}
+        Err(e) => {eprintln!("{:?}", e); panic!();}
+    };
 
     eprintln!("Read and deserialized {}.msgpack.xz", name);
     println!("Operations");
@@ -69,6 +103,8 @@ fn run_analysis_from_file(name: &str) -> Result<(), ()> {
         "Number of Calibration Results: {}",
         new_result.results.len()
     );
+    println!("Micro-architecture: {:?}", new_result.micro_architecture);
+    run_numa_analysis(new_result);
     Ok(())
 }
 
