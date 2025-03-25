@@ -60,7 +60,7 @@ pub struct AVMLocation {
     pub attacker: CoreLocation,
     pub victim: CoreLocation,
     pub memory_numa_node: NumaNode,
-    pub memory_slice: u8,
+    pub memory_slice: usize,
     pub memory_vpn: usize,
     pub memory_offset: isize,
 }
@@ -121,7 +121,7 @@ pub trait PartialLocation {
         }
     }
 
-    fn get_slice(&self) -> Option<u8> {
+    fn get_slice(&self) -> Option<usize> {
         if self.get_params().memory_slice {
             Some(self.get_location().memory_slice)
         } else {

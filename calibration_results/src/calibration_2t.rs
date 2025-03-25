@@ -30,7 +30,7 @@ pub fn calibration_result_to_location_map<
 >(
     results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
     analysis: &Analysis, /*Todo slicing*/
-    slice_mapping: &impl Fn(usize) -> u8,
+    slice_mapping: &impl Fn(usize) -> usize,
     core_location: &impl Fn(usize) -> CoreLocation, // This is the caller's job,
                                                     // he can use numa_node_of_cpu as an approximation, or use CPUID.
                                                     // NB, this aso means we need to dump that info from the machines, for the analysis.
@@ -74,7 +74,7 @@ pub fn calibration_result_to_location_map_parallel<
 >(
     results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
     analysis: &Analysis, /*Todo slicing*/
-    slice_mapping: &(impl Send + Sync + Fn(usize) -> u8),
+    slice_mapping: &(impl Send + Sync + Fn(usize) -> usize),
     core_location: &(impl Send + Sync + Fn(usize) -> CoreLocation), // This is the caller's job,
                                                                     // he can use numa_node_of_cpu as an approximation, or use CPUID.
                                                                     // NB, this aso means we need to dump that info from the machines, for the analysis.
