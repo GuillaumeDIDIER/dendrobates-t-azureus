@@ -237,14 +237,14 @@ impl<
                 if r > (u8::MAX as usize) {
                     panic!("Unsupported, the size of slice in AVMLocation is too small");
                 }
-                r as u8
+                r
             },
-            CacheAttackSlicing::ComplexAddressing(_) => |slice: usize| slice as u8,
+            CacheAttackSlicing::ComplexAddressing(_) => |slice: usize| slice,
             CacheAttackSlicing::SimpleAddressing(_) => |slice: usize| {
                 if slice > (u8::MAX as usize) {
                     panic!("Unsupported, the size of slice in AVMLocation is too small");
                 }
-                slice as u8
+                slice
             },
             CacheAttackSlicing::NoSlice => |slice: usize| 0,
         };
@@ -565,7 +565,7 @@ impl<
         })
     }
 
-    fn get_slice(&self, addr: *const u8) -> u8 {
+    fn get_slice(&self, addr: *const u8) -> usize {
         // This will not work well if slicing is not known FIXME
         let slice = self.slicing.hash(addr as usize);
 
@@ -576,14 +576,14 @@ impl<
                 if r > (u8::MAX as usize) {
                     panic!("Unsupported, the size of slice in AVMLocation is too small");
                 }
-                r as u8
+                r
             }
-            CacheAttackSlicing::ComplexAddressing(_) => slice as u8,
+            CacheAttackSlicing::ComplexAddressing(_) => slice,
             CacheAttackSlicing::SimpleAddressing(_) => {
                 if slice > (u8::MAX as usize) {
                     panic!("Unsupported, the size of slice in AVMLocation is too small");
                 }
-                slice as u8
+                slice
             }
             CacheAttackSlicing::NoSlice => 0,
         }

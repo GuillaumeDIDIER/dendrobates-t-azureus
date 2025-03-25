@@ -13,8 +13,8 @@ numactl-sys = { path = "../../numactl-sys", optional = true }
 
 [features]
 serde_support = ["serde", "numa_types/serde_support"]
-numa = ["numa_types/numa", "nix"]
+#numa = ["numa_types/numa", "nix"]
 default = ["numa", "serde_support"]
 
-[target.'cfg(target_os = "linux")'.features]
+#[target.'cfg(target_os = "linux")'.features]
 numa = ["numa_types/numa", "nix", "numactl-sys"]

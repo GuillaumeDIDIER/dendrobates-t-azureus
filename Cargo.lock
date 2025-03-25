@@ -197,6 +197,7 @@ dependencies = [
  "lzma-rs",
  "nix",
  "num-rational",
+ "numa_types",
  "numa_utils",
  "numactl-sys",
  "polling_serial",

@@ -12,14 +12,14 @@ use cache_utils::calibration::{
     Verbosity, ASP, ASVP, AV, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{flush, maccess, noop, numa};
+use cache_utils::{flush, maccess, noop};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
 use core::arch::x86_64 as arch_x86;
 
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use numa_utils::::NumaNode;
+use numa_utils::{available_nodes, NumaNode};
 use std::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ fn main() {
     let mut core_pairs: Vec<(NumaNode, usize, usize)> = Vec::new();
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
 
-    let node = numa::available_nodes().unwrap().into_iter().next().unwrap();
+    let node = available_nodes().unwrap().into_iter().next().unwrap();
 
     for i in 0..CpuSet::count() {
         for j in 0..CpuSet::count() {
@@ -266,7 +266,7 @@ fn main() {
     let slicing = get_cache_attack_slicing(core_per_socket, cache_line_size);
 
     let h = if let Some(s) = slicing {
-        |addr: usize| -> usize { slicing.unwrap().hash(addr) }
+        move |addr: usize| -> usize { s.hash(addr) }
     } else {
         panic!("No slicing function known");
     };

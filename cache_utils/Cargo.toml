@@ -26,6 +26,7 @@ calibration_results = { path = "../calibration_results" }
 lazy_static = "1.4.0"
 bitvec = { version = "1.0.1", optional = true }
 numa_utils = { path = "../numa_utils" }
+numa_types = { path = "../numa_types" }
 
 serde = { version = "1.0.216", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
@@ -40,11 +41,10 @@ numactl-sys = { path = "../../numactl-sys", optional = true }
 [features]
 use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono", "num-rational/std"]
 no_std = ["polling_serial", "vga_buffer", "hashbrown"]
-numa = ["numa_utils/numa", "calibration_results/numa"]
+#numa = ["numa_utils/numa", "calibration_results/numa"]
 serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]
 
 default = ["use_std", "numa", "serde_support"]
-[target.'cfg(target_os = "linux")'.features]
 numa = ["numa_types/numa", "nix", "numactl-sys"]
 
 [[bin]]

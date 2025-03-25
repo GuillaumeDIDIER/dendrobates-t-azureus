@@ -7,7 +7,7 @@ use cache_utils::calibration::{
     Verbosity, ASP, ASVP, AV, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER, SP, SVP,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{flush, maccess, noop, numa};
+use cache_utils::{flush, maccess, noop};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 
@@ -15,7 +15,7 @@ use core::arch::x86_64 as arch_x86;
 
 use cache_utils::ip_tool::Function;
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use numa_utils::::NumaNode;
+use numa_utils::{available_nodes, NumaNode};
 use core::cmp::min;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -183,7 +183,7 @@ fn main() {
 
     let cache_line_size = 64;
 
-    let node = numa::available_nodes().unwrap().into_iter().next().unwrap();
+    let node = available_nodes().unwrap().into_iter().next().unwrap();
 
     // Generate core iterator
     let mut core_pairs: Vec<(NumaNode, usize, usize)> = Vec::new();
