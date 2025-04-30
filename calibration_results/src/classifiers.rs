@@ -1,7 +1,4 @@
 use crate::calibration::ErrorPrediction;
-use alloc::boxed::Box;
-use alloc::vec;
-use alloc::vec::Vec;
 /**
  * This module regroups various methods to classify hits and misses
  *
@@ -14,10 +11,13 @@ use alloc::vec::Vec;
  *
  * Threshold only have N-1 possible meaningful values, thus Threshold i, means classes 0 to i (inclusive) are below, and class i+1 - N are above.
  */
-use calibration_results::histograms::{Bucket, SimpleBucketU64, StaticHistogramCumSum};
+use crate::histograms::{Bucket, SimpleBucketU64, StaticHistogramCumSum};
+use alloc::boxed::Box;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::borrow::Borrow;
 use core::cmp::Ordering;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display, Formatter};
 use itertools::Itertools;
 
 // Problem : Histogram need to be refactored to use buckets too.
@@ -238,6 +238,18 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
     }
 }
 
+impl<const WIDTH: u64, const N: usize> Display for Threshold<SimpleBucketU64<WIDTH, N>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut time: u64 = self.bucket_index.into();
+        time += WIDTH;
+        if self.miss_faster_than_hit {
+            write!(f, "miss < {}", time)
+        } else {
+            write!(f, "hit < {}", time)
+        }
+    }
+}
+
 /*impl<const WIDTH: u64, const N: usize> DynErrorPredictionsBuilder<WIDTH, N> for SimpleThresholdBuilder<WIDTH, N> {
     fn enumerate_error_predictions(&self, hits: &StaticHistogramCumSum<WIDTH, N>, miss: &StaticHistogramCumSum<WIDTH, N>) -> Vec<(Box<dyn ErrorPredictor<WIDTH, N>>, ErrorPrediction)>
     {
@@ -275,6 +287,10 @@ impl<T: Bucket> DualThreshold<T> {
     pub fn set_hit_to_miss(&mut self, hit_to_miss_index: &T) {
         self.hit_to_miss_index = *hit_to_miss_index;
         self.center_hit = self.miss_to_hit_index < self.hit_to_miss_index;
+    }
+
+    pub fn get_thresholds(&self) -> (T, T) {
+        (self.miss_to_hit_index, self.hit_to_miss_index)
     }
 }
 
@@ -424,6 +440,20 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
         let index = (indexes.len() - 1) / 2;
 
         Some(classifiers[index])
+    }
+}
+
+impl<const WIDTH: u64, const N: usize> Display for DualThreshold<SimpleBucketU64<WIDTH, N>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut m_t_h_time: u64 = self.miss_to_hit_index.into();
+        m_t_h_time += WIDTH;
+        let mut h_t_m_time: u64 = self.hit_to_miss_index.into();
+        h_t_m_time += WIDTH;
+        if self.center_hit {
+            write!(f, "{} < hit < {}", m_t_h_time, h_t_m_time)
+        } else {
+            write!(f, "{} < miss < {}", h_t_m_time, m_t_h_time)
+        }
     }
 }
 

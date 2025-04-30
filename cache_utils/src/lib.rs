@@ -28,7 +28,6 @@ pub mod frequency;
 #[cfg(feature = "use_std")]
 pub mod calibrate_2t;
 
-pub mod classifiers;
 #[cfg(feature = "use_std")]
 pub mod ip_tool;
 pub mod numa_analysis;

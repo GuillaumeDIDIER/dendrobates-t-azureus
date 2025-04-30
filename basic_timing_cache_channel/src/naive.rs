@@ -7,8 +7,8 @@ use cache_side_channel::{
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{only_flush, only_reload};
-use cache_utils::classifiers::{HitClassifier, Threshold};
 use cache_utils::flush;
+use calibration_results::classifiers::{HitClassifier, Threshold};
 use calibration_results::histograms::NaiveBucketU64;
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;

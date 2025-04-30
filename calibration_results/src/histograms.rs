@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde_support")]
 use serde_big_array::BigArray;
 use std::fmt::Debug;
+use std::iter::zip;
 use std::ops::AddAssign;
 /**********
  * Traits *
@@ -146,6 +147,12 @@ impl<const WIDTH: u64, const N: usize> StaticHistogram<WIDTH, N> {
             Err(_) => None,
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (SimpleBucketU64<WIDTH, N>, u32)> {
+        let buckets = SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX;
+        let values = self.data.iter().copied();
+        zip(buckets, values)
+    }
 }
 
 impl<const WIDTH: u64, const N: usize> Default for StaticHistogram<WIDTH, N> {
@@ -204,6 +211,11 @@ impl<const WIDTH: u64, const N: usize> StaticHistogramCumSum<WIDTH, N> {
             Err(_) => None,
         }
     }
+    pub fn iter(&self) -> impl Iterator<Item = (SimpleBucketU64<WIDTH, N>, HistogramCumSumItem)> {
+        let buckets = SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX;
+        let values = self.data.iter().copied();
+        zip(buckets, values)
+    }
 }
 
 impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
@@ -245,4 +257,26 @@ impl<const WIDTH: u64, const N: usize> Index<u64> for StaticHistogramCumSum<WIDT
         let bucket = SimpleBucketU64::try_from(index).expect("Invalid time");
         &self[&bucket]
     }
+}
+
+pub fn group2_histogram<const WIDTH: u64, const N: usize>(
+    input: StaticHistogram<WIDTH, { N + N }>,
+) -> StaticHistogram<{ WIDTH + WIDTH }, N> {
+    let mut res: StaticHistogram<{ WIDTH + WIDTH }, N> = StaticHistogram::empty();
+    for i in 0..N {
+        let value = input.data[2 * i] + input.data[2 * i + 1];
+        res.data[i] = value;
+    }
+    res
+}
+
+pub fn group2_histogram_cum_sum<const WIDTH: u64, const N: usize>(
+    input: StaticHistogramCumSum<WIDTH, { N + N }>,
+) -> StaticHistogramCumSum<{ WIDTH + WIDTH }, N> {
+    let mut res: StaticHistogram<{ WIDTH + WIDTH }, N> = StaticHistogram::empty();
+    for i in 0..N {
+        let count = input.data[2 * i].count + input.data[2 * i + 1].count;
+        res.data[i] = count;
+    }
+    StaticHistogramCumSum::from(res)
 }

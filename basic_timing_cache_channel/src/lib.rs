@@ -19,22 +19,21 @@ use cache_side_channel::{
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
-    calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn, map_values, only_flush,
-    only_reload, reduce, CalibrateOperation2T, CalibrationOptions, ErrorPrediction, HashMap,
-    Verbosity, PAGE_LEN, PAGE_SHIFT,
+    calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn, only_flush, only_reload,
+    CalibrateOperation2T, CalibrationOptions, HashMap, Verbosity, PAGE_LEN, PAGE_SHIFT,
 };
-use cache_utils::classifiers::{ErrorPredictionsBuilder, ErrorPredictor, HitClassifier};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{find_core_per_socket, flush, maccess};
 use calibration_results::calibration::{
-    AVMLocation, CoreLocation, LocationParameters, PartialLocation, PartialLocationOwned,
-    StaticHistCalibrateResult, VPN,
+    AVMLocation, CoreLocation, ErrorPrediction, LocationParameters, PartialLocation,
+    PartialLocationOwned, StaticHistCalibrateResult, VPN,
 };
 use calibration_results::calibration_2t::{
-    calibration_result_to_location_map, calibration_result_to_location_map_parallel,
-    CalibrateResult2TNuma,
+    calibration_result_to_location_map, CalibrateResult2TNuma,
 };
+use calibration_results::classifiers::{ErrorPredictionsBuilder, ErrorPredictor, HitClassifier};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
+use calibration_results::{map_values, reduce};
 use cpuid::complex_addressing::CacheAttackSlicing;
 use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;

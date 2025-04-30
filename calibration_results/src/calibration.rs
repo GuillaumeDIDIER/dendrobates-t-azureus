@@ -1,6 +1,6 @@
 use crate::histograms::StaticHistogram;
 use alloc::vec::Vec;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display, Formatter};
 use numa_types::NumaNode;
 #[cfg(feature = "serde_support")]
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 //use std::hash::{Hash, Hasher};
 //#[cfg(any(feature = "no_std", not(feature = "use_std")))]
 use core::hash::{Hash, Hasher};
+use num_rational::Rational64;
+use std::ops::{Add, AddAssign};
+use std::vec;
 
 pub type VPN = usize;
 
@@ -82,7 +85,7 @@ pub trait PartialLocation {
     fn get_params(&self) -> &LocationParameters;
     fn get_location(&self) -> &AVMLocation;
 
-    fn get_attacker_socker(&self) -> Option<u8> {
+    fn get_attacker_socket(&self) -> Option<u8> {
         if self.get_params().attacker.socket {
             Some(self.get_location().attacker.socket)
         } else {
@@ -98,9 +101,9 @@ pub trait PartialLocation {
         }
     }
 
-    fn get_victim_socker(&self) -> Option<u8> {
+    fn get_victim_socket(&self) -> Option<u8> {
         if self.get_params().attacker.socket {
-            Some(self.get_location().attacker.socket)
+            Some(self.get_location().victim.socket)
         } else {
             None
         }
@@ -312,5 +315,114 @@ impl<'a> PartialLocationRef<'a> {
     }
     pub fn project<'s, 'b>(&'s self, params: &'b LocationParameters) -> PartialLocationRef<'b> {
         self.try_project(params).expect("Impossible projection")
+    }
+}
+
+pub type Slice = usize;
+
+pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
+    let len = vector.len();
+    let mut res = vec![0; len];
+    res[0] = vector[0];
+    for i in 1..len {
+        res[i] = res[i - 1] + vector[i];
+    }
+    assert_eq!(len, res.len());
+    assert_eq!(len, vector.len());
+    res
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ErrorPrediction {
+    pub true_hit: u32,
+    pub true_miss: u32,
+    pub false_hit: u32,
+    pub false_miss: u32,
+}
+
+impl ErrorPrediction {
+    pub fn total_error(&self) -> u32 {
+        self.false_hit + self.false_miss
+    }
+    pub fn total(&self) -> u32 {
+        self.false_hit + self.false_miss + self.true_hit + self.true_miss
+    }
+    pub fn error_rate(&self) -> f32 {
+        (self.false_miss + self.false_hit) as f32 / (self.total() as f32)
+    }
+    pub fn error_ratio(&self) -> Rational64 {
+        Rational64::new(
+            (self.false_hit + self.false_miss) as i64,
+            self.total() as i64,
+        )
+    }
+}
+
+impl Add for &ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(self, rhs: &ErrorPrediction) -> Self::Output {
+        ErrorPrediction {
+            true_hit: self.true_hit + rhs.true_hit,
+            true_miss: self.true_miss + rhs.true_miss,
+            false_hit: self.false_hit + rhs.false_hit,
+            false_miss: self.true_miss + rhs.false_miss,
+        }
+    }
+}
+
+impl AddAssign<&Self> for ErrorPrediction {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.true_hit += rhs.true_hit;
+        self.true_miss += rhs.true_miss;
+        self.false_hit += rhs.false_hit;
+        self.false_miss += rhs.false_miss;
+    }
+}
+
+impl Add for ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<ErrorPrediction> for &ErrorPrediction {
+    type Output = ErrorPrediction;
+
+    fn add(self, mut rhs: ErrorPrediction) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for ErrorPrediction {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+impl Display for ErrorPrediction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{}% ({} True Hits, {} True Miss, {} False Hit, {} False Miss)",
+            self.error_rate() * 100.,
+            self.true_hit,
+            self.true_miss,
+            self.false_hit,
+            self.false_miss
+        )
     }
 }

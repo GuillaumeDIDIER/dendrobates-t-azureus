@@ -6,10 +6,9 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    accumulate, calibrate_fixed_freq_2_thread_numa, calibration_result_to_ASVP, flush_and_reload,
-    get_cache_attack_slicing, load_and_flush, map_values, only_flush, only_reload, reduce,
-    reload_and_flush, CalibrateOperation2T, CalibrateResult2T, CalibrationOptions, ErrorPrediction,
-    Verbosity, ASP, ASVP, AV, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER, SP, SVP,
+    calibrate_fixed_freq_2_thread_numa, flush_and_reload, get_cache_attack_slicing, load_and_flush,
+    only_flush, only_reload, reload_and_flush, CalibrateOperation2T, CalibrationOptions, Verbosity,
+    CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop};
@@ -21,11 +20,8 @@ use core::arch::x86_64 as arch_x86;
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use numa_utils::{available_nodes, NumaNode};
 use std::cmp::min;
-use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::process::Command;
 use std::str::from_utf8;
-
 unsafe fn multiple_access(p: *const u8) {
     unsafe {
         maccess::<u8>(p);

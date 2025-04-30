@@ -13,9 +13,9 @@ vga_buffer = { path = "../vga_buffer", optional = true }
 cpuid = { path = "../cpuid", default-features = false }
 x86_64 = "0.15.1"
 static_assertions = "1.1.0"
-itertools = { version = "0.12.1", default-features = false }
+itertools = { version = "0.14.0", default-features = false }
 atomic = "0.6.0"
-num-rational = { version = "0.4.2", default-features = false }
+#num-rational = { version = "0.4.2", default-features = false }
 
 nix = { version = "0.29.0", optional = true, features = ["process", "mman", "sched"] }
 libc = { version = "0.2.153", optional = true }
@@ -39,7 +39,7 @@ lzma-rs = "0.3.0"
 numactl-sys = { path = "../../numactl-sys", optional = true }
 
 [features]
-use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono", "num-rational/std"]
+use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono"]
 no_std = ["polling_serial", "vga_buffer", "hashbrown"]
 #numa = ["numa_utils/numa", "calibration_results/numa"]
 serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]

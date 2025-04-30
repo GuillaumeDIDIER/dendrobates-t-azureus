@@ -1,7 +1,6 @@
 #![allow(clippy::missing_safety_doc)]
 #![cfg(target_arch = "x86_64")]
 
-
 extern crate alloc; //#[cfg(feature = "serde_support")]
                     //use serde::{Deserialize, Serialize};
 #[cfg(feature = "use_std")]
@@ -20,16 +19,15 @@ use polling_serial::{serial_print as print, serial_println as println};
 pub use crate::calibrate_2t::*;
 
 use crate::calibration::Verbosity::*;
-use crate::classifiers::ErrorPredictor;
 use alloc::vec;
 use alloc::vec::Vec;
-use calibration_results::calibration::VPN;
+use calibration_results::calibration::{Slice, VPN};
+use calibration_results::classifiers::ErrorPredictor;
 use core::hash::{Hash, Hasher};
 use core::ops::{Add, AddAssign};
 #[cfg(all(feature = "no_std", not(feature = "use_std")))]
 pub use hashbrown::HashMap;
 use itertools::Itertools;
-use num_rational::Rational64;
 #[cfg(feature = "use_std")]
 pub use std::collections::HashMap;
 
@@ -544,8 +542,6 @@ pub fn calibrate_L3_miss_hit(
    Easily put any combination, use None to signal Any possible value, Some to signal fixed value.
 */
 
-pub type Slice = usize;
-
 /*
 // Broken due to lifetime issues
 trait PartialLocationProjection: Sized {
@@ -710,18 +706,6 @@ impl AddAssign<Self> for HitMissRawHistogram {
 }
 */
 
-pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
-    let len = vector.len();
-    let mut res = vec![0; len];
-    res[0] = vector[0];
-    for i in 1..len {
-        res[i] = res[i - 1] + vector[i];
-    }
-    assert_eq!(len, res.len());
-    assert_eq!(len, vector.len());
-    res
-}
-
 /*
 // TODO Refactor, this histogram should not know about how classifier work, and classifier should be the one exploiting it.
 // FIXME Histograms are the one responsible for time <-> bucket mapping decisions too.
@@ -881,90 +865,9 @@ impl AddAssign<Self> for HistogramCumSum {
 }
 */
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ErrorPrediction {
-    pub true_hit: u32,
-    pub true_miss: u32,
-    pub false_hit: u32,
-    pub false_miss: u32,
-}
-
-impl ErrorPrediction {
-    pub fn total_error(&self) -> u32 {
-        self.false_hit + self.false_miss
-    }
-    pub fn total(&self) -> u32 {
-        self.false_hit + self.false_miss + self.true_hit + self.true_miss
-    }
-    pub fn error_rate(&self) -> f32 {
-        (self.false_miss + self.false_hit) as f32 / (self.total() as f32)
-    }
-    pub fn error_ratio(&self) -> Rational64 {
-        Rational64::new(
-            (self.false_hit + self.false_miss) as i64,
-            self.total() as i64,
-        )
-    }
-}
-
-impl Add for &ErrorPrediction {
-    type Output = ErrorPrediction;
-
-    fn add(self, rhs: &ErrorPrediction) -> Self::Output {
-        ErrorPrediction {
-            true_hit: self.true_hit + rhs.true_hit,
-            true_miss: self.true_miss + rhs.true_miss,
-            false_hit: self.false_hit + rhs.false_hit,
-            false_miss: self.true_miss + rhs.false_miss,
-        }
-    }
-}
-
 // most common case re-use of self is possible. (Or a reduction to such a case)
 
-impl AddAssign<&Self> for ErrorPrediction {
-    fn add_assign(&mut self, rhs: &Self) {
-        self.true_hit += rhs.true_hit;
-        self.true_miss += rhs.true_miss;
-        self.false_hit += rhs.false_hit;
-        self.false_miss += rhs.false_miss;
-    }
-}
-
 // Fallback to most common case
-
-impl Add for ErrorPrediction {
-    type Output = ErrorPrediction;
-
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl Add<&Self> for ErrorPrediction {
-    type Output = ErrorPrediction;
-
-    fn add(mut self, rhs: &Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl Add<ErrorPrediction> for &ErrorPrediction {
-    type Output = ErrorPrediction;
-
-    fn add(self, mut rhs: ErrorPrediction) -> Self::Output {
-        rhs += self;
-        rhs
-    }
-}
-
-impl AddAssign<Self> for ErrorPrediction {
-    fn add_assign(&mut self, rhs: Self) {
-        *self += &rhs;
-    }
-}
 
 /*
 #[derive(Debug, Clone)]
@@ -1175,67 +1078,6 @@ impl<const WIDTH: u64, const N: usize> PotentialClassifiers<WIDTH, N> {
 }
 */
 
-pub fn map_values<K, U, V, F>(input: HashMap<K, U>, f: F) -> HashMap<K, V>
-where
-    K: Hash + Eq,
-    F: Fn(U, &K) -> V,
-{
-    let mut results = HashMap::new();
-    for (k, u) in input {
-        let f_u = f(u, &k);
-        results.insert(k, f_u);
-    }
-    results
-}
-
-pub fn accumulate<K, V, RK, Reduction, Accumulator, Accumulation, AccumulatorDefault>(
-    input: HashMap<K, V>,
-    reduction: Reduction,
-    accumulator_default: AccumulatorDefault,
-    aggregation: Accumulation,
-) -> HashMap<RK, Accumulator>
-where
-    K: Hash + Eq + Copy,
-    RK: Hash + Eq + Copy,
-    Reduction: Fn(K) -> RK,
-    Accumulation: Fn(&mut Accumulator, V, K, RK) -> (),
-    AccumulatorDefault: Fn() -> Accumulator,
-{
-    let mut accumulators = HashMap::new();
-    for (k, v) in input {
-        let rk = reduction(k);
-        aggregation(
-            accumulators
-                .entry(rk)
-                .or_insert_with(|| accumulator_default()),
-            v,
-            k,
-            rk,
-        );
-    }
-    accumulators
-}
-
-pub fn reduce<K, V, RK, RV, Reduction, Accumulator, Accumulation, AccumulatorDefault, Extract>(
-    input: HashMap<K, V>,
-    reduction: Reduction,
-    accumulator_default: AccumulatorDefault,
-    aggregation: Accumulation,
-    extraction: Extract,
-) -> HashMap<RK, RV>
-where
-    K: Hash + Eq + Copy,
-    RK: Hash + Eq + Copy,
-    Reduction: Fn(K) -> RK,
-    AccumulatorDefault: Fn() -> Accumulator,
-    Accumulation: Fn(&mut Accumulator, V, K, RK) -> (),
-    Extract: Fn(Accumulator, &RK) -> RV,
-{
-    let accumulators = accumulate(input, reduction, accumulator_default, aggregation);
-    let result = map_values(accumulators, extraction);
-    result
-}
-
 /*
 pub fn compute_threshold_error() -> (Threshold, ()) {
     unimplemented!();
@@ -1244,7 +1086,7 @@ pub fn compute_threshold_error() -> (Threshold, ()) {
 
 #[cfg(test)]
 mod tests {
-    use crate::calibration::map_values;
+    use calibration_results::map_values;
     #[cfg(all(feature = "no_std", not(feature = "use_std")))]
     use hashbrown::HashMap;
     #[cfg(feature = "use_std")]

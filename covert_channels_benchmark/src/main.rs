@@ -1,8 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use cache_side_channel::set_affinity;
-use cache_utils::calibration::{ErrorPrediction, CLFLUSH_NUM_ITER};
-use calibration_results::calibration::{CoreLocParameters, LocationParameters};
+use cache_utils::calibration::CLFLUSH_NUM_ITER;
+use calibration_results::calibration::{CoreLocParameters, ErrorPrediction, LocationParameters};
 use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::FlushAndFlush;
 use flush_reload::FlushAndReload;
@@ -337,7 +336,7 @@ fn main() {
                 },
                 norm_threshold,
                 norm_location,
-                cache_utils::classifiers::SimpleThresholdBuilder {},
+                calibration_results::classifiers::SimpleThresholdBuilder {},
                 CLFLUSH_NUM_ITER,
             )
             .unwrap();
@@ -385,7 +384,7 @@ fn main() {
                 },
                 norm_threshold,
                 norm_location,
-                cache_utils::classifiers::SimpleThresholdBuilder {},
+                calibration_results::classifiers::SimpleThresholdBuilder {},
                 CLFLUSH_NUM_ITER,
             )
             .unwrap();
