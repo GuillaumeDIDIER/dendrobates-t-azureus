@@ -13,7 +13,7 @@ use core::arch::x86_64;
 #[cfg(feature = "serde_support")]
 use serde::{Deserialize, Serialize};
 
-use crate::CPUVendor::{Intel, Unknown};
+use crate::CPUVendor::{Intel, Unknown, AMD};
 use crate::MicroArchitecture::EmeraldRapids;
 use crate::MicroArchitecture::GraniteRapids;
 use crate::MicroArchitecture::IceLakeServer;
@@ -338,6 +338,21 @@ impl MicroArchitecture {
         let vendor = CPUVendor::get_cpu_vendor();
         // Warning this might not support AMD
         if vendor == Intel {
+            // TODO refactor some of this into a separate function.
+            // has cpuid
+            let eax = unsafe { x86_64::__cpuid(1) }.eax;
+            let stepping = eax & 0xf;
+            let mut model = (eax >> 4) & 0xf;
+            let mut family = (eax >> 8) & 0xf;
+            if family == 0xf {
+                family += (eax >> 20) & 0xff
+            }
+            if family == 0xf || family == 0x6 {
+                model += (eax >> 12) & 0xf0
+            }
+            let family_model_display = family << 8 | model;
+            Some((vendor, family_model_display, stepping))
+        } else if vendor == AMD {
             // TODO refactor some of this into a separate function.
             // has cpuid
             let eax = unsafe { x86_64::__cpuid(1) }.eax;
