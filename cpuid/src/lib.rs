@@ -66,6 +66,7 @@ impl CPUVendor {
             .concat();
         match feature_string.as_slice() {
             b"GenuineIntel" => Intel,
+            b"AuthenticAMD" => AMD,
             // TODO add more vendors
             _ => Unknown,
         }
@@ -326,7 +327,7 @@ impl MicroArchitecture {
                     return None;
                 }
             }),
-            CPUVendor::AMD => {
+            AMD => {
                 Some(P5) // VERY WRONG, use as a placeholder
             }
             _ => None,
