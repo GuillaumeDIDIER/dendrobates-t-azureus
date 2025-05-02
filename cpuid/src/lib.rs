@@ -326,6 +326,9 @@ impl MicroArchitecture {
                     return None;
                 }
             }),
+            CPUVendor::AMD => {
+                Some(P5) // VERY WRONG, use as a placeholder
+            }
             _ => None,
         }
     }

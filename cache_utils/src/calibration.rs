@@ -503,10 +503,10 @@ pub fn get_cache_attack_slicing(
                 cache_line_length,
             )) // FIXME Cache length magic number
         } else {
-            None
+            Some(CacheAttackSlicing::Unsupported(!(cache_line_length - 1))) //,None
         }
     } else {
-        None
+        Some(CacheAttackSlicing::Unsupported(!(cache_line_length - 1))) //None
     }
 }
 
