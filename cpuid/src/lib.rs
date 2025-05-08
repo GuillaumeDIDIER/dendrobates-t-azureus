@@ -324,7 +324,8 @@ impl MicroArchitecture {
 
                 // TODO: Keep adding stuff in here
                 _ => {
-                    return None;
+                    P5 // FIXME
+                       //return None;
                 }
             }),
             AMD => {
