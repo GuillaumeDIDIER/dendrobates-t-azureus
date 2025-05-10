@@ -19,6 +19,9 @@ use nix::Error;
 use numa_utils::NumaNode;
 
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
+use calibration_results::numa_results::NumaCalibrationResult;
+use rmp_serde::Deserializer;
+use serde::{Deserialize, Serialize};
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -98,7 +101,9 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         None => panic!("Unable to determine cache slicing !"),
     };
 
-    let mut ret = Vec::new();
+    let mut store = std::fs::File::create("./tmp.msgpack").unwrap();
+    let mut count = 0;
+    //let mut ret = Vec::new();
 
     let mut turn_handles = TurnHandle::new(
         2,
@@ -394,12 +399,15 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
             calibrate_result_vec.push(calibrate_result);
         }
 
-        ret.push(CalibrateResult2TNuma {
+        let data = CalibrateResult2TNuma {
             numa_node,
             main_core,
             helper_core,
             res: calibrate_result_vec,
-        });
+        };
+        data.serialize(&mut store).expect("Failed to serialize");
+        count += 1;
+        //ret.push(data);
 
         if helper_core != main_core {
             // terminate the thread
@@ -425,6 +433,15 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     );
 
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
+
+    drop(store);
+    store = std::fs::File::open("./tmp.msgpack").unwrap();
+    let mut ret = Vec::new();
+    let mut deserializer = Deserializer::new(store);
+    for _i in 0..count {
+        let data = CalibrateResult2TNuma::<WIDTH, N>::deserialize(&mut deserializer).unwrap();
+        ret.push(data);
+    }
 
     Ok(ret)
 }

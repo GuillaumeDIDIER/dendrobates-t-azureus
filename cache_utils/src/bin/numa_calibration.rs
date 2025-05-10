@@ -295,6 +295,7 @@ fn main() {
                 NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
             ))
             .expect("Failed to write out results");
+        std::fs::remove_file("./tmp.msgpack").expect("Failed to reove tmp file");
     }
 
     //let mut analysis = HashMap::<ASV, ResultAnalysis>::new();
