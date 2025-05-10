@@ -20,7 +20,8 @@ use cache_side_channel::{
 };
 use cache_utils::calibration::{
     calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn, only_flush, only_reload,
-    CalibrateOperation2T, CalibrationOptions, HashMap, Verbosity, PAGE_LEN, PAGE_SHIFT,
+    CalibrateOperation2T, CalibrationOptions, HashMap, Verbosity, CALIBRATION_WARMUP_ITER,
+    PAGE_LEN, PAGE_SHIFT,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{find_core_per_socket, flush, maccess};
@@ -262,6 +263,7 @@ impl<
                         verbosity: Verbosity::NoOutput,
                         optimised_addresses: true,
                         measure_hash: false,
+                        warmup_iterations: CALIBRATION_WARMUP_ITER,
                     },
                     core_per_socket,
                 )

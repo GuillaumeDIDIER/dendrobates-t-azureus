@@ -2,7 +2,8 @@
 
 use cache_utils::calibration::{
     calibrate_fixed_freq_2_thread_numa, only_reload, CalibrateOperation2T, CalibrationOptions,
-    Verbosity, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE, CLFLUSH_NUM_ITER,
+    Verbosity, CALIBRATION_WARMUP_ITER, CLFLUSH_BUCKET_NUMBER, CLFLUSH_BUCKET_SIZE,
+    CLFLUSH_NUM_ITER,
 };
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::{flush, maccess, noop};
@@ -264,6 +265,7 @@ fn main() {
                 verbosity: verbose_level,
                 optimised_addresses: true,
                 measure_hash: false,
+                warmup_iterations: CALIBRATION_WARMUP_ITER,
             },
             core_per_socket,
         )

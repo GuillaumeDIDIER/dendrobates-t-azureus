@@ -44,7 +44,10 @@ pub struct CalibrationOptions {
     pub verbosity: Verbosity,
     pub optimised_addresses: bool,
     pub measure_hash: bool,
+    pub warmup_iterations: u32,
 }
+
+pub const CALIBRATION_WARMUP_ITER: u32 = 128;
 
 impl CalibrationOptions {
     pub fn new(iterations: u32, verbosity: Verbosity) -> CalibrationOptions {
@@ -53,6 +56,7 @@ impl CalibrationOptions {
             verbosity,
             optimised_addresses: false,
             measure_hash: false,
+            warmup_iterations: CALIBRATION_WARMUP_ITER,
         }
     }
 }

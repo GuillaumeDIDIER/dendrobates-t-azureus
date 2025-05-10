@@ -268,7 +268,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                     params.op = op.prepare;
                     let mut rejected: u32 = 0;
                     let mut histogram = StaticHistogram::<WIDTH, N>::empty();
-                    for _ in 0..options.iterations {
+                    for _ in 0..options.warmup_iterations {
                         main_turn_handle.next();
                         params = main_turn_handle.wait();
                         let _time = unsafe { (op.op)(op.t, pointer) };
@@ -295,7 +295,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
                 for op in operations {
                     let mut rejected: u32 = 0;
                     let mut histogram = StaticHistogram::<WIDTH, N>::empty();
-                    for _ in 0..options.iterations {
+                    for _ in 0..options.warmup_iterations {
                         unsafe { (op.prepare)(pointer) };
                         unsafe { arch_x86::_mm_mfence() }; // Test with this ?
                         let _time = unsafe { (op.op)(op.t, pointer) };
