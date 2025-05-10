@@ -44,7 +44,8 @@ no_std = ["polling_serial", "vga_buffer", "hashbrown"]
 #numa = ["numa_utils/numa", "calibration_results/numa"]
 #serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]
 
-default = ["use_std", "numa", "serde_support"]
+default = ["use_std", "numa"]
+#default = ["use_std", "numa", "serde_support"]
 numa = ["numa_types/numa", "nix", "numactl-sys"]
 
 [[bin]]

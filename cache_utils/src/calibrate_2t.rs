@@ -20,7 +20,7 @@ use numa_utils::NumaNode;
 
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use calibration_results::numa_results::NumaCalibrationResult;
-use rmp_serde::Deserializer;
+use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
@@ -102,6 +102,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
     };
 
     let mut store = std::fs::File::create("./tmp.msgpack").unwrap();
+    let mut serializer = Serializer::new(&mut store);
     let mut count = 0;
     //let mut ret = Vec::new();
 
@@ -405,7 +406,8 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
             helper_core,
             res: calibrate_result_vec,
         };
-        data.serialize(&mut store).expect("Failed to serialize");
+        data.serialize(&mut serializer)
+            .expect("Failed to serialize");
         count += 1;
         //ret.push(data);
 
