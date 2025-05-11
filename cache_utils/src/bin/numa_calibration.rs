@@ -25,7 +25,6 @@ use calibration_results::numa_results::{
 use chrono::Local;
 use cpuid::complex_addressing::{cache_slicing, CacheAttackSlicing};
 use cpuid::{CPUVendor, MicroArchitecture};
-use lzma_rs::xz_compress;
 use numa_utils::numa_node_of_cpu;
 use rmp_serde::Serializer;
 use serde::Serialize;
