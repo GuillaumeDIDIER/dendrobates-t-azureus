@@ -28,6 +28,7 @@ use std::thread;
 use std::vec::Vec;
 use std::{eprintln, print, println};
 use turn_lock::TurnHandle;
+use zstd;
 
 pub struct CalibrateOperation2T<'a, T> {
     pub prepare: unsafe fn(*const u8) -> (),
@@ -101,8 +102,9 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         None => panic!("Unable to determine cache slicing !"),
     };
 
-    let mut store = std::fs::File::create("./tmp.msgpack").unwrap();
-    let mut serializer = Serializer::new(&mut store);
+    let store = std::fs::File::create("./tmp.msgpack.zst").unwrap();
+    let mut encoder = zstd::Encoder::new(store, 0).unwrap().auto_finish();
+    let mut serializer = Serializer::new(&mut encoder);
     let mut count = 0;
     //let mut ret = Vec::new();
 
@@ -436,10 +438,11 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
 
     sched_setaffinity(Pid::from_raw(0), &old).unwrap();
 
-    drop(store);
-    store = std::fs::File::open("./tmp.msgpack").unwrap();
+    drop(encoder);
+    let store = std::fs::File::open("./tmp.msgpack.zst").unwrap();
+    let decoder = zstd::Decoder::new(store).unwrap();
     let mut ret = Vec::new();
-    let mut deserializer = Deserializer::new(store);
+    let mut deserializer = Deserializer::new(decoder);
     for _i in 0..count {
         let data = CalibrateResult2TNuma::<WIDTH, N>::deserialize(&mut deserializer).unwrap();
         ret.push(data);

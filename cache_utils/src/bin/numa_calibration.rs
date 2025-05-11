@@ -172,7 +172,7 @@ fn main() {
             display_name: "clflush remote hit",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_shared_hit",
@@ -186,7 +186,7 @@ fn main() {
             display_name: "clflush miss - f",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: flush,
             op: load_and_flush_wrap,
             name: "clflush_local_hit_f",
@@ -200,7 +200,7 @@ fn main() {
             display_name: "clflush miss - n",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: noop::<u8>,
             op: load_and_flush_wrap,
             name: "clflush_local_hit_n",
@@ -221,7 +221,7 @@ fn main() {
             display_name: "reload remote hit",
             t: &(),
         },
-/*        CalibrateOperation2T {
+        /*        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: only_reload_wrap,
             name: "reload_shared_hit",
@@ -291,13 +291,13 @@ fn main() {
         let time = Local::now();
 
         full_result
-            .write_msgpack(format!(
+            .write_msgpack_zstd(format!(
                 "{}.{}",
                 time.format("%Y-%m-%dT%H-%M-%S%z"),
-                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
+                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD
             ))
             .expect("Failed to write out results");
-        std::fs::remove_file("./tmp.msgpack").expect("Failed to reove tmp file");
+        //std::fs::remove_file("./tmp.msgpack").expect("Failed to remove tmp file");
     }
 
     //let mut analysis = HashMap::<ASV, ResultAnalysis>::new();

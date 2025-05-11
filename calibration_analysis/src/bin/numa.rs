@@ -658,7 +658,7 @@ where
             }
         }
     };
-    make_projection_plots(
+    /*make_projection_plots(
         &location_map,
         projection_socket,
         &folder,
@@ -668,7 +668,7 @@ where
         GroupDimension::Rectangle(2, 4),
         &ordering_numa,
     )
-    .expect("Failed to make Full projection plot.");
+    .expect("Failed to make Full projection plot.");*/
 
     //----------
 
@@ -704,18 +704,78 @@ where
 }
 
 fn run_analysis_from_file(name: &str) -> Result<(), ()> {
-    let path = if name.ends_with(&NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION) {
-        name.to_owned()
-    } else {
-        format!(
-            "{}.{}",
-            name,
-            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
+    let suffix = format!(
+        ".{}",
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
+    );
+    let suffix_zstd = format!(
+        ".{}",
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD
+    );
+
+    let folder = <str as AsRef<Path>>::as_ref(&name)
+        .canonicalize()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    let mut basename = name.to_owned();
+
+    if basename.ends_with(&suffix) {
+        basename = basename.strip_suffix(&suffix).unwrap().to_owned();
+    } else if basename.ends_with(&suffix_zstd) {
+        basename = basename.strip_suffix(&suffix_zstd).unwrap().to_owned();
+    }
+
+    let name = <String as AsRef<Path>>::as_ref(&basename)
+        .file_name()
+        .unwrap()
+        .to_os_string()
+        .into_string()
+        .unwrap();
+
+    let candidate_zstd = format!(
+        "{}.{}",
+        basename,
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD
+    );
+    let candidate_raw = format!(
+        "{}.{}",
+        basename,
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
+    );
+
+    let (results, format) = if std::fs::exists(&candidate_zstd).unwrap()
+        && std::fs::exists(&candidate_raw).unwrap()
+    {
+        let r1 =
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&candidate_zstd);
+        let r2 = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&candidate_raw);
+        if r1 != r2 {
+            eprintln!("Data mismatch");
+            return Err(());
+        }
+        println!("{} and {} match", candidate_zstd, candidate_raw);
+        (
+            r1,
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
         )
+    } else if std::fs::exists(&candidate_zstd).unwrap() {
+        (
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&candidate_zstd),
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
+        )
+    } else if std::fs::exists(&candidate_raw).unwrap() {
+        (
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&candidate_raw),
+            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION,
+        )
+    } else {
+        return Err(());
     };
 
-    let new_result = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&path);
-    let new_result = match new_result {
+    let results = match results {
         Ok(r) => r,
         Err(e) => {
             eprintln!("{:?}", e);
@@ -723,33 +783,14 @@ fn run_analysis_from_file(name: &str) -> Result<(), ()> {
         }
     };
 
-    let folder = <String as AsRef<Path>>::as_ref(&path)
-        .canonicalize()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    let name = <String as AsRef<Path>>::as_ref(&path)
-        .file_name()
-        .unwrap()
-        .to_os_string()
-        .into_string()
-        .unwrap()
-        .strip_suffix(".NumaResults.msgpack.xz")
-        .unwrap()
-        .to_owned();
-
-    eprintln!("Read and deserialized {}.msgpack.xz", name);
+    eprintln!("Read and deserialized {}.{}", name, format);
     println!("Operations");
-    for op in &new_result.operations {
+    for op in &results.operations {
         println!("{}: {}", op.name, op.display_name);
     }
-    println!(
-        "Number of Calibration Results: {}",
-        new_result.results.len()
-    );
-    println!("Micro-architecture: {:?}", new_result.micro_architecture);
-    run_numa_analysis::<BUCKET_SIZE, 512>(new_result, folder, name);
+    println!("Number of Calibration Results: {}", results.results.len());
+    println!("Micro-architecture: {:?}", results.micro_architecture);
+    //run_numa_analysis::<BUCKET_SIZE, 512>(new_result, folder, name);
     Ok(())
 }
 

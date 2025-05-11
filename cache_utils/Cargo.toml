@@ -33,13 +33,13 @@ serde-big-array = { version = "0.5.1", optional = false }
 chrono = { version = "0.4.39", features = ["std", "clock"], optional = true }
 thiserror = { version = "2.0.7", optional = true }
 rmp-serde = { version = "1.3.0", optional = false }
-lzma-rs = "0.3.0"
+zstd = { version = "0.13.3", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 numactl-sys = { path = "../../numactl-sys", optional = true }
 
 [features]
-use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono"]
+use_std = ["nix", "itertools/use_std", "libc", "cpuid/use_std", "turn_lock", "bitvec", "thiserror", "chrono", "zstd"]
 no_std = ["polling_serial", "vga_buffer", "hashbrown"]
 #numa = ["numa_utils/numa", "calibration_results/numa"]
 #serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]

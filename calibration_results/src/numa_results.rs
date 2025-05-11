@@ -13,12 +13,11 @@ use serde::{Deserialize, Serialize};
 extern crate std;
 #[cfg(all(feature = "no_std", not(feature = "use_std")))]
 use hashbrown::HashMap;
-use lzma_rs::xz_compress;
-#[cfg(any(feature = "use_std", not(feature = "no_std")))]
-use lzma_rs::xz_decompress;
 use rmp_serde::{Deserializer, Serializer};
 #[cfg(any(feature = "use_std", not(feature = "no_std")))]
 use std::collections::HashMap;
+#[cfg(any(feature = "use_std", not(feature = "no_std")))]
+use zstd;
 
 /** This module is used to factorize the analysis code, to enable off-line analysis
 */
@@ -48,7 +47,8 @@ pub const BUCKET_SIZE: u64 = 1;
     feature = "serde_support"
 ))]
 impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
-    pub const EXTENSION: &'static str = "NumaResults.msgpack.xz";
+    pub const EXTENSION: &'static str = "NumaResults.msgpack";
+    pub const EXTENSION_ZSTD: &'static str = "NumaResults.msgpack.zst";
     pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
         let buf = match std::fs::read(path) {
             Ok(d) => d,
@@ -56,18 +56,34 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
                 return Err(String::from("Failed to open path"));
             }
         };
-        let mut data = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut data);
-        xz_decompress(&mut &buf[..], &mut cursor).unwrap();
-        let mut deserializer = Deserializer::new(&data[..]);
-        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer).map_err(|e| {format!("{:?}", e)})
+        let mut deserializer = Deserializer::new(&buf[..]);
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
+            .map_err(|e| format!("{:?}", e))
     }
 
     pub fn write_msgpack(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
         let mut f1 = std::fs::File::create(path).map_err(|_e| {})?;
-        let mut buf = Vec::new();
-        let mut s = Serializer::new(&mut buf);
-        self.serialize(&mut s).map_err(|_e| {})?;
-        xz_compress(&mut &buf[..], &mut f1).map_err(|_e| {})
+        let mut s = Serializer::new(&mut f1);
+        self.serialize(&mut s).map_err(|_e| {})
+    }
+
+    pub fn read_msgpack_zstd(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let buf = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(String::from("Failed to open path"));
+            }
+        };
+        let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
+        let mut deserializer = Deserializer::new(&mut decoder);
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
+            .map_err(|e| format!("{:?}", e))
+    }
+
+    pub fn write_msgpack_zstd(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
+        let f1 = std::fs::File::create(path).map_err(|_e| {})?;
+        let mut encoder = zstd::Encoder::new(f1, 0).map_err(|_e| {})?.auto_finish();
+        let mut s = Serializer::new(&mut encoder);
+        self.serialize(&mut s).map_err(|_e| {})
     }
 }
