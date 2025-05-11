@@ -31,7 +31,7 @@ xz *.txt
 popd
 
 mkdir ./variable_freq
-cp /tmp/numa_cal_variable/*.xz ./variable_freq/
+cp /tmp/numa_cal_variable/*.xz /tmp/numa_cal_variable/*.zst ./variable_freq/
 
 rm -Rf /tmp/numa_cal_variable
 
@@ -56,7 +56,7 @@ rm -Rf /tmp/numa_cal_variable
 
 
 #mkdir ./fixed_freq
-#cp /tmp/numa_cal_fixed/*.xz ./fixed_freq/
+#cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq/
 #rm -Rf /tmp/numa_cal_fixed
 
 

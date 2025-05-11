@@ -56,7 +56,7 @@ popd
 
 
 mkdir -p ./fixed_freq
-cp /tmp/numa_cal_fixed/*.xz ./fixed_freq/
+cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq/
 rm -Rf /tmp/numa_cal_fixed
 
 
