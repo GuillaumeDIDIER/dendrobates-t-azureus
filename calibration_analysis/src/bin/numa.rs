@@ -294,7 +294,7 @@ where
         )
         .expect("Failed to write plot");
         picture_ff
-            .to_pdf(folder.as_ref(), picture_ff_jobname, Engine::PdfLatex)
+            .to_pdf(folder.as_ref(), picture_ff_jobname, Engine::LuaLatex)
             .expect("Failed to create PDF");
 
         // ------ Reload -------------
@@ -375,9 +375,11 @@ where
         )
         .expect("Failed to write plot");
         picture_fr
-            .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::PdfLatex)
+            .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::LuaLatex)
             .expect("Failed to create PDF");
+        // -----------------------------------------------------------------------------------------
     } else {
+        // -----------------------------------------------------------------------------------------
         /* count > 1 */
         let mut sorted_histograms: Vec<(_, _)> = mapped.into_iter().collect();
         sorted_histograms.sort_by(sort_criteria);
@@ -436,32 +438,50 @@ where
         flush_group.set_title("FF TBD");
         flush_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", ymax_flush)));
 
-        let mut flush_picture = Picture::from(flush_group);
-        flush_picture.add_to_preamble(vec![String::from(
+        picture_ff.axes.push(Box::new(flush_group));
+        picture_ff.add_to_preamble(vec![String::from(
             r#"\definecolor{HistRed}{HTML}{E41A1C}
 \definecolor{HistRedLight}{HTML}{FAB4AE}
 \definecolor{HistBlue}{HTML}{377EB8}
 \definecolor{HistBlueLight}{HTML}{B3CDE3}
 "#,
         )]);
-        //println!("{}", numa_flush_picture.standalone_string());
-        flush_picture.show_pdf(Engine::PdfLatex).unwrap();
+        let picture_ff_jobname = format!("{}-FF", base_name.as_ref());
+        let picture_ff_jobname_tex = format!("{}-FF.tex", base_name.as_ref());
+
+        std::fs::write(
+            folder.as_ref().join(picture_ff_jobname_tex),
+            picture_ff.standalone_string(),
+        )
+        .expect("Failed to write plot");
+        picture_ff
+            .to_pdf(folder.as_ref(), picture_ff_jobname, Engine::LuaLatex)
+            .expect("Failed to create PDF");
 
         //---------
 
         reload_group.set_title("FR-TBD");
         reload_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", ymax_flush)));
 
-        let mut reload_picture = Picture::from(reload_group);
-        reload_picture.add_to_preamble(vec![String::from(
+        picture_fr.axes.push(Box::new(reload_group));
+        picture_fr.add_to_preamble(vec![String::from(
             r#"\definecolor{HistRed}{HTML}{E41A1C}
 \definecolor{HistRedLight}{HTML}{FAB4AE}
 \definecolor{HistBlue}{HTML}{377EB8}
 \definecolor{HistBlueLight}{HTML}{B3CDE3}
 "#,
         )]);
-        //println!("{}", numa_reload_picture.standalone_string());
-        reload_picture.show_pdf(Engine::PdfLatex).unwrap();
+        let picture_fr_jobname = format!("{}-FR", base_name.as_ref());
+        let picture_fr_jobname_tex = format!("{}-FR.tex", base_name.as_ref());
+
+        std::fs::write(
+            folder.as_ref().join(picture_fr_jobname_tex),
+            picture_fr.standalone_string(),
+        )
+        .expect("Failed to write plot");
+        picture_fr
+            .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::LuaLatex)
+            .expect("Failed to create PDF");
     }
 
     Ok(())
@@ -567,6 +587,27 @@ where
     // 3. Use the reductions to determine thresholds.
     // 4. Compute the expected errors, with average, min, max and stddev.
     println!("Number of entries: {}", location_map.iter().count());
+
+    let numa_nodes_set: HashSet<_> = location_map.keys().map(|l| l.memory_numa_node).collect();
+
+    let attacker_socket_set: HashSet<_> = location_map.keys().map(|l| l.attacker.socket).collect();
+    let victim_socket_set: HashSet<_> = location_map.keys().map(|l| l.victim.socket).collect();
+
+    let attacker_core_set: HashSet<_> = location_map.keys().map(|l| l.attacker.core).collect();
+    let victim_core_set: HashSet<_> = location_map.keys().map(|l| l.victim.core).collect();
+
+    let target_set: HashSet<_> = location_map
+        .keys()
+        .map(|l| (l.memory_numa_node, l.memory_offset))
+        .collect();
+
+    let numa_node_count = numa_nodes_set.iter().count();
+    println!("Number of Numa Nodes: {}", numa_node_count);
+    let attacker_socket_count = attacker_socket_set.iter().count();
+    println!("Number of Attacker Socket: {}", attacker_socket_count);
+    let victim_socket_count = victim_socket_set.iter().count();
+    println!("Number of Victim Sockets: {}", victim_socket_count);
+
     //let shallow_copy = location_map.iter().collect();
 
     /*let tmp = shallow_copy.iter().find(|a, b| true);
@@ -658,18 +699,20 @@ where
             }
         }
     };
-    /*make_projection_plots(
-        &location_map,
-        projection_socket,
-        &folder,
-        basename_numa,
-        true,
-        true,
-        GroupDimension::Rectangle(2, 4),
-        &ordering_numa,
-    )
-    .expect("Failed to make Full projection plot.");*/
 
+    /*if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
+        make_projection_plots(
+            &location_map,
+            projection_socket,
+            &folder,
+            basename_numa,
+            true,
+            true,
+            GroupDimension::Rectangle(victim_socket_count * attacker_socket_count, numa_node_count),
+            &ordering_numa,
+        )
+        .expect("Failed to make Full projection plot.");
+    }*/
     //----------
 
     /*
@@ -746,7 +789,7 @@ fn run_analysis_from_file(name: &str) -> Result<(), ()> {
         NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION
     );
 
-    let (results, format) = if std::fs::exists(&candidate_zstd).unwrap()
+    let (results, format) = /*if std::fs::exists(&candidate_zstd).unwrap()
         && std::fs::exists(&candidate_raw).unwrap()
     {
         let r1 =
@@ -761,7 +804,7 @@ fn run_analysis_from_file(name: &str) -> Result<(), ()> {
             r1,
             NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
         )
-    } else if std::fs::exists(&candidate_zstd).unwrap() {
+    } else */ if std::fs::exists(&candidate_zstd).unwrap() {
         (
             NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&candidate_zstd),
             NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
@@ -790,7 +833,7 @@ fn run_analysis_from_file(name: &str) -> Result<(), ()> {
     }
     println!("Number of Calibration Results: {}", results.results.len());
     println!("Micro-architecture: {:?}", results.micro_architecture);
-    //run_numa_analysis::<BUCKET_SIZE, 512>(new_result, folder, name);
+    run_numa_analysis::<BUCKET_SIZE, 512>(results, folder, name);
     Ok(())
 }
 
