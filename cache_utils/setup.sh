@@ -6,3 +6,4 @@ bash -c 'source "$HOME/.cargo/env" && rustup toolchain install nightly --profile
 source $HOME/.cargo/env
 cd ~/dendrobates-t-azureus/cache_utils/
 cargo build --release --bin numa_calibration
+cargo build --release --bin numa_calibration_1500
