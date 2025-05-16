@@ -20,7 +20,7 @@ use nix::unistd::Pid;
 use core::arch::x86_64 as arch_x86;
 
 use calibration_results::numa_results::{
-    NumaCalibrationResult, OperationNames, /*BUCKET_NUMBER*/, BUCKET_SIZE,
+    NumaCalibrationResult, OperationNames, /*BUCKET_NUMBER,*/ BUCKET_SIZE,
 };
 const BUCKET_NUMBER: usize = 1500;
 use chrono::Local;
