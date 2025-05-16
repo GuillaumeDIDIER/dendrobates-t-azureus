@@ -5,6 +5,7 @@ use calibration_results::numa_results::{BUCKET_NUMBER, BUCKET_SIZE};
 use rayon::prelude::*;
 use std::env::args;
 use std::fmt::Display;
+
 /*
 Design to do, we need to extract, for both FR and FF the raw calibration results (HashMap<AVMLoc, Histograms>)
 -> From there we can compute the consolidations for all possible models.
@@ -31,9 +32,7 @@ fn main() {
     let mut args = args();
     args.next();
     for argument in args {
-        let r = calibration_analysis::run_analysis_from_file::<BUCKET_SIZE, { BUCKET_NUMBER / 2 }>(
-            &argument,
-        );
+        let r = calibration_analysis::run_analysis_from_file(&argument);
         println!("{argument}: {:?}", r);
     }
 }

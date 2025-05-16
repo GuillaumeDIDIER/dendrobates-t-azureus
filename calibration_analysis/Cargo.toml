@@ -18,7 +18,7 @@ zstd = "0.13.3"
 serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]
 use_std = ["rayon"]
 
-default = ["serde_support"]
+default = ["serde_support", "use_std"]
 
 [[bin]]
 name = "numa"
