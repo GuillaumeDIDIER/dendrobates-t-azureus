@@ -334,21 +334,21 @@ pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ErrorPrediction {
-    pub true_hit: u32,
-    pub true_miss: u32,
-    pub false_hit: u32,
-    pub false_miss: u32,
+    pub true_hit: u64,
+    pub true_miss: u64,
+    pub false_hit: u64,
+    pub false_miss: u64,
 }
 
 impl ErrorPrediction {
-    pub fn total_error(&self) -> u32 {
+    pub fn total_error(&self) -> u64 {
         self.false_hit + self.false_miss
     }
-    pub fn total(&self) -> u32 {
+    pub fn total(&self) -> u64 {
         self.false_hit + self.false_miss + self.true_hit + self.true_miss
     }
-    pub fn error_rate(&self) -> f32 {
-        (self.false_miss + self.false_hit) as f32 / (self.total() as f32)
+    pub fn error_rate(&self) -> f64 {
+        (self.false_miss + self.false_hit) as f64 / (self.total() as f64)
     }
     pub fn error_ratio(&self) -> Rational64 {
         Rational64::new(

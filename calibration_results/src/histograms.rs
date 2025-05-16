@@ -35,7 +35,7 @@ pub struct StaticHistogram<const WIDTH: u64, const N: usize> {
 #[derive(Debug, Clone, Copy)]
 pub struct HistogramCumSumItem {
     pub count: u32,
-    pub cumulative_count: u32,
+    pub cumulative_count: u64,
 }
 #[derive(Debug, Clone)]
 pub struct StaticHistogramCumSum<const WIDTH: u64, const N: usize> {
@@ -222,7 +222,7 @@ impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
     for StaticHistogramCumSum<WIDTH, N>
 {
     fn from(value: StaticHistogram<WIDTH, N>) -> Self {
-        let mut cumul = 0;
+        let mut cumul = 0u64;
         let mut r = Self {
             data: [HistogramCumSumItem {
                 count: 0,
@@ -230,7 +230,7 @@ impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
             }; N],
         };
         for (i, &count) in value.data.iter().enumerate() {
-            cumul += count;
+            cumul += count as u64;
             r.data[i] = HistogramCumSumItem {
                 count,
                 cumulative_count: cumul,

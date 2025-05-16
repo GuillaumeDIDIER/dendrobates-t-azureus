@@ -1,32 +1,33 @@
 #![feature(generic_const_exprs)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
-use calibration_results::calibration_2t::{
-    calibration_result_to_location_map, calibration_result_to_location_map_parallel,
-};
-use calibration_results::numa_results::{BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResult};
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
-//use lzma_rs::xz_decompress;
 use calibration_results::calibration::{
     AVMLocation, CoreLocParameters, CoreLocation, ErrorPrediction, LocationParameters,
-    PartialLocation, PartialLocationOwned, StaticHistCalibrateResult,
+    PartialLocation, PartialLocationOwned,
 };
-use calibration_results::classifiers::{
-    DualThreshold, DualThresholdBuilder, ErrorPredictionsBuilder, SimpleThresholdBuilder, Threshold,
-};
+use calibration_results::calibration_2t::calibration_result_to_location_map_parallel;
 use calibration_results::histograms::{
-    Bucket, SimpleBucketU64, StaticHistogram, StaticHistogramCumSum, group2_histogram_cum_sum,
+    Bucket, SimpleBucketU64, StaticHistogram, StaticHistogramCumSum,
 };
+use calibration_results::numa_results::{BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResult};
 use calibration_results::reduce;
-use pgfplots::axis::plot::Type2D::ConstLeft;
-use pgfplots::axis::plot::coordinate::Coordinate2D;
-use pgfplots::axis::plot::{Plot2D, PlotKey};
+use pgfplots::axis::plot::Plot2D;
 use pgfplots::axis::{Axis, AxisKey};
 use pgfplots::groupplot::{GroupDimension, GroupPlot};
 use pgfplots::{Engine, Picture};
-use rmp_serde::Deserializer;
-use serde::Deserialize;
+use rayon::prelude::*;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+//use rmp_serde::Deserializer;
+//use serde::Deserialize;
+use calibration_analysis::CacheOps;
+use calibration_results::classifiers::{
+    DualThreshold, DualThresholdBuilder, ErrorPredictionsBuilder, ErrorPredictor,
+    SimpleThresholdBuilder, Threshold,
+};
 use std::env::args;
+use std::fmt::Display;
+use std::io::Write;
 use std::path::Path;
 /*
 Design to do, we need to extract, for both FR and FF the raw calibration results (HashMap<AVMLoc, Histograms>)
@@ -36,133 +37,18 @@ Design to do, we need to extract, for both FR and FF the raw calibration results
 
  */
 
-#[derive(Default)]
-struct CacheOps<T> {
-    flush_hit: T,
-    flush_miss: T,
-    reload_hit: T,
-    reload_miss: T,
-}
-
 /***********************
  * PGFPlots Histograms *
  ***********************/
 
-pub trait Histogram {
-    fn histogram_points(&self) -> (Vec<Coordinate2D>, f64);
-}
-
-impl<const WIDTH: u64, const N: usize> Histogram for StaticHistogram<WIDTH, N> {
-    fn histogram_points(&self) -> (Vec<Coordinate2D>, f64) {
-        let mut ymax = 0.0;
-        let mut vec: Vec<Coordinate2D> = self
-            .iter()
-            .map(|(bucket, value)| {
-                let time: u64 = bucket.into();
-                if ymax < value as f64 {
-                    ymax = value as f64
-                }
-                Coordinate2D::from((time as f64, value as f64))
-            })
-            .collect();
-        //let end = vec[vec.len() - 1];
-        //vec.push(Coordinate2D::from((end.x, 0f64)));
-        //vec.push(Coordinate2D::from((0f64, 0f64)));
-        (vec, ymax)
-    }
-}
-
-impl<const WIDTH: u64, const N: usize> Histogram for StaticHistogramCumSum<WIDTH, N> {
-    fn histogram_points(&self) -> (Vec<Coordinate2D>, f64) {
-        let mut ymax = 0.0;
-        let mut vec: Vec<Coordinate2D> = self
-            .iter()
-            .map(|(bucket, value)| {
-                let time: u64 = bucket.into();
-                if ymax < value.count as f64 {
-                    ymax = value.count as f64
-                }
-                Coordinate2D::from((time as f64, value.count as f64))
-            })
-            .collect();
-        //let end = vec[vec.len() - 1];
-        //vec.push(Coordinate2D::from((end.x, 0f64)));
-        //vec.push(Coordinate2D::from((0f64, 0f64)));
-        (vec, ymax)
-    }
-}
-
-fn make_plot<const WIDTH: u64, const N: usize>(
-    hit: StaticHistogramCumSum<WIDTH, N>,
-    miss: StaticHistogramCumSum<WIDTH, N>,
-) -> (Vec<Plot2D>, f64) {
-    let mut flush_hit_hist = Plot2D::new();
-    let mut ymax = 0.0;
-    flush_hit_hist.add_key(PlotKey::Type2D(ConstLeft));
-    {
-        let (mut coordinates, ymax_local) = hit.histogram_points();
-        if ymax < ymax_local {
-            ymax = ymax_local
-        }
-        let end = coordinates[coordinates.len() - 1];
-        coordinates.push(Coordinate2D::from((end.x, 0f64)));
-        coordinates.push(Coordinate2D::from((0f64, 0f64)));
-        flush_hit_hist.coordinates = coordinates;
-    }
-    flush_hit_hist.add_key(PlotKey::Custom(String::from(
-        "draw=HistBlue, fill=HistBlueLight, very thin",
-    )));
-
-    let mut flush_miss_hist = Plot2D::new();
-    flush_miss_hist.add_key(PlotKey::Type2D(ConstLeft));
-    {
-        let (coordinates, ymax_local) = miss.histogram_points();
-        if ymax < ymax_local {
-            ymax = ymax_local
-        }
-        flush_miss_hist.coordinates = coordinates;
-    }
-    flush_miss_hist.add_key(PlotKey::Custom(String::from("draw=HistRed, thin")));
-    (vec![flush_hit_hist, flush_miss_hist], ymax)
-}
-
-fn make_plot_by2<const WIDTH: u64, const N: usize>(
-    hit: StaticHistogramCumSum<WIDTH, { N + N }>,
-    miss: StaticHistogramCumSum<WIDTH, { N + N }>,
-) -> (Vec<Plot2D>, f64)
-where
-    [(); { WIDTH + WIDTH } as usize]:,
-{
-    let hit_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(hit);
-    let miss_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(miss);
-    make_plot::<{ WIDTH + WIDTH }, N>(hit_by2, miss_by2)
-}
-
-fn make_projection_plots<const WIDTH: u64, const N: usize>(
+fn make_projection<const WIDTH: u64, const N: usize>(
     location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
     projection: LocationParameters,
-    folder: impl AsRef<Path>,
-    base_name: impl AsRef<str>,
-    flush_flush: bool,
-    flush_reload: bool,
-    group_dimension: GroupDimension,
-    sort_criteria: impl FnMut(
-        &(
-            PartialLocationOwned,
-            CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-        ),
-        &(
-            PartialLocationOwned,
-            CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-        ),
-    ) -> Ordering,
-    /* Thresholding Strategies */
-    /* Filter */
-) -> Result<(), ()>
-where
-    [(); { WIDTH + WIDTH } as usize]:,
+) -> HashMap<PartialLocationOwned, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>
+//where
+//    [(); { WIDTH + WIDTH } as usize]:,
 {
-    let shallow_copy = location_map.iter().collect();
+    let shallow_copy = location_map.par_iter().collect();
     let mapped = reduce(
         shallow_copy,
         |avm_location| PartialLocationOwned::new(projection, *avm_location),
@@ -181,15 +67,156 @@ where
         }, /* Figure out if we should build the HistCumSums here*/
     );
 
+    //let count = mapped.iter().count();
+    //println!(
+    //    "[{}] Number of entries: {}",
+    //    base_name.as_ref(),
+    //    mapped.iter().count()
+    //);
+    mapped
+}
+
+struct QuadThresholdErrors<T: Bucket> {
+    pub flush_single_threshold: (Threshold<T>, ErrorPrediction),
+    pub flush_dual_threshold: (DualThreshold<T>, ErrorPrediction),
+    pub reload_single_threshold: (Threshold<T>, ErrorPrediction),
+    pub reload_dual_threshold: (DualThreshold<T>, ErrorPrediction),
+}
+
+struct QuadErrors<T> {
+    pub flush_single_error: T,
+    pub flush_dual_error: T,
+    pub reload_single_error: T,
+    pub reload_dual_error: T,
+}
+
+fn write_out_threshold_info<T: Bucket>(
+    mut out: impl Write,
+    basename: &str,
+    thresholds: &QuadThresholdErrors<T>,
+) -> std::io::Result<()>
+where
+    Threshold<T>: Display,
+    DualThreshold<T>: Display,
+{
+    writeln!(
+        out,
+        "{}-FF-Single: {}, Error prediction: {}",
+        basename, thresholds.flush_single_threshold.0, thresholds.flush_single_threshold.1
+    )?;
+    writeln!(
+        out,
+        "{}-FF-Dual: {}, Error prediction: {} ",
+        basename, thresholds.flush_dual_threshold.0, thresholds.flush_dual_threshold.1
+    )?;
+    writeln!(
+        out,
+        "{}-FR-Single: {}, Error prediction: {} ",
+        basename, thresholds.reload_single_threshold.0, thresholds.reload_single_threshold.1
+    )?;
+    writeln!(
+        out,
+        "{}-FR-Dual: {}, Error prediction: {} ",
+        basename, thresholds.reload_dual_threshold.0, thresholds.reload_dual_threshold.1
+    )
+}
+
+fn write_out_quad_errors<T>(
+    mut out: impl Write,
+    basename: &str,
+    quad_errors: &QuadErrors<T>,
+) -> std::io::Result<()>
+where
+    T: Display,
+{
+    writeln!(
+        out,
+        "{}-FF-Single-Error: {}",
+        basename, quad_errors.flush_single_error
+    )?;
+    writeln!(
+        out,
+        "{}-FF-Dual-Error: {}",
+        basename, quad_errors.flush_dual_error
+    )?;
+    writeln!(
+        out,
+        "{}-FR-Single-Error: {}",
+        basename, quad_errors.reload_single_error
+    )?;
+    writeln!(
+        out,
+        "{}-FR-Dual-Error: {}",
+        basename, quad_errors.reload_dual_error
+    )
+}
+/*
+    println!(
+    "[{}] Reload Single Threshold: {}, Error Prediction: {}",
+    base_name.as_ref(),
+    reload_single_threshold.0,
+    reload_single_threshold.1
+);*/
+
+fn compute_errors<const WIDTH: u64, const N: usize>(
+    projected: &HashMap<
+        PartialLocationOwned,
+        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
+    >,
+) -> HashMap<PartialLocationOwned, QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>> {
+    let simple_threshold_builder: SimpleThresholdBuilder<WIDTH, { N + N }> =
+        SimpleThresholdBuilder();
+    let dual_threshold_builder: DualThresholdBuilder<WIDTH, { N + N }> = DualThresholdBuilder();
+
+    projected
+        .par_iter()
+        .map(|(k, histograms)| {
+            let flush_single_threshold = simple_threshold_builder
+                .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
+                .expect("Failed to compute single threshold");
+            let flush_dual_threshold = dual_threshold_builder
+                .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
+                .expect("Failed to compute dual threshold");
+
+            let reload_single_threshold = simple_threshold_builder
+                .find_best_classifier(&histograms.reload_hit, &histograms.reload_miss)
+                .expect("Failed to compute single threshold");
+            let reload_dual_threshold = dual_threshold_builder
+                .find_best_classifier(&histograms.reload_hit, &histograms.reload_miss)
+                .expect("Failed to compute dual threshold");
+
+            (
+                *k,
+                QuadThresholdErrors {
+                    flush_single_threshold,
+                    flush_dual_threshold,
+                    reload_single_threshold,
+                    reload_dual_threshold,
+                },
+            )
+        })
+        .collect()
+}
+
+fn make_projection_plots<const WIDTH: u64, const N: usize>(
+    projected: HashMap<PartialLocationOwned, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
+    folder: impl AsRef<Path>,
+    base_name: impl AsRef<str>,
+    flush_flush: bool,
+    flush_reload: bool,
+    group_dimension: GroupDimension,
+    sort_criteria: &fn(PartialLocationOwned, PartialLocationOwned) -> Ordering,
+    /* Thresholding Strategies */
+    /* Filter */
+) -> Result<(), ()>
+where
+    [(); { WIDTH + WIDTH } as usize]:,
+{
     let mut picture_ff = Picture::new();
     let mut picture_fr = Picture::new();
 
-    let count = mapped.iter().count();
-    println!(
-        "[{}] Number of entries: {}",
-        base_name.as_ref(),
-        mapped.iter().count()
-    );
+    let count = projected.par_iter().count();
+    println!("[{}] Number of entries: {}", base_name.as_ref(), count);
 
     if count == 0 {
         return Err(());
@@ -210,34 +237,10 @@ where
                 return Err(());
             }
         }
-        let histograms = mapped.into_iter().next().unwrap().1;
-        /*
-                let simple_threshold_builder: SimpleThresholdBuilder<WIDTH, { N + N }> =
-                    SimpleThresholdBuilder();
-                let dual_threshold_builder: DualThresholdBuilder<WIDTH, { N + N }> = DualThresholdBuilder();
+        let histograms = projected.into_iter().next().unwrap().1;
 
-                let flush_single_threshold = simple_threshold_builder
-                    .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
-                    .expect("Failed to compute single threshold");
-                let flush_dual_threshold = dual_threshold_builder
-                    .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
-                    .expect("Failed to compute dual threshold");
-
-                println!(
-                    "[{}] Flush Single Threshold: {}, Error Prediction: {}",
-                    base_name.as_ref(),
-                    flush_single_threshold.0,
-                    flush_single_threshold.1
-                );
-                println!(
-                    "[{}] Flush Dual Threshold: {}, Error Prediction: {}",
-                    base_name.as_ref(),
-                    flush_dual_threshold.0,
-                    flush_dual_threshold.1
-                );
-        */
         let (mut flush_plots, flush_ymax) =
-            make_plot_by2(histograms.flush_hit, histograms.flush_miss);
+            calibration_analysis::make_plot_by2(histograms.flush_hit, histograms.flush_miss);
         let mut flush_hist = Axis::new();
         flush_hist.plots.append(&mut flush_plots);
 
@@ -320,7 +323,7 @@ where
         );
         */
         let (mut reload_plots, reload_ymax) =
-            make_plot_by2(histograms.reload_hit, histograms.reload_miss);
+            calibration_analysis::make_plot_by2(histograms.reload_hit, histograms.reload_miss);
         let mut reload_hist = Axis::new();
         reload_hist.plots.append(&mut reload_plots);
 
@@ -381,8 +384,17 @@ where
     } else {
         // -----------------------------------------------------------------------------------------
         /* count > 1 */
-        let mut sorted_histograms: Vec<(_, _)> = mapped.into_iter().collect();
-        sorted_histograms.sort_by(sort_criteria);
+        let mut sorted_histograms: Vec<(_, _)> = projected.into_par_iter().collect();
+        sorted_histograms.sort_by(
+            |arg0: &(
+                PartialLocationOwned,
+                CacheOps<StaticHistogramCumSum<WIDTH, { N + N }>>,
+            ),
+             arg1: &(
+                PartialLocationOwned,
+                CacheOps<StaticHistogramCumSum<WIDTH, { N + N }>>,
+            )| sort_criteria(arg0.0, arg1.0),
+        );
         // TODO figure out how to handle the multiple plots.
 
         let mut flush_group = GroupPlot::new();
@@ -398,12 +410,12 @@ where
             let mut reload_axis = Axis::new();
 
             let (mut plots_flush, ymax_local) =
-                make_plot_by2(item.1.1.flush_hit, item.1.1.flush_miss);
+                calibration_analysis::make_plot_by2(item.1.1.flush_hit, item.1.1.flush_miss);
             if ymax_flush < ymax_local {
                 ymax_flush = ymax_local
             }
             let (mut plots_reload, ymax_local) =
-                make_plot_by2(item.1.1.reload_hit, item.1.1.reload_miss);
+                calibration_analysis::make_plot_by2(item.1.1.reload_hit, item.1.1.reload_miss);
             if ymax_reload < ymax_local {
                 ymax_reload = ymax_local
             }
@@ -454,9 +466,12 @@ where
             picture_ff.standalone_string(),
         )
         .expect("Failed to write plot");
-        picture_ff
-            .to_pdf(folder.as_ref(), picture_ff_jobname, Engine::LuaLatex)
-            .expect("Failed to create PDF");
+        match picture_ff.to_pdf(folder.as_ref(), &picture_ff_jobname, Engine::LuaLatex) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Failed to create PDF: {}, {:?}", picture_ff_jobname, e)
+            }
+        }
 
         //---------
 
@@ -479,15 +494,133 @@ where
             picture_fr.standalone_string(),
         )
         .expect("Failed to write plot");
-        picture_fr
-            .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::LuaLatex)
-            .expect("Failed to create PDF");
+        match picture_fr.to_pdf(folder.as_ref(), &picture_fr_jobname, Engine::LuaLatex) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Failed to create PDF: {}, {:?}", picture_fr_jobname, e)
+            }
+        }
     }
 
     Ok(())
 }
+fn ordering_all(a: PartialLocationOwned, b: PartialLocationOwned) -> std::cmp::Ordering {
+    Ordering::Equal
+}
+fn ordering_numa(a: PartialLocationOwned, b: PartialLocationOwned) -> Ordering {
+    match a.get_numa_node().unwrap().cmp(&b.get_numa_node().unwrap()) {
+        Ordering::Less => Ordering::Less,
+        Ordering::Greater => Ordering::Greater,
+        Ordering::Equal => {
+            match a
+                .get_attacker_socket()
+                .unwrap()
+                .cmp(&b.get_attacker_socket().unwrap())
+            {
+                Ordering::Less => Ordering::Less,
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Equal => a
+                    .get_victim_socket()
+                    .unwrap()
+                    .cmp(&b.get_victim_socket().unwrap()),
+            }
+        }
+    }
+}
 
-/* TODO : Evaluate if ndarray would be better thann our current hashmaps*/
+struct Statistics<T> {
+    min: T,
+    max: T,
+    med: T,
+    q1: T,
+    q3: T,
+    avg: T,
+}
+fn build_statistics(
+    mut series: QuadErrors<Vec<(ErrorPrediction, PartialLocationOwned)>>,
+) -> Statistics<QuadErrors<ErrorPrediction>> {
+    series
+        .flush_single_error
+        .sort_by_key(|(e, _l)| e.error_ratio());
+    series
+        .flush_dual_error
+        .sort_by_key(|(e, _l)| e.error_ratio());
+    series
+        .reload_single_error
+        .sort_by_key(|(e, _l)| e.error_ratio());
+    series
+        .reload_dual_error
+        .sort_by_key(|(e, _l)| e.error_ratio());
+
+    let count = series.flush_single_error.len();
+    let min = QuadErrors {
+        flush_single_error: series.flush_single_error[0].0,
+        flush_dual_error: series.flush_dual_error[0].0,
+        reload_single_error: series.reload_single_error[0].0,
+        reload_dual_error: series.reload_dual_error[0].0,
+    };
+    let max = QuadErrors {
+        flush_single_error: series.flush_single_error[count - 1].0,
+        flush_dual_error: series.flush_dual_error[count - 1].0,
+        reload_single_error: series.reload_single_error[count - 1].0,
+        reload_dual_error: series.reload_dual_error[count - 1].0,
+    };
+    let med = QuadErrors {
+        flush_single_error: series.flush_single_error[(count + 1) >> 1].0,
+        flush_dual_error: series.flush_dual_error[(count + 1) >> 1].0,
+        reload_single_error: series.reload_single_error[(count + 1) >> 1].0,
+        reload_dual_error: series.reload_dual_error[(count + 1) >> 1].0,
+    };
+
+    let q1 = QuadErrors {
+        flush_single_error: series.flush_single_error[(count + 1) >> 2].0,
+        flush_dual_error: series.flush_dual_error[(count + 1) >> 2].0,
+        reload_single_error: series.reload_single_error[(count + 1) >> 2].0,
+        reload_dual_error: series.reload_dual_error[(count + 1) >> 2].0,
+    };
+
+    let q3 = QuadErrors {
+        flush_single_error: series.flush_single_error[3 * (count + 1) >> 2].0,
+        flush_dual_error: series.flush_dual_error[3 * (count + 1) >> 2].0,
+        reload_single_error: series.reload_single_error[3 * (count + 1) >> 2].0,
+        reload_dual_error: series.reload_dual_error[3 * (count + 1) >> 2].0,
+    };
+
+    let avg = QuadErrors {
+        flush_single_error: series
+            .flush_single_error
+            .into_par_iter()
+            .map(|(e, l)| e)
+            .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
+        flush_dual_error: series
+            .flush_dual_error
+            .into_par_iter()
+            .map(|(e, l)| e)
+            .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
+
+        reload_single_error: series
+            .reload_single_error
+            .into_par_iter()
+            .map(|(e, l)| e)
+            .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
+
+        reload_dual_error: series
+            .reload_dual_error
+            .into_par_iter()
+            .map(|(e, l)| e)
+            .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
+    };
+    Statistics {
+        min,
+        max,
+        med,
+        q1,
+        q3,
+        avg,
+    }
+}
+
+/* TODO : Evaluate if ndarray would be better than our current hashmaps*/
 
 pub fn run_numa_analysis<const WIDTH: u64, const N: usize>(
     data: NumaCalibrationResult<WIDTH, { N + N }>,
@@ -608,10 +741,17 @@ where
     let victim_socket_count = victim_socket_set.iter().count();
     println!("Number of Victim Sockets: {}", victim_socket_count);
 
-    //let shallow_copy = location_map.iter().collect();
+    let path = folder
+        .as_ref()
+        .join(format!("{}.Errors.txt", basename.as_ref()));
+    let mut output_file = std::fs::File::create(path).unwrap();
 
-    /*let tmp = shallow_copy.iter().find(|a, b| true);
-    println!("{:?}", tmp);*/
+    writeln!(
+        output_file,
+        "MicroArchitecture: {:?} - {:?}",
+        data.micro_architecture.0.0, data.micro_architecture.1
+    )
+    .unwrap_or_default();
 
     let projection_full = LocationParameters {
         attacker: CoreLocParameters {
@@ -644,75 +784,254 @@ where
     };
 
     let basename_all = format!("{}-all", basename.as_ref());
-    let ordering_all = |a: &(
-        PartialLocationOwned,
-        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-    ),
-                        b: &(
-        PartialLocationOwned,
-        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-    )| { Ordering::Equal };
+
+    let projected_full = make_projection(&location_map, projection_full);
+
+    let errors = compute_errors(&projected_full);
+
+    let count = errors.par_iter().count();
+    assert_eq!(count, 1);
+    let full_threshold_errors = errors.iter().next().unwrap().1;
+
+    write_out_threshold_info(&mut output_file, "Full", full_threshold_errors)
+        .map_err(|e| eprintln!("Failed to write to file"))
+        .unwrap_or_default();
+
     make_projection_plots(
-        &location_map,
-        projection_full,
+        projected_full,
         &folder,
         basename_all,
         true,
         true,
         GroupDimension::Horizontal(1),
-        &ordering_all,
+        &(ordering_all as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
     )
     .expect("Failed to make Full projection plot.");
 
     let basename_numa = format!("{}-node-aware", basename.as_ref());
-    let ordering_numa = |a: &(
-        PartialLocationOwned,
-        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-    ),
-                         b: &(
-        PartialLocationOwned,
-        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-    )| {
-        match a
-            .0
-            .get_numa_node()
-            .unwrap()
-            .cmp(&b.0.get_numa_node().unwrap())
-        {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => {
-                match a
-                    .0
-                    .get_attacker_socket()
-                    .unwrap()
-                    .cmp(&b.0.get_attacker_socket().unwrap())
-                {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => {
-                        a.0.get_victim_socket()
-                            .unwrap()
-                            .cmp(&b.0.get_victim_socket().unwrap())
-                    }
-                }
-            }
-        }
-    };
 
-    /*if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
+    if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
+        let projected_numa = make_projection(&location_map, projection_socket);
+        let numa_threshold_errors = compute_errors(&projected_numa);
+        let mut sorted_numa_threshold_errors: Vec<(_, _)> =
+            numa_threshold_errors.into_par_iter().collect();
+        sorted_numa_threshold_errors.sort_by(|a, b| ordering_numa(a.0, b.0));
+
+        let mut numa_errors_full_thresholds: Vec<(
+            PartialLocationOwned,
+            QuadErrors<ErrorPrediction>,
+        )> = projected_numa
+            .par_iter()
+            .map(|(k, hists)| {
+                let flush_single_error = full_threshold_errors
+                    .flush_single_threshold
+                    .0
+                    .error_prediction(&hists.flush_hit, &hists.flush_miss);
+                let flush_dual_error = full_threshold_errors
+                    .flush_dual_threshold
+                    .0
+                    .error_prediction(&hists.flush_hit, &hists.flush_miss);
+                let reload_single_error = full_threshold_errors
+                    .reload_single_threshold
+                    .0
+                    .error_prediction(&hists.reload_hit, &hists.reload_miss);
+                let reload_dual_error = full_threshold_errors
+                    .reload_dual_threshold
+                    .0
+                    .error_prediction(&hists.reload_hit, &hists.reload_miss);
+
+                (
+                    *k,
+                    QuadErrors {
+                        flush_single_error,
+                        flush_dual_error,
+                        reload_single_error,
+                        reload_dual_error,
+                    },
+                )
+            })
+            .collect();
+        numa_errors_full_thresholds.sort_by(|a, b| ordering_numa(a.0, b.0));
+
+        writeln!(output_file).unwrap_or_default();
+
+        // Write out per Numa AVM errors of these thresholds
+
+        let mut full_series = QuadErrors {
+            flush_single_error: Vec::new(),
+            flush_dual_error: Vec::new(),
+            reload_single_error: Vec::new(),
+            reload_dual_error: Vec::new(),
+        };
+        for (location, quad_error) in &numa_errors_full_thresholds {
+            let base = format!(
+                "Full-N{}-A{}-V{}",
+                location.get_numa_node().unwrap(),
+                location.get_attacker_socket().unwrap(),
+                location.get_victim_socket().unwrap()
+            );
+            full_series
+                .flush_single_error
+                .push((quad_error.flush_single_error, *location));
+            full_series
+                .flush_dual_error
+                .push((quad_error.flush_dual_error, *location));
+            full_series
+                .reload_single_error
+                .push((quad_error.reload_single_error, *location));
+            full_series
+                .reload_dual_error
+                .push((quad_error.reload_dual_error, *location));
+            write_out_quad_errors(&mut output_file, &*base, quad_error).unwrap_or_default();
+        }
+
+        writeln!(output_file).unwrap_or_default();
+
+        // Compute and write out min, max and median (average is already known)
+
+        let full_stats = build_statistics(full_series);
+
+        write_out_quad_errors(&mut output_file, "Full-Best", &full_stats.min).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Full-Worst", &full_stats.max).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Full-Median", &full_stats.med).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Full-Q1", &full_stats.q1).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Full-Q3", &full_stats.q3).unwrap_or_default();
+
+        writeln!(output_file).unwrap_or_default();
+
+        // Print out the numa model threshold (Known Numa node for A, V and M)
+
+        let mut numa_series = QuadErrors {
+            flush_single_error: Vec::new(),
+            flush_dual_error: Vec::new(),
+            reload_single_error: Vec::new(),
+            reload_dual_error: Vec::new(),
+        };
+
+        for (location, threshold_errors) in sorted_numa_threshold_errors {
+            let base = format!(
+                "Numa-N{}-A{}-V{}",
+                location.get_numa_node().unwrap(),
+                location.get_attacker_socket().unwrap(),
+                location.get_victim_socket().unwrap()
+            );
+
+            numa_series
+                .flush_single_error
+                .push((threshold_errors.flush_single_threshold.1, location));
+            numa_series
+                .flush_dual_error
+                .push((threshold_errors.flush_dual_threshold.1, location));
+            numa_series
+                .reload_single_error
+                .push((threshold_errors.reload_single_threshold.1, location));
+            numa_series
+                .reload_dual_error
+                .push((threshold_errors.reload_dual_threshold.1, location));
+
+            write_out_threshold_info(&mut output_file, &*base, &threshold_errors)
+                .unwrap_or_default();
+        }
+
+        writeln!(output_file).unwrap_or_default();
+
+        // Compute the min, max, median and average error.
+
+        let numa_stats = build_statistics(numa_series);
+
+        write_out_quad_errors(&mut output_file, "Numa-Best", &numa_stats.min).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Numa-Worst", &numa_stats.max).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Numa-Median", &numa_stats.med).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Numa-Average", &numa_stats.avg)
+            .unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Numa-Q1", &numa_stats.q1).unwrap_or_default();
+        write_out_quad_errors(&mut output_file, "Numa-Q2", &numa_stats.q3).unwrap_or_default();
+
+        writeln!(output_file, "").unwrap_or_default();
+        write!(output_file, "Full-FF-Single-Boxplot:").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.flush_single_error.error_rate(),
+                 full_stats.q1.flush_single_error.error_rate(),
+                 full_stats.med.flush_single_error.error_rate(),
+                 full_stats.avg.flush_single_error.error_rate(),
+                 full_stats.q3.flush_single_error.error_rate(),
+                 full_stats.max.flush_single_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Full-FF-Dual-Boxplot:  ").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.flush_dual_error.error_rate(),
+                 full_stats.q1.flush_dual_error.error_rate(),
+                 full_stats.med.flush_dual_error.error_rate(),
+                 full_stats.avg.flush_dual_error.error_rate(),
+                 full_stats.q3.flush_dual_error.error_rate(),
+                 full_stats.max.flush_dual_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Full-FR-Single-Boxplot:").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.reload_single_error.error_rate(),
+                 full_stats.q1.reload_single_error.error_rate(),
+                 full_stats.med.reload_single_error.error_rate(),
+                 full_stats.avg.reload_single_error.error_rate(),
+                 full_stats.q3.reload_single_error.error_rate(),
+                 full_stats.max.reload_single_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Full-FR-Dual-Boxplot:  ").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.reload_dual_error.error_rate(),
+                 full_stats.q1.reload_dual_error.error_rate(),
+                 full_stats.med.reload_dual_error.error_rate(),
+                 full_stats.avg.reload_dual_error.error_rate(),
+                 full_stats.q3.reload_dual_error.error_rate(),
+                 full_stats.max.reload_dual_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Numa-FF-Single-Boxplot:").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.flush_single_error.error_rate(),
+                 numa_stats.q1.flush_single_error.error_rate(),
+                 numa_stats.med.flush_single_error.error_rate(),
+                 numa_stats.avg.flush_single_error.error_rate(),
+                 numa_stats.q3.flush_single_error.error_rate(),
+                 numa_stats.max.flush_single_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Numa-FF-Dual-Boxplot:  ").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.flush_dual_error.error_rate(),
+                 numa_stats.q1.flush_dual_error.error_rate(),
+                 numa_stats.med.flush_dual_error.error_rate(),
+                 numa_stats.avg.flush_dual_error.error_rate(),
+                 numa_stats.q3.flush_dual_error.error_rate(),
+                 numa_stats.max.flush_dual_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Numa-FR-Single-Boxplot:").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.reload_single_error.error_rate(),
+                 numa_stats.q1.reload_single_error.error_rate(),
+                 numa_stats.med.reload_single_error.error_rate(),
+                 numa_stats.avg.reload_single_error.error_rate(),
+                 numa_stats.q3.reload_single_error.error_rate(),
+                 numa_stats.max.reload_single_error.error_rate()).unwrap_or_default();
+        write!(output_file, "Numa-FR-Dual-Boxplot:  ").unwrap_or_default();
+        writeln!(output_file,
+                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.reload_dual_error.error_rate(),
+                 numa_stats.q1.reload_dual_error.error_rate(),
+                 numa_stats.med.reload_dual_error.error_rate(),
+                 numa_stats.avg.reload_dual_error.error_rate(),
+                 numa_stats.q3.reload_dual_error.error_rate(),
+                 numa_stats.max.reload_dual_error.error_rate()).unwrap_or_default();
         make_projection_plots(
-            &location_map,
-            projection_socket,
+            projected_numa,
             &folder,
             basename_numa,
             true,
             true,
             GroupDimension::Rectangle(victim_socket_count * attacker_socket_count, numa_node_count),
-            &ordering_numa,
+            &(ordering_numa
+                as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
         )
         .expect("Failed to make Full projection plot.");
-    }*/
+    }
     //----------
 
     /*

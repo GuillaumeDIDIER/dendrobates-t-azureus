@@ -12,6 +12,7 @@ calibration_results = { path = "../calibration_results" }
 #tectonic = { version = "0.15.0" }
 #pgfplots = { version = "0.5.1" } # TODO, fork it to support plot groups ? features = ["tectonic"]
 pgfplots = { git = "https://github.com/GuillaumeDIDIER/pgfplots", branch = "preamble" }
+zstd = "0.13.3"
 
 [features]
 serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]

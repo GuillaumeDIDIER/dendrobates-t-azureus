@@ -53,7 +53,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
         let buf = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
-                return Err(String::from("Failed to open path"));
+                return Err(format!("Failed to open path: {}", e));
             }
         };
         let mut deserializer = Deserializer::new(&buf[..]);
@@ -71,7 +71,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
         let buf = match std::fs::read(path) {
             Ok(d) => d,
             Err(e) => {
-                return Err(String::from("Failed to open path"));
+                return Err(format!("Failed to open path: {}", e));
             }
         };
         let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
