@@ -7,3 +7,4 @@ source $HOME/.cargo/env
 cd ~/dendrobates-t-azureus/cache_utils/
 cargo build --release --bin numa_calibration
 cargo build --release --bin numa_calibration_1500
+cargo build --release --bin numa_calibration_3000
