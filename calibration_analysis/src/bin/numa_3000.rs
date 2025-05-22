@@ -27,7 +27,7 @@ Design to do, we need to extract, for both FR and FF the raw calibration results
 );*/
 
 /* TODO : Evaluate if ndarray would be better than our current hashmaps*/
-const BUCKET_NUMBER: usize = 1500;
+const BUCKET_NUMBER: usize = 3000;
 fn main() {
     let mut args = args();
     args.next();

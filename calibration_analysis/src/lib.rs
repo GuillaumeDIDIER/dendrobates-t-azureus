@@ -27,6 +27,7 @@ use calibration_results::classifiers::{
     DualThreshold, DualThresholdBuilder, ErrorPredictionsBuilder, ErrorPredictor,
     SimpleThresholdBuilder, Threshold,
 };
+use num::integer::gcd;
 use std::fmt::Display;
 use std::io::Write;
 use std::path::Path;
@@ -129,7 +130,7 @@ where
     make_plot::<{ WIDTH + WIDTH }, N>(hit_by2, miss_by2)
 }
 
-fn make_projection<const WIDTH: u64, const N: usize>(
+pub fn make_projection<const WIDTH: u64, const N: usize>(
     location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
     projection: LocationParameters,
 ) -> HashMap<PartialLocationOwned, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>
@@ -326,8 +327,8 @@ where
         flush_hist.plots.append(&mut flush_plots);
 
         flush_hist.set_title("Flush+Flush"); // FIXME, this should be customizable by the caller
-        flush_hist.add_key(AxisKey::Custom(String::from(
-            "height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, tick align=outside, tick pos=left, axis on top,", //
+        flush_hist.add_key(AxisKey::Custom(format!(
+            "height=10cm, width=20cm, xmin=0,xmax={}, ymin=0, tick align=outside, tick pos=left, axis on top,", N+N//
         )));
 
         let mut flush_single_threshold_plot = Plot2D::new();
@@ -409,8 +410,8 @@ where
         reload_hist.plots.append(&mut reload_plots);
 
         reload_hist.set_title("Flush+Reload"); // FIXME, this should be customizable by the caller
-        reload_hist.add_key(AxisKey::Custom(String::from(
-            "height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, tick align=outside, tick pos=left, axis on top,", //
+        reload_hist.add_key(AxisKey::Custom(format!(
+            "height=10cm, width=20cm, xmin=0,xmax={}, ymin=0, tick align=outside, tick pos=left, axis on top,", N+N//
         )));
         /*
         let mut reload_single_threshold_plot = Plot2D::new();
@@ -529,7 +530,7 @@ where
             reload_group.groups.push(reload_axis);
         }
         flush_group.set_title("FF TBD");
-        flush_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", ymax_flush)));
+        flush_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax={}, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", N+N, ymax_flush)));
 
         picture_ff.axes.push(Box::new(flush_group));
         picture_ff.add_to_preamble(vec![String::from(
@@ -557,7 +558,7 @@ where
         //---------
 
         reload_group.set_title("FR-TBD");
-        reload_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax=1024, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", ymax_flush)));
+        reload_group.add_key(AxisKey::Custom(format!("height=10cm, width=20cm, xmin=0,xmax={}, ymin=0, ymax={}, tick align=outside, tick pos=left, axis on top,", N+N, ymax_flush)));
 
         picture_fr.axes.push(Box::new(reload_group));
         picture_fr.add_to_preamble(vec![String::from(
@@ -1030,78 +1031,79 @@ where
         write_out_quad_errors(&mut output_file, "Numa-Q2", &numa_stats.q3).unwrap_or_default();
 
         writeln!(output_file, "").unwrap_or_default();
-        write!(output_file, "Full-FF-Single-Boxplot:").unwrap_or_default();
+        writeln!(output_file, "% Numa-FF-Dual-Boxplot:  ").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.flush_single_error.error_rate(),
-                 full_stats.q1.flush_single_error.error_rate(),
-                 full_stats.med.flush_single_error.error_rate(),
-                 full_stats.avg.flush_single_error.error_rate(),
-                 full_stats.q3.flush_single_error.error_rate(),
-                 full_stats.max.flush_single_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Full-FF-Dual-Boxplot:  ").unwrap_or_default();
+                 "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.flush_dual_error.error_rate() * 1.,
+                 numa_stats.q1.flush_dual_error.error_rate() * 1.,
+                 numa_stats.med.flush_dual_error.error_rate() * 1.,
+                 numa_stats.avg.flush_dual_error.error_rate() * 1.,
+                 numa_stats.q3.flush_dual_error.error_rate() * 1.,
+                 numa_stats.max.flush_dual_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Numa-FF-Single-Boxplot:").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.flush_dual_error.error_rate(),
-                 full_stats.q1.flush_dual_error.error_rate(),
-                 full_stats.med.flush_dual_error.error_rate(),
-                 full_stats.avg.flush_dual_error.error_rate(),
-                 full_stats.q3.flush_dual_error.error_rate(),
-                 full_stats.max.flush_dual_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Full-FR-Single-Boxplot:").unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.flush_single_error.error_rate() * 1.,
+                 numa_stats.q1.flush_single_error.error_rate() * 1.,
+                 numa_stats.med.flush_single_error.error_rate() * 1.,
+                 numa_stats.avg.flush_single_error.error_rate() * 1.,
+                 numa_stats.q3.flush_single_error.error_rate() * 1.,
+                 numa_stats.max.flush_single_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Numa-FR-Dual-Boxplot:  ").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.reload_single_error.error_rate(),
-                 full_stats.q1.reload_single_error.error_rate(),
-                 full_stats.med.reload_single_error.error_rate(),
-                 full_stats.avg.reload_single_error.error_rate(),
-                 full_stats.q3.reload_single_error.error_rate(),
-                 full_stats.max.reload_single_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Full-FR-Dual-Boxplot:  ").unwrap_or_default();
+                 "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.reload_dual_error.error_rate() * 1.,
+                 numa_stats.q1.reload_dual_error.error_rate() * 1.,
+                 numa_stats.med.reload_dual_error.error_rate() * 1.,
+                 numa_stats.avg.reload_dual_error.error_rate() * 1.,
+                 numa_stats.q3.reload_dual_error.error_rate() * 1.,
+                 numa_stats.max.reload_dual_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Numa-FR-Single-Boxplot:").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.reload_dual_error.error_rate(),
-                 full_stats.q1.reload_dual_error.error_rate(),
-                 full_stats.med.reload_dual_error.error_rate(),
-                 full_stats.avg.reload_dual_error.error_rate(),
-                 full_stats.q3.reload_dual_error.error_rate(),
-                 full_stats.max.reload_dual_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Numa-FF-Single-Boxplot:").unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 numa_stats.min.reload_single_error.error_rate() * 1.,
+                 numa_stats.q1.reload_single_error.error_rate() * 1.,
+                 numa_stats.med.reload_single_error.error_rate() * 1.,
+                 numa_stats.avg.reload_single_error.error_rate() * 1.,
+                 numa_stats.q3.reload_single_error.error_rate() * 1.,
+                 numa_stats.max.reload_single_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Full-FF-Dual-Boxplot:  ").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.flush_single_error.error_rate(),
-                 numa_stats.q1.flush_single_error.error_rate(),
-                 numa_stats.med.flush_single_error.error_rate(),
-                 numa_stats.avg.flush_single_error.error_rate(),
-                 numa_stats.q3.flush_single_error.error_rate(),
-                 numa_stats.max.flush_single_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Numa-FF-Dual-Boxplot:  ").unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.flush_dual_error.error_rate() * 1.,
+                 full_stats.q1.flush_dual_error.error_rate() * 1.,
+                 full_stats.med.flush_dual_error.error_rate() * 1.,
+                 full_stats.avg.flush_dual_error.error_rate() * 1.,
+                 full_stats.q3.flush_dual_error.error_rate() * 1.,
+                 full_stats.max.flush_dual_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Full-FF-Single-Boxplot:").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.flush_dual_error.error_rate(),
-                 numa_stats.q1.flush_dual_error.error_rate(),
-                 numa_stats.med.flush_dual_error.error_rate(),
-                 numa_stats.avg.flush_dual_error.error_rate(),
-                 numa_stats.q3.flush_dual_error.error_rate(),
-                 numa_stats.max.flush_dual_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Numa-FR-Single-Boxplot:").unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.flush_single_error.error_rate() * 1.,
+                 full_stats.q1.flush_single_error.error_rate() * 1.,
+                 full_stats.med.flush_single_error.error_rate() * 1.,
+                 full_stats.avg.flush_single_error.error_rate() * 1.,
+                 full_stats.q3.flush_single_error.error_rate() * 1.,
+                 full_stats.max.flush_single_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Full-FR-Dual-Boxplot:  ").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.reload_single_error.error_rate(),
-                 numa_stats.q1.reload_single_error.error_rate(),
-                 numa_stats.med.reload_single_error.error_rate(),
-                 numa_stats.avg.reload_single_error.error_rate(),
-                 numa_stats.q3.reload_single_error.error_rate(),
-                 numa_stats.max.reload_single_error.error_rate()).unwrap_or_default();
-        write!(output_file, "Numa-FR-Dual-Boxplot:  ").unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.reload_dual_error.error_rate() * 1.,
+                 full_stats.q1.reload_dual_error.error_rate() * 1.,
+                 full_stats.med.reload_dual_error.error_rate() * 1.,
+                 full_stats.avg.reload_dual_error.error_rate() * 1.,
+                 full_stats.q3.reload_dual_error.error_rate() * 1.,
+                 full_stats.max.reload_dual_error.error_rate() * 1.).unwrap_or_default();
+        writeln!(output_file, "% Full-FR-Single-Boxplot:").unwrap_or_default();
         writeln!(output_file,
-                 "\\addplot+[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.reload_dual_error.error_rate(),
-                 numa_stats.q1.reload_dual_error.error_rate(),
-                 numa_stats.med.reload_dual_error.error_rate(),
-                 numa_stats.avg.reload_dual_error.error_rate(),
-                 numa_stats.q3.reload_dual_error.error_rate(),
-                 numa_stats.max.reload_dual_error.error_rate()).unwrap_or_default();
+                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 full_stats.min.reload_single_error.error_rate() * 1.,
+                 full_stats.q1.reload_single_error.error_rate() * 1.,
+                 full_stats.med.reload_single_error.error_rate() * 1.,
+                 full_stats.avg.reload_single_error.error_rate() * 1.,
+                 full_stats.q3.reload_single_error.error_rate() * 1.,
+                 full_stats.max.reload_single_error.error_rate() * 1.).unwrap_or_default();
+
         make_projection_plots(
             projected_numa,
             &folder,
@@ -1113,6 +1115,20 @@ where
                 as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
         )
         .expect("Failed to make Full projection plot.");
+
+        writeln!(output_file).unwrap_or_default();
+        writeln!(output_file, "Flush-Reload-Data:").unwrap_or_default();
+        writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
+            full_stats.avg.reload_single_error.error_rate() * 100., full_stats.min.reload_single_error.error_rate() * 100., full_stats.q1.reload_single_error.error_rate() * 100., full_stats.med.reload_single_error.error_rate() * 100., full_stats.q3.reload_single_error.error_rate() * 100., full_stats.max.reload_single_error.error_rate() * 100.,
+            full_stats.avg.reload_dual_error.error_rate() * 100., full_stats.min.reload_dual_error.error_rate() * 100., full_stats.q1.reload_dual_error.error_rate() * 100., full_stats.med.reload_dual_error.error_rate() * 100., full_stats.q3.reload_dual_error.error_rate() * 100., full_stats.max.reload_dual_error.error_rate() * 100.,
+            numa_stats.avg.reload_single_error.error_rate() * 100., numa_stats.min.reload_single_error.error_rate() * 100., numa_stats.q1.reload_single_error.error_rate() * 100., numa_stats.med.reload_single_error.error_rate() * 100., numa_stats.q3.reload_single_error.error_rate() * 100., numa_stats.max.reload_single_error.error_rate() * 100.,
+        ).unwrap_or_default();
+        writeln!(output_file, "Flush-Flush-Data:").unwrap_or_default();
+        writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
+                 full_stats.avg.flush_single_error.error_rate() * 100., full_stats.min.flush_single_error.error_rate() * 100., full_stats.q1.flush_single_error.error_rate() * 100., full_stats.med.flush_single_error.error_rate() * 100., full_stats.q3.flush_single_error.error_rate() * 100., full_stats.max.flush_single_error.error_rate() * 100.,
+                 full_stats.avg.flush_dual_error.error_rate() * 100., full_stats.min.flush_dual_error.error_rate() * 100., full_stats.q1.flush_dual_error.error_rate() * 100., full_stats.med.flush_dual_error.error_rate() * 100., full_stats.q3.flush_dual_error.error_rate() * 100., full_stats.max.flush_dual_error.error_rate() * 100.,
+                 numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
+        ).unwrap_or_default();
     }
     //----------
 
@@ -1236,5 +1252,201 @@ where
     println!("Number of Calibration Results: {}", results.results.len());
     println!("Micro-architecture: {:?}", results.micro_architecture);
     run_numa_analysis::<WIDTH, N>(results, folder, name);
+    Ok(())
+}
+
+pub fn run_tsc_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()> {
+    let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION);
+    let suffix_zstd = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD);
+
+    let folder = <str as AsRef<Path>>::as_ref(&name)
+        .canonicalize()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    let mut basename = name.to_owned();
+
+    if basename.ends_with(&suffix) {
+        basename = basename.strip_suffix(&suffix).unwrap().to_owned();
+    } else if basename.ends_with(&suffix_zstd) {
+        basename = basename.strip_suffix(&suffix_zstd).unwrap().to_owned();
+    }
+
+    let name = <String as AsRef<Path>>::as_ref(&basename)
+        .file_name()
+        .unwrap()
+        .to_os_string()
+        .into_string()
+        .unwrap();
+
+    let candidate_zstd = format!(
+        "{}.{}",
+        basename,
+        NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD
+    );
+    let candidate_raw = format!(
+        "{}.{}",
+        basename,
+        NumaCalibrationResult::<WIDTH, N>::EXTENSION
+    );
+
+    let (results, format) = if std::fs::exists(&candidate_zstd).unwrap() {
+        (
+            NumaCalibrationResult::<WIDTH, N>::read_msgpack_zstd(&candidate_zstd),
+            NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD,
+        )
+    } else if std::fs::exists(&candidate_raw).unwrap() {
+        (
+            NumaCalibrationResult::<WIDTH, N>::read_msgpack(&candidate_raw),
+            NumaCalibrationResult::<WIDTH, N>::EXTENSION,
+        )
+    } else {
+        return Err(());
+    };
+
+    let numa_results = match results {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            panic!();
+        }
+    };
+
+    eprintln!("Read and deserialized {}.{}", name, format);
+    /*println!("Operations");
+    for op in &numa_results.operations {
+        println!("{}: {}", op.name, op.display_name);
+    }
+    println!(
+        "Number of Calibration Results: {}",
+        numa_results.results.len()
+    );
+    println!("Micro-architecture: {:?}", numa_results.micro_architecture);
+    */
+    // Compute histogram stacks and then try finding the GCD ?
+    println!(
+        "Running analysis with folder: {} and basename: {}",
+        folder.display(),
+        basename
+    );
+    /* We need dual and single threshold analysis */
+    let results = numa_results.results;
+    let topology_info = numa_results.topology_info;
+    let slicings = numa_results.slicing;
+    let operations = numa_results.operations;
+
+    /*let names = CacheOps {
+        flush_hit: HashSet::from([String::from("clflush_remote_hit")]),
+        flush_miss: HashSet::from([
+            String::from("clflush_miss_f"),
+            //String::from("clflush_miss_n"),
+        ]),
+        reload_hit: HashSet::from([String::from("reload_remote_hit")]),
+        reload_miss: HashSet::from([String::from("reload_miss")]),
+    };
+
+    let mut indexes = CacheOps {
+        flush_hit: HashSet::new(),
+        flush_miss: HashSet::new(),
+        reload_hit: HashSet::new(),
+        reload_miss: HashSet::new(),
+    };
+
+    for (i, name) in operations.iter().enumerate() {
+        if names.flush_hit.contains(&name.name) {
+            indexes.flush_hit.insert(i);
+        }
+        if names.flush_miss.contains(&name.name) {
+            indexes.flush_miss.insert(i);
+        }
+        if names.reload_hit.contains(&name.name) {
+            indexes.reload_hit.insert(i);
+        }
+        if names.reload_miss.contains(&name.name) {
+            indexes.reload_miss.insert(i);
+        }
+    }*/
+
+    let core_location = |core: usize| {
+        // Eventually we need to integrate https://docs.rs/raw-cpuid/latest/raw_cpuid/struct.ExtendedTopologyIter.html
+        let node = topology_info[&core].into();
+        CoreLocation {
+            socket: node,
+            core: core as u16,
+        }
+    };
+
+    let location_map = calibration_result_to_location_map_parallel(
+        results,
+        &|static_hist_result| {
+            let mut result = StaticHistogram::<WIDTH, N>::default();
+            for (i, hist) in static_hist_result.histogram.into_iter().enumerate() {
+                result += &hist;
+            }
+            result
+        },
+        &|addr| {
+            slicings
+                .1
+                .hash(addr)
+                .try_into()
+                .expect("Slice index doesn't fit u8")
+        },
+        &core_location,
+    );
+
+    // 1. For each location, extract, FLUSH_HIT / FLUSH_MISS - RELOAD_HIT / RELOAD_MISS
+    // 2. From there, compute the various reductions from thresholding, without losing the initial data.
+    //    (This will require careful use of references, and probably warrants some sort of helper, given we have 34 different configs)
+    // 3. Use the reductions to determine thresholds.
+    // 4. Compute the expected errors, with average, min, max and stddev.
+    //println!("Number of entries: {}", location_map.iter().count());
+
+    let projection_full = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: false,
+            core: false,
+        },
+        victim: CoreLocParameters {
+            socket: false,
+            core: false,
+        },
+        memory_numa_node: false,
+        memory_slice: false,
+        memory_vpn: false,
+        memory_offset: false,
+    };
+
+    let basename_rdtsc = format!("{}-rdtsc", basename);
+
+    //let shallow_copy = location_map.par_iter().collect();
+    let projected_full = reduce(
+        location_map,
+        |avm_location| PartialLocationOwned::new(projection_full, avm_location),
+        || StaticHistogram::<WIDTH, N>::default(),
+        |acc, v, _k, _rk| {
+            *acc += &v;
+        },
+        |acc, rk| acc, /* Figure out if we should build the HistCumSums here*/
+    );
+
+    let count = projected_full.par_iter().count();
+    assert_eq!(count, 1);
+    let histogram = projected_full.into_iter().next().unwrap().1;
+    let mut indices: Vec<u64> = Vec::new();
+    for (i, val) in histogram.iter() {
+        if val > 0 && i != SimpleBucketU64::<WIDTH, N>::MAX {
+            indices.push(i.into());
+        }
+    }
+    println!("Indices found: {:?}", indices);
+    let first = indices[0];
+    /*for e in indices.iter_mut() {
+        *e -= first;
+    }*/
+    let gcd = indices.into_iter().reduce(gcd).unwrap();
+    println!("Found GCD: {}", gcd);
     Ok(())
 }
