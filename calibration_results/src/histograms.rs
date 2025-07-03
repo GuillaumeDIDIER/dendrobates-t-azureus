@@ -218,10 +218,10 @@ impl<const WIDTH: u64, const N: usize> StaticHistogramCumSum<WIDTH, N> {
     }
 }
 
-impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
+impl<const WIDTH: u64, const N: usize> From<&StaticHistogram<WIDTH, N>>
     for StaticHistogramCumSum<WIDTH, N>
 {
-    fn from(value: StaticHistogram<WIDTH, N>) -> Self {
+    fn from(value: &StaticHistogram<WIDTH, N>) -> Self {
         let mut cumul = 0u64;
         let mut r = Self {
             data: [HistogramCumSumItem {
@@ -237,6 +237,14 @@ impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
             };
         }
         r
+    }
+}
+
+impl<const WIDTH: u64, const N: usize> From<StaticHistogram<WIDTH, N>>
+    for StaticHistogramCumSum<WIDTH, N>
+{
+    fn from(value: StaticHistogram<WIDTH, N>) -> Self {
+        Self::from(&value)
     }
 }
 

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 //#[cfg(any(feature = "no_std", not(feature = "use_std")))]
 use core::hash::{Hash, Hasher};
 use num_rational::Rational64;
+use std::iter::Sum;
 use std::ops::{Add, AddAssign};
 use std::vec;
 
@@ -318,6 +319,42 @@ impl<'a> PartialLocationRef<'a> {
     }
 }
 
+impl Display for PartialLocationOwned {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        if self.params.attacker.socket || self.params.attacker.core {
+            write!(f, "Attacker ")?;
+            if self.params.attacker.core {
+                write!(f, "core {}, ", self.location.attacker.core)?
+            }
+            if self.params.attacker.socket {
+                write!(f, "socket {}, ", self.location.attacker.socket)?
+            }
+        }
+        if self.params.victim.socket || self.params.victim.core {
+            write!(f, "Victim ")?;
+            if self.params.victim.core {
+                write!(f, "core {}, ", self.location.victim.core)?
+            }
+            if self.params.victim.socket {
+                write!(f, "socket {}, ", self.location.victim.socket)?
+            }
+        }
+        if self.params.memory_numa_node {
+            write!(f, "Numa Node: {}, ", self.location.memory_numa_node)?
+        }
+        if self.params.memory_vpn {
+            write!(f, "VPN: {}, ", self.location.memory_vpn)?
+        }
+        if self.params.memory_offset {
+            write!(f, "Offset: {}, ", self.location.memory_offset)?
+        }
+        if self.params.memory_slice {
+            write!(f, "Slice: {}, ", self.location.memory_slice)?
+        }
+        Ok(())
+    }
+}
+
 pub type Slice = usize;
 
 pub fn cum_sum(vector: &[u32]) -> Vec<u32> {
@@ -410,6 +447,34 @@ impl Add<ErrorPrediction> for &ErrorPrediction {
 impl AddAssign<Self> for ErrorPrediction {
     fn add_assign(&mut self, rhs: Self) {
         *self += &rhs;
+    }
+}
+
+impl Sum<Self> for ErrorPrediction {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(
+            ErrorPrediction {
+                true_hit: 0,
+                true_miss: 0,
+                false_hit: 0,
+                false_miss: 0,
+            },
+            |a, b| a + b,
+        )
+    }
+}
+
+impl<'a> Sum<&'a Self> for ErrorPrediction {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(
+            ErrorPrediction {
+                true_hit: 0,
+                true_miss: 0,
+                false_hit: 0,
+                false_miss: 0,
+            },
+            |a, b| a + b,
+        )
     }
 }
 

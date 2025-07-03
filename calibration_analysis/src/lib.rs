@@ -1,6 +1,8 @@
 #![feature(generic_const_exprs)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod error_statistics;
+
 use calibration_results::calibration::{
     AVMLocation, CoreLocParameters, CoreLocation, ErrorPrediction, LocationParameters,
     PartialLocation, PartialLocationOwned,
@@ -29,6 +31,7 @@ use calibration_results::classifiers::{
 };
 use num::integer::gcd;
 use std::fmt::Display;
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
@@ -172,11 +175,68 @@ struct QuadThresholdErrors<T: Bucket> {
     pub reload_dual_threshold: (DualThreshold<T>, ErrorPrediction),
 }
 
+#[derive(Clone, Copy, Debug)]
 struct QuadErrors<T> {
     pub flush_single_error: T,
     pub flush_dual_error: T,
     pub reload_single_error: T,
     pub reload_dual_error: T,
+}
+
+pub trait Output {
+    fn write(&self, output_file: &mut File, name: impl AsRef<str>);
+}
+impl<T: Output> QuadErrors<T> {
+    pub fn write(&self, output_file: &mut File, name: &str) {
+        self.flush_single_error
+            .write(output_file, format!("{}-FF-S", name));
+        self.flush_dual_error
+            .write(output_file, format!("{}-FF-D", name));
+        self.reload_single_error
+            .write(output_file, format!("{}-FR-S", name));
+        self.reload_dual_error
+            .write(output_file, format!("{}-FR-D", name));
+    }
+}
+
+impl<T: Sized + Send + Sync> QuadErrors<T> {
+    pub fn apply<U: Send>(&self, f: impl Sync + Fn(&T) -> U) -> QuadErrors<U> {
+        let mut r = vec![
+            &self.flush_single_error,
+            &self.flush_dual_error,
+            &self.reload_single_error,
+            &self.reload_dual_error,
+        ]
+        .into_par_iter()
+        .map(|e| (f(e)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        QuadErrors {
+            flush_single_error: r.next().unwrap(),
+            flush_dual_error: r.next().unwrap(),
+            reload_single_error: r.next().unwrap(),
+            reload_dual_error: r.next().unwrap(),
+        }
+    }
+
+    pub fn apply_mut<U: Send>(&mut self, f: impl Sync + Fn(&mut T) -> U) -> QuadErrors<U> {
+        let mut r = vec![
+            &mut self.flush_single_error,
+            &mut self.flush_dual_error,
+            &mut self.reload_single_error,
+            &mut self.reload_dual_error,
+        ]
+        .into_par_iter()
+        .map(|e| (f(e)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        QuadErrors {
+            flush_single_error: r.next().unwrap(),
+            flush_dual_error: r.next().unwrap(),
+            reload_single_error: r.next().unwrap(),
+            reload_dual_error: r.next().unwrap(),
+        }
+    }
 }
 
 fn write_out_threshold_info<T: Bucket>(
@@ -802,7 +862,8 @@ where
     //    (This will require careful use of references, and probably warrants some sort of helper, given we have 34 different configs)
     // 3. Use the reductions to determine thresholds.
     // 4. Compute the expected errors, with average, min, max and stddev.
-    println!("Number of entries: {}", location_map.iter().count());
+    let num_entries = location_map.iter().count();
+    println!("Number of entries: {}", num_entries);
 
     let numa_nodes_set: HashSet<_> = location_map.keys().map(|l| l.memory_numa_node).collect();
 
@@ -823,6 +884,11 @@ where
     println!("Number of Attacker Socket: {}", attacker_socket_count);
     let victim_socket_count = victim_socket_set.iter().count();
     println!("Number of Victim Sockets: {}", victim_socket_count);
+
+    let attacker_core_count = attacker_core_set.iter().count();
+    println!("Number of Attacker Core: {}", attacker_core_count);
+    let victim_core_count = victim_core_set.iter().count();
+    println!("Number of Victim Core: {}", victim_core_count);
 
     let path = folder
         .as_ref()
@@ -866,6 +932,51 @@ where
         memory_offset: false,
     };
 
+    let projection_numa_m_core_av = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        victim: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        memory_numa_node: true,
+        memory_slice: false,
+        memory_vpn: false,
+        memory_offset: false,
+    };
+
+    let projection_numa_m_core_av_addr = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        victim: CoreLocParameters {
+            socket: true,
+            core: true,
+        },
+        memory_numa_node: true,
+        memory_slice: true,
+        memory_vpn: true,
+        memory_offset: true,
+    };
+
+    let projection_numa_avm_addr = LocationParameters {
+        attacker: CoreLocParameters {
+            socket: true,
+            core: false,
+        },
+        victim: CoreLocParameters {
+            socket: true,
+            core: false,
+        },
+        memory_numa_node: true,
+        memory_slice: true,
+        memory_vpn: true,
+        memory_offset: true,
+    };
+
     let basename_all = format!("{}-all", basename.as_ref());
 
     let projected_full = make_projection(&location_map, projection_full);
@@ -891,11 +1002,35 @@ where
     )
     .expect("Failed to make Full projection plot.");
 
-    let basename_numa = format!("{}-node-aware", basename.as_ref());
+    if num_entries > 1 {
+        let stat = error_statistics::compute_statistics(&location_map, projection_full, &errors);
+        writeln!(output_file);
+        stat.write(&mut output_file, "Full-AVM-Errors");
+    }
+
+    /*
+    List of models:
+    Numa(MAV), Numa(MA), Numa(AV), Numa(A) x (No Addr / Addr)
+
+    (Numa(M)+Core(AV), Numa(MV)+Core(A), Numa(M) + Core(A)) x (No Addr / Addr)
+
+
+     */
 
     if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
+        let basename_numa = format!("{}-node-aware", basename.as_ref());
+
         let projected_numa = make_projection(&location_map, projection_socket);
         let numa_threshold_errors = compute_errors(&projected_numa);
+        if num_entries > victim_socket_count * attacker_socket_count * numa_node_count {
+            let stat = error_statistics::compute_statistics(
+                &location_map,
+                projection_socket,
+                &numa_threshold_errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Numa-AVM-Errors");
+        }
         let mut sorted_numa_threshold_errors: Vec<(_, _)> =
             numa_threshold_errors.into_par_iter().collect();
         sorted_numa_threshold_errors.sort_by(|a, b| ordering_numa(a.0, b.0));
@@ -1129,6 +1264,42 @@ where
                  full_stats.avg.flush_dual_error.error_rate() * 100., full_stats.min.flush_dual_error.error_rate() * 100., full_stats.q1.flush_dual_error.error_rate() * 100., full_stats.med.flush_dual_error.error_rate() * 100., full_stats.q3.flush_dual_error.error_rate() * 100., full_stats.max.flush_dual_error.error_rate() * 100.,
                  numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
         ).unwrap_or_default();
+    }
+
+    if numa_node_count * victim_core_count * attacker_core_count > 1 {
+        let projected_numa_m_core_av = make_projection(&location_map, projection_numa_m_core_av);
+        let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
+
+        let stat = error_statistics::compute_statistics(
+            &location_map,
+            projection_numa_m_core_av,
+            &numa_m_core_av_threshold_errors,
+        );
+        writeln!(output_file);
+        stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
+
+        // This is way to slow, and that treatment would should be simpler, as we aren't doing any projection.
+        /*let projected_numa_m_core_av_addr =
+            make_projection(&location_map, projection_numa_m_core_av_addr);
+        let numa_m_core_av_addr_threshold_errors = compute_errors(&projected_numa_m_core_av_addr);
+
+        let stat = error_statistics::compute_statistics(
+            &location_map,
+            projection_numa_m_core_av_addr,
+            &numa_m_core_av_addr_threshold_errors,
+        );
+        writeln!(output_file);
+        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");*/
+        let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
+        let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
+
+        let stat = error_statistics::compute_statistics(
+            &location_map,
+            projection_numa_avm_addr,
+            &numa_avm_addr_threshold_errors,
+        );
+        writeln!(output_file);
+        stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
     }
     //----------
 
