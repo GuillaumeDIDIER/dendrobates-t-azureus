@@ -1,6 +1,6 @@
 use crate::{CacheOps, Output, QuadErrors, QuadThresholdErrors};
 use calibration_results::calibration::{
-    AVMLocation, ErrorPrediction, LocationParameters, PartialLocation, PartialLocationOwned,
+    AVMLocation, ErrorPrediction, LocationParameters, PartialLocationOwned,
 };
 use calibration_results::classifiers::ErrorPredictor;
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
@@ -20,10 +20,10 @@ pub struct StatisticsResults {
     pub max: (ErrorPrediction, AVMLocation),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ErrorStatisticsResults {
     pub average: StatisticsResults,
-    pub best: (PartialLocationOwned, StatisticsResults),
+    pub choice: Vec<(String, PartialLocationOwned, StatisticsResults)>,
 }
 
 impl Output for ErrorStatisticsResults {
@@ -45,61 +45,71 @@ impl Output for ErrorStatisticsResults {
             .expect("Failed to output");
         writeln!(output_file, "{}-Max: {}", name.as_ref(), self.average.max.0)
             .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Location: {}",
-            name.as_ref(),
-            self.best.0
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Average: {}",
-            name.as_ref(),
-            self.best.1.average
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Min: {}",
-            name.as_ref(),
-            self.best.1.min.0
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Q1: {}",
-            name.as_ref(),
-            self.best.1.q1.0
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Med: {}",
-            name.as_ref(),
-            self.best.1.med.0
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Q3: {}",
-            name.as_ref(),
-            self.best.1.q3.0
-        )
-        .expect("Failed to output");
-        writeln!(
-            output_file,
-            "{}-Best-Max: {}",
-            name.as_ref(),
-            self.best.1.max.0
-        )
-        .expect("Failed to output");
+        for choice in &self.choice {
+            writeln!(
+                output_file,
+                "{}-{}-Location: {}",
+                name.as_ref(),
+                choice.0,
+                choice.1
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Average: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.average
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Min: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.min.0
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Q1: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.q1.0
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Med: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.med.0
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Q3: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.q3.0
+            )
+            .expect("Failed to output");
+            writeln!(
+                output_file,
+                "{}-{}-Max: {}",
+                name.as_ref(),
+                choice.0,
+                choice.2.max.0
+            )
+            .expect("Failed to output");
+        }
     }
 }
 
 pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     full_location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
-    projection: LocationParameters,
+    known_projection: LocationParameters,
+    choices: Vec<(String, LocationParameters)>,
     thresholds_map: &HashMap<
         PartialLocationOwned,
         QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>,
@@ -107,14 +117,14 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
 ) -> QuadErrors<ErrorStatisticsResults> {
     assert_ne!(full_location_map.par_iter().count(), 1);
 
-    let mut all_error_predictions: Vec<(
+    let all_error_predictions: Vec<(
         AVMLocation,
         PartialLocationOwned,
         QuadErrors<ErrorPrediction>,
     )> = full_location_map
         .par_iter()
         .map(|(k, hists)| {
-            let key = PartialLocationOwned::new(projection, *k);
+            let key = PartialLocationOwned::new(known_projection, *k);
             let thresholds = &thresholds_map[&key];
             let hist_cum_sums = CacheOps {
                 flush_hit: StaticHistogramCumSum::from(&hists.flush_hit),
@@ -173,139 +183,208 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             .collect(),
     };
 
-    // we probably want to turn this into an accumulate / reduce parallel version.
-    let mut mapped = RwLock::new(HashMap::<
-        PartialLocationOwned,
-        Mutex<Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>>,
-    >::new());
-
-    all_error_predictions.into_par_iter().for_each(|(k, p, q)| {
-        let errors = q;
-        let guard = mapped.read().unwrap();
-        if let Some(entry) = guard.get(&p) {
-            let mut inner_vec = entry.lock().unwrap();
-            inner_vec.push((k, errors));
-        } else {
-            drop(guard);
-            let mut write_guard = mapped.write().unwrap();
-            write_guard
-                .entry(p)
-                .or_insert_with(|| Mutex::new(Vec::new()));
-            drop(write_guard);
-            mapped
-                .read()
-                .unwrap()
-                .get(&p)
-                .unwrap()
-                .lock()
-                .unwrap()
-                .push((k, errors));
-        }
-    });
-
-    let two_level_error_predictions: Vec<(
-        PartialLocationOwned,
-        Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>,
-    )> = mapped
-        .into_inner()
-        .unwrap()
-        .into_par_iter()
-        .map(|(k, v)| {
-            let map = v.into_inner().unwrap().into_par_iter().collect();
-
-            (k, map)
-        })
-        .collect();
-
-    let mut quad_two_level_error_predictions: QuadErrors<
-        Vec<(
-            PartialLocationOwned,
-            ErrorPrediction,
-            Vec<(AVMLocation, ErrorPrediction)>,
-        )>,
-    > = QuadErrors {
-        flush_single_error: two_level_error_predictions
-            .par_iter()
-            .map(|(p, qv)| {
-                let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
-                    .par_iter()
-                    .map(|(l, q)| (*l, q.flush_single_error))
-                    .collect();
-                v.par_sort_by_key(|(_l, e)| e.error_ratio());
-                let e_avg = v.par_iter().map(|(_l, e)| e).sum();
-                (*p, e_avg, v)
-            })
-            .collect(),
-        flush_dual_error: two_level_error_predictions
-            .par_iter()
-            .map(|(p, qv)| {
-                let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
-                    .par_iter()
-                    .map(|(l, q)| (*l, q.flush_dual_error))
-                    .collect();
-                v.par_sort_by_key(|(_l, e)| e.error_ratio());
-                let e_avg = v.par_iter().map(|(_l, e)| e).sum();
-                (*p, e_avg, v)
-            })
-            .collect(),
-        reload_single_error: two_level_error_predictions
-            .par_iter()
-            .map(|(p, qv)| {
-                let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
-                    .par_iter()
-                    .map(|(l, q)| (*l, q.reload_single_error))
-                    .collect();
-                v.par_sort_by_key(|(_l, e)| e.error_ratio());
-                let e_avg = v.par_iter().map(|(_l, e)| e).sum();
-                (*p, e_avg, v)
-            })
-            .collect(),
-        reload_dual_error: two_level_error_predictions
-            .par_iter()
-            .map(|(p, qv)| {
-                let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
-                    .par_iter()
-                    .map(|(l, q)| (*l, q.reload_dual_error))
-                    .collect();
-                v.par_sort_by_key(|(_l, e)| e.error_ratio());
-                let e_avg = v.par_iter().map(|(_l, e)| e).sum();
-                (*p, e_avg, v)
-            })
-            .collect(),
+    let mut choice = QuadErrors {
+        flush_single_error: Vec::new(),
+        flush_dual_error: Vec::new(),
+        reload_single_error: Vec::new(),
+        reload_dual_error: Vec::new(),
     };
 
-    quad_two_level_error_predictions
-        .apply_mut(|v| v.par_sort_by_key(|(_p, e, _v)| e.error_ratio()));
+    for (choice_name, choice_projection) in choices {
+        // we probably want to turn this into an accumulate / reduce parallel version.
+        let mapped = RwLock::new(HashMap::<
+            PartialLocationOwned,
+            Mutex<Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>>,
+        >::new());
 
-    let best_min = quad_two_level_error_predictions.apply(|v| v[0].2[0]);
-    let best_max = quad_two_level_error_predictions.apply(|v| {
-        let inner = &v[0].2;
-        let len = inner.len();
-        inner[len - 1]
-    });
+        all_error_predictions.par_iter().for_each(|(k, _p, q)| {
+            let errors = q;
+            let choice_partial_location = PartialLocationOwned::new(choice_projection, *k);
+            let guard = mapped.read().unwrap();
+            if let Some(entry) = guard.get(&choice_partial_location) {
+                let mut inner_vec = entry.lock().unwrap();
+                inner_vec.push((*k, *errors));
+            } else {
+                drop(guard);
+                let mut write_guard = mapped.write().unwrap();
+                write_guard
+                    .entry(choice_partial_location)
+                    .or_insert_with(|| Mutex::new(Vec::new()));
+                drop(write_guard);
+                mapped
+                    .read()
+                    .unwrap()
+                    .get(&choice_partial_location)
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .push((*k, *errors));
+            }
+        });
 
-    let best_med = quad_two_level_error_predictions.apply(|v| {
-        let inner = &v[0].2;
-        let len = inner.len();
-        inner[(len + 1) >> 1]
-    });
+        let two_level_error_predictions: Vec<(
+            PartialLocationOwned,
+            Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>,
+        )> = mapped
+            .into_inner()
+            .unwrap()
+            .into_par_iter()
+            .map(|(k, v)| {
+                let map = v.into_inner().unwrap().into_par_iter().collect();
 
-    let best_q1 = quad_two_level_error_predictions.apply(|v| {
-        let inner = &v[0].2;
-        let len = inner.len();
-        inner[(len + 1) >> 2]
-    });
-    let best_q3 = quad_two_level_error_predictions.apply(|v| {
-        let inner = &v[0].2;
-        let len = inner.len();
-        inner[3 * (len + 1) >> 2]
-    });
+                (k, map)
+            })
+            .collect();
 
-    // This one is easy, it's already computed.
-    let best_avg = quad_two_level_error_predictions.apply(|v| v[0].1);
+        let mut quad_two_level_error_predictions: QuadErrors<
+            Vec<(
+                PartialLocationOwned,
+                ErrorPrediction,
+                Vec<(AVMLocation, ErrorPrediction)>,
+            )>,
+        > = QuadErrors {
+            flush_single_error: two_level_error_predictions
+                .par_iter()
+                .map(|(p, qv)| {
+                    let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                        .par_iter()
+                        .map(|(l, q)| (*l, q.flush_single_error))
+                        .collect();
+                    v.par_sort_by_key(|(_l, e)| e.error_ratio());
+                    let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                    (*p, e_avg, v)
+                })
+                .collect(),
+            flush_dual_error: two_level_error_predictions
+                .par_iter()
+                .map(|(p, qv)| {
+                    let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                        .par_iter()
+                        .map(|(l, q)| (*l, q.flush_dual_error))
+                        .collect();
+                    v.par_sort_by_key(|(_l, e)| e.error_ratio());
+                    let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                    (*p, e_avg, v)
+                })
+                .collect(),
+            reload_single_error: two_level_error_predictions
+                .par_iter()
+                .map(|(p, qv)| {
+                    let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                        .par_iter()
+                        .map(|(l, q)| (*l, q.reload_single_error))
+                        .collect();
+                    v.par_sort_by_key(|(_l, e)| e.error_ratio());
+                    let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                    (*p, e_avg, v)
+                })
+                .collect(),
+            reload_dual_error: two_level_error_predictions
+                .par_iter()
+                .map(|(p, qv)| {
+                    let mut v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                        .par_iter()
+                        .map(|(l, q)| (*l, q.reload_dual_error))
+                        .collect();
+                    v.par_sort_by_key(|(_l, e)| e.error_ratio());
+                    let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                    (*p, e_avg, v)
+                })
+                .collect(),
+        };
 
-    let best_location = quad_two_level_error_predictions.apply(|v| v[0].0);
+        quad_two_level_error_predictions
+            .apply_mut(|v| v.par_sort_by_key(|(_p, e, _v)| e.error_ratio()));
 
+        let best_min = quad_two_level_error_predictions.apply(|v| v[0].2[0]);
+        let best_max = quad_two_level_error_predictions.apply(|v| {
+            let inner = &v[0].2;
+            let len = inner.len();
+            inner[len - 1]
+        });
+
+        let best_med = quad_two_level_error_predictions.apply(|v| {
+            let inner = &v[0].2;
+            let len = inner.len();
+            inner[(len + 1) >> 1]
+        });
+
+        let best_q1 = quad_two_level_error_predictions.apply(|v| {
+            let inner = &v[0].2;
+            let len = inner.len();
+            inner[(len + 1) >> 2]
+        });
+        let best_q3 = quad_two_level_error_predictions.apply(|v| {
+            let inner = &v[0].2;
+            let len = inner.len();
+            inner[3 * (len + 1) >> 2]
+        });
+
+        // This one is easy, it's already computed.
+        let best_avg = quad_two_level_error_predictions.apply(|v| v[0].1);
+
+        let best_location = quad_two_level_error_predictions.apply(|v| v[0].0);
+        choice.flush_single_error.push((
+            choice_name.clone(),
+            best_location.flush_single_error,
+            StatisticsResults {
+                average: best_avg.flush_single_error,
+                min: (best_min.flush_single_error.1, best_min.flush_single_error.0),
+                q1: (best_q1.flush_single_error.1, best_q1.flush_single_error.0),
+                med: (best_med.flush_single_error.1, best_med.flush_single_error.0),
+                q3: (best_q3.flush_single_error.1, best_q3.flush_single_error.0),
+                max: (best_max.flush_single_error.1, best_max.flush_single_error.0),
+            },
+        ));
+
+        choice.flush_dual_error.push((
+            choice_name.clone(),
+            best_location.flush_dual_error,
+            StatisticsResults {
+                average: best_avg.flush_dual_error,
+                min: (best_min.flush_dual_error.1, best_min.flush_dual_error.0),
+                q1: (best_q1.flush_dual_error.1, best_q1.flush_dual_error.0),
+                med: (best_med.flush_dual_error.1, best_med.flush_dual_error.0),
+                q3: (best_q3.flush_dual_error.1, best_q3.flush_dual_error.0),
+                max: (best_max.flush_dual_error.1, best_max.flush_dual_error.0),
+            },
+        ));
+
+        choice.reload_single_error.push((
+            choice_name.clone(),
+            best_location.reload_single_error,
+            StatisticsResults {
+                average: best_avg.reload_single_error,
+                min: (
+                    best_min.reload_single_error.1,
+                    best_min.reload_single_error.0,
+                ),
+                q1: (best_q1.reload_single_error.1, best_q1.reload_single_error.0),
+                med: (
+                    best_med.reload_single_error.1,
+                    best_med.reload_single_error.0,
+                ),
+                q3: (best_q3.reload_single_error.1, best_q3.reload_single_error.0),
+                max: (
+                    best_max.reload_single_error.1,
+                    best_max.reload_single_error.0,
+                ),
+            },
+        ));
+
+        choice.reload_dual_error.push((
+            choice_name,
+            best_location.reload_dual_error,
+            StatisticsResults {
+                average: best_avg.reload_dual_error,
+                min: (best_min.reload_dual_error.1, best_min.reload_dual_error.0),
+                q1: (best_q1.reload_dual_error.1, best_q1.reload_dual_error.0),
+                med: (best_med.reload_dual_error.1, best_med.reload_dual_error.0),
+                q3: (best_q3.reload_dual_error.1, best_q3.reload_dual_error.0),
+                max: (best_max.reload_dual_error.1, best_max.reload_dual_error.0),
+            },
+        ));
+    }
     quad_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, _p, e)| e.error_ratio()));
 
     let all_min = quad_all_error_pred.apply(|all_e_p| all_e_p[0]);
@@ -327,17 +406,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             q3: (all_q3.flush_single_error.2, all_q3.flush_single_error.0),
             max: (all_max.flush_single_error.2, all_max.flush_single_error.0),
         },
-        best: (
-            best_location.flush_single_error,
-            StatisticsResults {
-                average: best_avg.flush_single_error,
-                min: (best_min.flush_single_error.1, best_min.flush_single_error.0),
-                q1: (best_q1.flush_single_error.1, best_q1.flush_single_error.0),
-                med: (best_med.flush_single_error.1, best_med.flush_single_error.0),
-                q3: (best_q3.flush_single_error.1, best_q3.flush_single_error.0),
-                max: (best_max.flush_single_error.1, best_max.flush_single_error.0),
-            },
-        ),
+        choice: choice.flush_single_error,
     };
     let flush_dual_error = ErrorStatisticsResults {
         average: StatisticsResults {
@@ -348,17 +417,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             q3: (all_q3.flush_dual_error.2, all_q3.flush_dual_error.0),
             max: (all_max.flush_dual_error.2, all_max.flush_dual_error.0),
         },
-        best: (
-            best_location.flush_dual_error,
-            StatisticsResults {
-                average: best_avg.flush_dual_error,
-                min: (best_min.flush_dual_error.1, best_min.flush_dual_error.0),
-                q1: (best_q1.flush_dual_error.1, best_q1.flush_dual_error.0),
-                med: (best_med.flush_dual_error.1, best_med.flush_dual_error.0),
-                q3: (best_q3.flush_dual_error.1, best_q3.flush_dual_error.0),
-                max: (best_max.flush_dual_error.1, best_max.flush_dual_error.0),
-            },
-        ),
+        choice: choice.flush_dual_error,
     };
     let reload_single_error = ErrorStatisticsResults {
         average: StatisticsResults {
@@ -369,26 +428,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             q3: (all_q3.reload_single_error.2, all_q3.reload_single_error.0),
             max: (all_max.reload_single_error.2, all_max.reload_single_error.0),
         },
-        best: (
-            best_location.reload_single_error,
-            StatisticsResults {
-                average: best_avg.reload_single_error,
-                min: (
-                    best_min.reload_single_error.1,
-                    best_min.reload_single_error.0,
-                ),
-                q1: (best_q1.reload_single_error.1, best_q1.reload_single_error.0),
-                med: (
-                    best_med.reload_single_error.1,
-                    best_med.reload_single_error.0,
-                ),
-                q3: (best_q3.reload_single_error.1, best_q3.reload_single_error.0),
-                max: (
-                    best_max.reload_single_error.1,
-                    best_max.reload_single_error.0,
-                ),
-            },
-        ),
+        choice: choice.reload_single_error,
     };
     let reload_dual_error = ErrorStatisticsResults {
         average: StatisticsResults {
@@ -399,17 +439,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             q3: (all_q3.reload_dual_error.2, all_q3.reload_dual_error.0),
             max: (all_max.reload_dual_error.2, all_max.reload_dual_error.0),
         },
-        best: (
-            best_location.reload_dual_error,
-            StatisticsResults {
-                average: best_avg.reload_dual_error,
-                min: (best_min.reload_dual_error.1, best_min.reload_dual_error.0),
-                q1: (best_q1.reload_dual_error.1, best_q1.reload_dual_error.0),
-                med: (best_med.reload_dual_error.1, best_med.reload_dual_error.0),
-                q3: (best_q3.reload_dual_error.1, best_q3.reload_dual_error.0),
-                max: (best_max.reload_dual_error.1, best_max.reload_dual_error.0),
-            },
-        ),
+        choice: choice.reload_dual_error,
     };
 
     QuadErrors {

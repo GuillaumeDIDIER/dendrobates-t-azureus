@@ -846,6 +846,12 @@ where
                 }
             }
             result
+            /*CacheOps {
+                flush_hit: StaticHistogramCumSum::from(result.flush_hit),
+                flush_miss: StaticHistogramCumSum::from(result.flush_miss),
+                reload_hit: StaticHistogramCumSum::from(result.reload_hit),
+                reload_miss: StaticHistogramCumSum::from(result.reload_miss),
+            }*/
         },
         &|addr| {
             slicings
@@ -1003,7 +1009,8 @@ where
     .expect("Failed to make Full projection plot.");
 
     if num_entries > 1 {
-        let stat = error_statistics::compute_statistics(&location_map, projection_full, &errors);
+        let stat =
+            error_statistics::compute_statistics(&location_map, projection_full, vec![], &errors);
         writeln!(output_file);
         stat.write(&mut output_file, "Full-AVM-Errors");
     }
@@ -1026,6 +1033,7 @@ where
             let stat = error_statistics::compute_statistics(
                 &location_map,
                 projection_socket,
+                vec![(String::from("Best"), projection_socket)],
                 &numa_threshold_errors,
             );
             writeln!(output_file);
@@ -1273,33 +1281,42 @@ where
         let stat = error_statistics::compute_statistics(
             &location_map,
             projection_numa_m_core_av,
+            vec![(String::from("Best"), projection_numa_m_core_av)],
             &numa_m_core_av_threshold_errors,
         );
         writeln!(output_file);
         stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
 
         // This is way to slow, and that treatment would should be simpler, as we aren't doing any projection.
-        /*let projected_numa_m_core_av_addr =
+        let projected_numa_m_core_av_addr =
             make_projection(&location_map, projection_numa_m_core_av_addr);
         let numa_m_core_av_addr_threshold_errors = compute_errors(&projected_numa_m_core_av_addr);
 
         let stat = error_statistics::compute_statistics(
             &location_map,
             projection_numa_m_core_av_addr,
+            vec![
+                (String::from("Best-Addr"), projection_numa_m_core_av_addr),
+                (String::from("Best-No-Addr"), projection_numa_m_core_av),
+            ],
             &numa_m_core_av_addr_threshold_errors,
         );
         writeln!(output_file);
-        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");*/
+        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
         let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
         let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
 
         let stat = error_statistics::compute_statistics(
             &location_map,
             projection_numa_avm_addr,
+            vec![
+                (String::from("Best-MAV-Addr"), projection_numa_avm_addr),
+                (String::from("Best-MAV"), projection_socket),
+            ],
             &numa_avm_addr_threshold_errors,
         );
         writeln!(output_file);
-        stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
+        stat.write(&mut output_file, "Numa-MAV-Addr-Errors");
     }
     //----------
 
