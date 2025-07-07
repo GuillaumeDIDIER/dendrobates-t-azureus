@@ -711,24 +711,24 @@ fn build_statistics(
         reload_dual_error: series.reload_dual_error[count - 1].0,
     };
     let med = QuadErrors {
-        flush_single_error: series.flush_single_error[(count + 1) >> 1].0,
-        flush_dual_error: series.flush_dual_error[(count + 1) >> 1].0,
-        reload_single_error: series.reload_single_error[(count + 1) >> 1].0,
-        reload_dual_error: series.reload_dual_error[(count + 1) >> 1].0,
+        flush_single_error: series.flush_single_error[(count - 1) >> 1].0,
+        flush_dual_error: series.flush_dual_error[(count - 1) >> 1].0,
+        reload_single_error: series.reload_single_error[(count - 1) >> 1].0,
+        reload_dual_error: series.reload_dual_error[(count - 1) >> 1].0,
     };
 
     let q1 = QuadErrors {
-        flush_single_error: series.flush_single_error[(count + 1) >> 2].0,
-        flush_dual_error: series.flush_dual_error[(count + 1) >> 2].0,
-        reload_single_error: series.reload_single_error[(count + 1) >> 2].0,
-        reload_dual_error: series.reload_dual_error[(count + 1) >> 2].0,
+        flush_single_error: series.flush_single_error[(count - 1) >> 2].0,
+        flush_dual_error: series.flush_dual_error[(count - 1) >> 2].0,
+        reload_single_error: series.reload_single_error[(count - 1) >> 2].0,
+        reload_dual_error: series.reload_dual_error[(count - 1) >> 2].0,
     };
 
     let q3 = QuadErrors {
-        flush_single_error: series.flush_single_error[3 * (count + 1) >> 2].0,
-        flush_dual_error: series.flush_dual_error[3 * (count + 1) >> 2].0,
-        reload_single_error: series.reload_single_error[3 * (count + 1) >> 2].0,
-        reload_dual_error: series.reload_dual_error[3 * (count + 1) >> 2].0,
+        flush_single_error: series.flush_single_error[(3 * count - 1) >> 2].0,
+        flush_dual_error: series.flush_dual_error[(3 * count - 1) >> 2].0,
+        reload_single_error: series.reload_single_error[(3 * count - 1) >> 2].0,
+        reload_dual_error: series.reload_dual_error[(3 * count - 1) >> 2].0,
     };
 
     let avg = QuadErrors {
@@ -1287,8 +1287,8 @@ where
         writeln!(output_file);
         stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
 
-        // This is way to slow, and that treatment would should be simpler, as we aren't doing any projection.
-        let projected_numa_m_core_av_addr =
+        // This is way too slow, and that treatment would should be simpler, as we aren't doing any projection.
+        /*let projected_numa_m_core_av_addr =
             make_projection(&location_map, projection_numa_m_core_av_addr);
         let numa_m_core_av_addr_threshold_errors = compute_errors(&projected_numa_m_core_av_addr);
 
@@ -1302,7 +1302,7 @@ where
             &numa_m_core_av_addr_threshold_errors,
         );
         writeln!(output_file);
-        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
+        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");*/
         let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
         let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
 

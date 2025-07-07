@@ -306,18 +306,18 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         let best_med = quad_two_level_error_predictions.apply(|v| {
             let inner = &v[0].2;
             let len = inner.len();
-            inner[(len + 1) >> 1]
+            inner[(len - 1) >> 1]
         });
 
         let best_q1 = quad_two_level_error_predictions.apply(|v| {
             let inner = &v[0].2;
             let len = inner.len();
-            inner[(len + 1) >> 2]
+            inner[(len - 1) >> 2] // Use the definition, first such that at least 25% are <=
         });
         let best_q3 = quad_two_level_error_predictions.apply(|v| {
             let inner = &v[0].2;
             let len = inner.len();
-            inner[3 * (len + 1) >> 2]
+            inner[(3 * len - 1) >> 2] // Use the definition, first such that at least 75% are <=
         });
 
         // This one is easy, it's already computed.
@@ -390,9 +390,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     let all_min = quad_all_error_pred.apply(|all_e_p| all_e_p[0]);
     let all_max = quad_all_error_pred.apply(|all_e_p| all_e_p[all_e_p.len() - 1]);
 
-    let all_med = quad_all_error_pred.apply(|all_e_p| all_e_p[(all_e_p.len() + 1) >> 1]);
-    let all_q1 = quad_all_error_pred.apply(|all_e_p| all_e_p[(all_e_p.len() + 1) >> 2]);
-    let all_q3 = quad_all_error_pred.apply(|all_e_p| all_e_p[3 * (all_e_p.len() + 1) >> 2]);
+    let all_med = quad_all_error_pred.apply(|all_e_p| all_e_p[(all_e_p.len() - 1) >> 1]);
+    let all_q1 = quad_all_error_pred.apply(|all_e_p| all_e_p[(all_e_p.len() - 1) >> 2]);
+    let all_q3 = quad_all_error_pred.apply(|all_e_p| all_e_p[(3 * all_e_p.len() - 1) >> 2]);
 
     let all_avg: QuadErrors<ErrorPrediction> =
         quad_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, _p, e)| e).sum());
