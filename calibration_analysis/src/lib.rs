@@ -142,6 +142,7 @@ pub fn make_projection<const WIDTH: u64, const N: usize>(
 {
     let shallow_copy = location_map.par_iter().collect();
     let mapped = reduce(
+        // TODO, this should run in parallel if possible.
         shallow_copy,
         |avm_location| PartialLocationOwned::new(projection, *avm_location),
         || CacheOps::<StaticHistogram<WIDTH, { N + N }>>::default(),
@@ -225,6 +226,25 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
             &mut self.flush_dual_error,
             &mut self.reload_single_error,
             &mut self.reload_dual_error,
+        ]
+        .into_par_iter()
+        .map(|e| (f(e)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        QuadErrors {
+            flush_single_error: r.next().unwrap(),
+            flush_dual_error: r.next().unwrap(),
+            reload_single_error: r.next().unwrap(),
+            reload_dual_error: r.next().unwrap(),
+        }
+    }
+
+    pub fn map<U: Send>(self, f: impl Sync + Fn(T) -> U) -> QuadErrors<U> {
+        let mut r = vec![
+            self.flush_single_error,
+            self.flush_dual_error,
+            self.reload_single_error,
+            self.reload_dual_error,
         ]
         .into_par_iter()
         .map(|e| (f(e)))
@@ -1288,7 +1308,8 @@ where
         stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
 
         // This is way too slow, and that treatment would should be simpler, as we aren't doing any projection.
-        /*let projected_numa_m_core_av_addr =
+        /**/
+        let projected_numa_m_core_av_addr =
             make_projection(&location_map, projection_numa_m_core_av_addr);
         let numa_m_core_av_addr_threshold_errors = compute_errors(&projected_numa_m_core_av_addr);
 
@@ -1302,7 +1323,7 @@ where
             &numa_m_core_av_addr_threshold_errors,
         );
         writeln!(output_file);
-        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");*/
+        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors"); /**/
         let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
         let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
 

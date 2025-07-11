@@ -30,6 +30,7 @@ Design to do, we need to extract, for both FR and FF the raw calibration results
 fn main() {
     if let Ok(num_threads) = std::thread::available_parallelism() {
         let rayon_thread = (num_threads.get() * 15) >> 4;
+        println!("Using {} cores", rayon_thread);
         rayon::ThreadPoolBuilder::new()
             .num_threads(rayon_thread)
             .build_global()

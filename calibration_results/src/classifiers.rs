@@ -69,6 +69,7 @@ pub trait ErrorPredictionsBuilder<const WIDTH: u64, const N: usize>: Send + Sync
         miss: &StaticHistogramCumSum<WIDTH, N>,
     ) -> Option<(Self::E, ErrorPrediction)>;
 
+    // Out of equivalent classifiers from an error rate, pick one.
     fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
         &self,
         classifiers: Vec<(T, U)>,
@@ -211,7 +212,27 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
         hits: &StaticHistogramCumSum<WIDTH, N>,
         miss: &StaticHistogramCumSum<WIDTH, N>,
     ) -> Option<(Self::E, ErrorPrediction)> {
-        let all_classifiers =
+        fn helper<const WIDTH: u64, const N: usize>(
+            res: &mut Vec<(Threshold<SimpleBucketU64<WIDTH, N>>, ErrorPrediction)>,
+            error: &mut u64,
+            threshold: Threshold<SimpleBucketU64<WIDTH, N>>,
+            hits: &StaticHistogramCumSum<WIDTH, N>,
+            miss: &StaticHistogramCumSum<WIDTH, N>,
+        ) {
+            let error_pred = threshold.error_prediction(hits, miss);
+            match error_pred.total_error().cmp(&error) {
+                Ordering::Less => {
+                    res.clear();
+                    *error = error_pred.total_error();
+                    res.push((threshold, error_pred));
+                }
+                Ordering::Equal => {
+                    res.push((threshold, error_pred));
+                }
+                Ordering::Greater => { /* Nothing to do*/ }
+            }
+        }
+        /*let all_classifiers =
             ErrorPredictionsBuilder::enumerate_error_predictions(self, hits, miss);
         let min_classifiers = all_classifiers
             .into_iter()
@@ -221,7 +242,50 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
             None
         } else {
             Some(min_classifiers[(n - 1) / 2])
+        }*/
+        //let mut res = Vec::with_capacity(2 * N);
+        let mut res = Vec::new();
+        let mut error = u64::MAX;
+        for i in SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX {
+            let t1 = Threshold::<SimpleBucketU64<WIDTH, N>> {
+                bucket_index: i,
+                miss_faster_than_hit: true,
+            };
+            helper(&mut res, &mut error, t1, hits, miss);
+            /*let e1 = t1.error_prediction(hits, miss);
+
+            match e1.total_error().cmp(&error) {
+                Ordering::Less => {
+                    res.clear();
+                    error = e1.total_error();
+                    res.push((t1, e1));
+                }
+                Ordering::Equal => {
+                    res.push((t1, e1));
+                }
+                Ordering::Greater => { /* Nothing to do*/ }
+            }*/
+            let t2 = Threshold::<SimpleBucketU64<WIDTH, N>> {
+                bucket_index: i,
+                miss_faster_than_hit: false,
+            };
+            helper(&mut res, &mut error, t2, hits, miss);
+            /*
+            let e2 = t2.error_prediction(hits, miss);
+            match e2.total_error().cmp(&error) {
+                Ordering::Less => {
+                    res.clear();
+                    error = e2.total_error();
+                    res.push((t2, e2));
+                }
+                Ordering::Equal => {
+                    res.push((t2, e2));
+                }
+                Ordering::Greater => { /* Nothing to do*/ }
+            }*/
         }
+        let n = res.len();
+        if n == 0 { None } else { Some(res[(n - 1) / 2]) }
     }
 
     fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
@@ -294,6 +358,7 @@ impl<T: Bucket> DualThreshold<T> {
     }
 }
 
+// Important note the the x_to_y index means index i includes x. (It's an <= threshold).
 impl<T: Bucket> HitClassifier<T> for DualThreshold<T> {
     fn is_hit(&self, bucket: T) -> bool {
         if self.center_hit {
@@ -368,6 +433,191 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictor<WIDTH, N>
     }
 }
 
+impl<const WIDTH: u64, const N: usize> DualThresholdBuilder<WIDTH, N> {
+    pub fn find_best_classifier_slow(
+        &self,
+        hits: &StaticHistogramCumSum<WIDTH, N>,
+        miss: &StaticHistogramCumSum<WIDTH, N>,
+    ) -> Option<(DualThreshold<SimpleBucketU64<WIDTH, N>>, ErrorPrediction)> {
+        let mut center_hits_t1_candidates = Vec::new();
+        let mut center_miss_t1_candidates = Vec::new();
+        let mut center_hits_t1_error = u64::MAX;
+        let mut center_miss_t1_error = u64::MAX;
+        let mut candidates = Vec::new();
+        //let mut center_hits_candidates = Vec::new();
+        //let mut center_miss_candidates = Vec::new();
+        let mut error = u64::MAX;
+        //let mut center_hits_error = u64::MAX;
+        //let mut center_miss_error = u64::MAX;
+        let mut range = SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX;
+        let first = range.next().unwrap();
+
+        let total_miss = miss[&SimpleBucketU64::<WIDTH, N>::MAX].cumulative_count;
+        let total_hits = hits[&SimpleBucketU64::<WIDTH, N>::MAX].cumulative_count;
+
+        // For the first bucket, with everything as miss.
+        /*let center_hit_t1_error_prediction = ErrorPrediction {
+            true_hit: 0,
+            true_miss: miss[&first].cumulative_count,
+            false_hit: hits[&first].cumulative_count,
+            false_miss: 0,
+        };*/
+        center_hits_t1_error = hits[&first].cumulative_count; //center_hit_t1_error_prediction.total_error();
+        center_hits_t1_candidates.push((first/*, center_hit_t1_error_prediction*/));
+
+        center_miss_t1_error = miss[&first].cumulative_count; //center_hit_t1_error_prediction.total_error();
+        center_miss_t1_candidates.push((first/*, center_hit_t1_error_prediction*/));
+
+        /*let center_hits_error_prediction = center_hit_t1_error_prediction + ErrorPrediction{
+            true_hit: 0,
+            true_miss: total_miss - miss[&first].cumulative_count,
+            false_hit: total_hits - hits[&first].cumulative_count,
+            false_miss: 0,
+        };*/
+
+        match total_hits.cmp(&total_miss) {
+            Ordering::Less => {
+                error = total_hits;
+                candidates.push((first, first, true));
+            }
+            Ordering::Equal => {
+                error = total_hits;
+                candidates.push((first, first, true));
+                candidates.push((first, first, false));
+            }
+            Ordering::Greater => {
+                error = total_miss;
+                candidates.push((first, first, false));
+            }
+        }
+
+        for i in range {
+            let extra_hits = hits[&i].count as u64;
+            let extra_miss = miss[&i].count as u64;
+            let center_hits_t1_unchanged_error = center_hits_t1_error + extra_miss;
+            let center_hits_t1_new_error = hits[&i].cumulative_count;
+
+            let center_miss_t1_unchanged_error = center_miss_t1_error + extra_hits;
+            let center_miss_t1_new_error = miss[&i].cumulative_count;
+
+            match center_hits_t1_new_error.cmp(&center_hits_t1_unchanged_error) {
+                Ordering::Less => {
+                    center_hits_t1_candidates.clear();
+                    center_hits_t1_candidates.push(i);
+                    center_hits_t1_error = center_hits_t1_new_error;
+                }
+                Ordering::Equal => {
+                    center_hits_t1_candidates.push(i);
+                    center_hits_t1_error = center_hits_t1_new_error;
+                }
+                Ordering::Greater => {
+                    center_hits_t1_error = center_hits_t1_unchanged_error;
+                }
+            }
+
+            match center_miss_t1_new_error.cmp(&center_miss_t1_unchanged_error) {
+                Ordering::Less => {
+                    center_miss_t1_candidates.clear();
+                    center_miss_t1_candidates.push(i);
+                    center_miss_t1_error = center_miss_t1_new_error;
+                }
+                Ordering::Equal => {
+                    center_miss_t1_candidates.push(i);
+                    center_miss_t1_error = center_miss_t1_new_error;
+                }
+                Ordering::Greater => {
+                    center_miss_t1_error = center_miss_t1_unchanged_error;
+                }
+            }
+
+            let center_hits_error_new =
+                center_hits_t1_error + total_hits - hits[&i].cumulative_count;
+            match center_hits_error_new.cmp(&error) {
+                Ordering::Less => {
+                    candidates.clear();
+                    for candidate_t1 in center_hits_t1_candidates.iter() {
+                        candidates.push((*candidate_t1, i, true));
+                    }
+                    error = center_hits_error_new;
+                }
+                Ordering::Equal => {
+                    for candidate_t1 in center_hits_t1_candidates.iter() {
+                        candidates.push((*candidate_t1, i, true));
+                    }
+                }
+                Ordering::Greater => { /* Nothing to do, the set of best candidates unchanged */ }
+            }
+
+            let center_miss_error_new =
+                center_miss_t1_error + total_miss - miss[&i].cumulative_count;
+            match center_miss_error_new.cmp(&error) {
+                Ordering::Less => {
+                    candidates.clear();
+                    for candidate_t1 in center_miss_t1_candidates.iter() {
+                        candidates.push((*candidate_t1, i, false));
+                    }
+                    error = center_miss_error_new;
+                }
+                Ordering::Equal => {
+                    for candidate_t1 in center_miss_t1_candidates.iter() {
+                        candidates.push((*candidate_t1, i, false));
+                    }
+                }
+                Ordering::Greater => { /* Nothing to do, the set of best candidates unchanged */ }
+            }
+        }
+
+        // NOTE, this is rather expensive. Can we do better ?
+
+        // 1. Find classifier minimizing the error
+        /*let all_classifiers =
+            ErrorPredictionsBuilder::enumerate_error_predictions(self, hits, miss);
+        let min_classifiers = all_classifiers
+            .into_iter()
+            .min_set_by_key(|(_e, pred)| pred.total_error());
+
+         */
+
+        let mut min_classifiers: Vec<(
+            DualThreshold<SimpleBucketU64<{ WIDTH }, { N }>>,
+            ErrorPrediction,
+        )> = Vec::with_capacity(candidates.len());
+        for (t1, t2, center_hit) in candidates {
+            assert!(t1 <= t2);
+            let dual_threshold = if center_hit {
+                DualThreshold::new(t1, t2)
+            } else {
+                if t1 == t2 {
+                    panic!("Tried to use all miss as a dual threshold classifier, unsupported");
+                }
+                DualThreshold::new(t2, t1)
+            };
+            let error_pred = dual_threshold.error_prediction(hits, miss);
+            assert_eq!(error_pred.total_error(), error);
+            min_classifiers.push((dual_threshold, error_pred))
+        }
+        let n = min_classifiers.len();
+        if n == 0 {
+            return None;
+        }
+        // 2. Find the classifier minimizing the distance to the others ?
+        let mut total_distance = vec![0usize; n];
+        for i in 0..n {
+            for j in 0..n {
+                total_distance[i] += distance(&min_classifiers[i].0, &min_classifiers[j].0)
+            }
+        }
+        let indexes = total_distance
+            .into_iter()
+            .enumerate()
+            .min_set_by_key(|(_, k)| *k);
+        assert!(indexes.len() > 0);
+        let index = (indexes.len() - 1) / 2;
+
+        Some(min_classifiers[index])
+    }
+}
+
 impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
     for DualThresholdBuilder<WIDTH, N>
 {
@@ -390,37 +640,160 @@ impl<const WIDTH: u64, const N: usize> ErrorPredictionsBuilder<WIDTH, N>
         hits: &StaticHistogramCumSum<WIDTH, N>,
         miss: &StaticHistogramCumSum<WIDTH, N>,
     ) -> Option<(Self::E, ErrorPrediction)> {
-        // 1. Find classifier minimizing the error
-        let all_classifiers =
-            ErrorPredictionsBuilder::enumerate_error_predictions(self, hits, miss);
-        let min_classifiers = all_classifiers
-            .into_iter()
-            .min_set_by_key(|(_e, pred)| pred.total_error());
-        let n = min_classifiers.len();
-        if n == 0 {
-            return None;
-        }
-        // 2. Find the classifier minimizing the distance to the others ?
-        let mut total_distance = vec![0usize; n];
-        for i in 0..n {
-            for j in 0..n {
-                total_distance[i] += distance(&min_classifiers[i].0, &min_classifiers[j].0)
+        let mut center_hits_t1_error = u64::MAX;
+        let mut center_miss_t1_error = u64::MAX;
+
+        //let mut center_hits_candidates = Vec::new();
+        //let mut center_miss_candidates = Vec::new();
+        let mut error = u64::MAX;
+        //let mut center_hits_error = u64::MAX;
+        //let mut center_miss_error = u64::MAX;
+        let mut range = SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX;
+        let first = range.next().unwrap();
+
+        let total_miss = miss[&SimpleBucketU64::<WIDTH, N>::MAX].cumulative_count;
+        let total_hits = hits[&SimpleBucketU64::<WIDTH, N>::MAX].cumulative_count;
+
+        // For the first bucket, with everything as miss.
+        /*let center_hit_t1_error_prediction = ErrorPrediction {
+            true_hit: 0,
+            true_miss: miss[&first].cumulative_count,
+            false_hit: hits[&first].cumulative_count,
+            false_miss: 0,
+        };*/
+        center_hits_t1_error = hits[&first].cumulative_count; //center_hit_t1_error_prediction.total_error();
+
+        center_miss_t1_error = miss[&first].cumulative_count; //center_hit_t1_error_prediction.total_error();
+
+        let mut center_hits_t1_candidate = first;
+        let mut center_miss_t1_candidate = first;
+
+        let mut candidate = (first, first, true);
+
+        let mut center_hits_t1_flip = false;
+        let mut center_miss_t1_flip = false;
+        let mut candidate_flip = false;
+
+        /*let center_hits_error_prediction = center_hit_t1_error_prediction + ErrorPrediction{
+            true_hit: 0,
+            true_miss: total_miss - miss[&first].cumulative_count,
+            false_hit: total_hits - hits[&first].cumulative_count,
+            false_miss: 0,
+        };*/
+
+        match total_hits.cmp(&total_miss) {
+            Ordering::Less => {
+                error = total_hits;
+                candidate = (first, first, true);
+            }
+            Ordering::Equal => {
+                error = total_hits;
+                candidate = (first, first, true);
+            }
+            Ordering::Greater => {
+                error = total_miss;
+                candidate = (first, first, false);
             }
         }
-        let indexes = total_distance
-            .into_iter()
-            .enumerate()
-            .min_set_by_key(|(_, k)| *k);
-        assert!(indexes.len() > 0);
-        let index = (indexes.len() - 1) / 2;
 
-        Some(min_classifiers[index])
+        for i in range {
+            let extra_hits = hits[&i].count as u64;
+            let extra_miss = miss[&i].count as u64;
+            let center_hits_t1_unchanged_error = center_hits_t1_error + extra_miss;
+            let center_hits_t1_new_error = hits[&i].cumulative_count;
+
+            let center_miss_t1_unchanged_error = center_miss_t1_error + extra_hits;
+            let center_miss_t1_new_error = miss[&i].cumulative_count;
+
+            match center_hits_t1_new_error.cmp(&center_hits_t1_unchanged_error) {
+                Ordering::Less => {
+                    center_hits_t1_candidate = i;
+                    center_hits_t1_error = center_hits_t1_new_error;
+                }
+                Ordering::Equal => {
+                    if center_hits_t1_flip {
+                        center_hits_t1_candidate = i;
+                    }
+                    center_hits_t1_flip = !center_hits_t1_flip;
+                    center_hits_t1_error = center_hits_t1_new_error;
+                }
+                Ordering::Greater => {
+                    center_hits_t1_error = center_hits_t1_unchanged_error;
+                }
+            }
+
+            match center_miss_t1_new_error.cmp(&center_miss_t1_unchanged_error) {
+                Ordering::Less => {
+                    center_miss_t1_candidate = i;
+                    center_miss_t1_error = center_miss_t1_new_error;
+                }
+                Ordering::Equal => {
+                    if center_miss_t1_flip {
+                        center_miss_t1_candidate = i;
+                    }
+                    center_miss_t1_flip = !center_miss_t1_flip;
+                    center_miss_t1_error = center_miss_t1_new_error;
+                }
+                Ordering::Greater => {
+                    center_miss_t1_error = center_miss_t1_unchanged_error;
+                }
+            }
+
+            let center_hits_error_new =
+                center_hits_t1_error + total_hits - hits[&i].cumulative_count;
+            match center_hits_error_new.cmp(&error) {
+                Ordering::Less => {
+                    candidate = (center_hits_t1_candidate, i, true);
+                    error = center_hits_error_new;
+                }
+                Ordering::Equal => {
+                    if candidate_flip {
+                        candidate = (center_hits_t1_candidate, i, true);
+                    }
+                    candidate_flip = !candidate_flip;
+                }
+                Ordering::Greater => { /* Nothing to do, the set of best candidates unchanged */ }
+            }
+
+            let center_miss_error_new =
+                center_miss_t1_error + total_miss - miss[&i].cumulative_count;
+            match center_miss_error_new.cmp(&error) {
+                Ordering::Less => {
+                    candidate = (center_miss_t1_candidate, i, false);
+                    error = center_miss_error_new;
+                }
+                Ordering::Equal => {
+                    if candidate_flip {
+                        candidate = (center_miss_t1_candidate, i, false);
+                    }
+                    candidate_flip = !candidate_flip;
+                }
+                Ordering::Greater => { /* Nothing to do, the set of best candidates unchanged */ }
+            }
+        }
+
+        let (t1, t2, center_hit) = candidate;
+
+        assert!(t1 <= t2);
+        let dual_threshold = if center_hit {
+            DualThreshold::new(t1, t2)
+        } else {
+            if t1 == t2 {
+                panic!("Tried to use all miss as a dual threshold classifier, unsupported");
+            }
+            DualThreshold::new(t2, t1)
+        };
+        let error_pred = dual_threshold.error_prediction(hits, miss);
+        assert_eq!(error_pred.total_error(), error);
+
+        Some((dual_threshold, error_pred))
     }
 
     fn select_best_classifier<T: Borrow<Self::E> + Copy, U: Copy>(
         &self,
         classifiers: Vec<(T, U)>,
     ) -> Option<(T, U)> {
+        // TODO This function seems wrong ?
         let n = classifiers.len();
         if n == 0 {
             return None;
@@ -499,4 +872,26 @@ where
             None
         }
     }
+}
+
+pub fn compute_theoretical_optimum_error<const WIDTH: u64, const N: usize, T>(
+    hits: &StaticHistogramCumSum<WIDTH, N>,
+    miss: &StaticHistogramCumSum<WIDTH, N>,
+) -> ErrorPrediction {
+    let mut res = ErrorPrediction {
+        true_hit: 0,
+        true_miss: 0,
+        false_hit: 0,
+        false_miss: 0,
+    };
+    for i in SimpleBucketU64::<WIDTH, N>::MIN..=SimpleBucketU64::<WIDTH, N>::MAX {
+        if hits[&i].count >= miss[&i].count {
+            res.true_hit += hits[&i].count as u64;
+            res.false_hit += miss[&i].count as u64;
+        } else {
+            res.false_miss += hits[&i].count as u64;
+            res.true_miss += miss[&i].count as u64;
+        }
+    }
+    res
 }
