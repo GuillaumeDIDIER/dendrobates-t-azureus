@@ -27,7 +27,7 @@ use std::collections::{HashMap, HashSet};
 //use serde::Deserialize;
 use calibration_results::classifiers::{
     DualThreshold, DualThresholdBuilder, ErrorPredictionsBuilder, ErrorPredictor,
-    SimpleThresholdBuilder, Threshold,
+    SimpleThresholdBuilder, Threshold, compute_theoretical_optimum_error,
 };
 use num::integer::gcd;
 use std::fmt::Display;
@@ -180,8 +180,10 @@ struct QuadThresholdErrors<T: Bucket> {
 struct QuadErrors<T> {
     pub flush_single_error: T,
     pub flush_dual_error: T,
+    pub flush_th_error: T,
     pub reload_single_error: T,
     pub reload_dual_error: T,
+    pub reload_th_error: T,
 }
 
 pub trait Output {
@@ -193,10 +195,14 @@ impl<T: Output> QuadErrors<T> {
             .write(output_file, format!("{}-FF-S", name));
         self.flush_dual_error
             .write(output_file, format!("{}-FF-D", name));
+        self.flush_th_error
+            .write(output_file, format!("{}-FF-Th", name));
         self.reload_single_error
             .write(output_file, format!("{}-FR-S", name));
         self.reload_dual_error
             .write(output_file, format!("{}-FR-D", name));
+        self.reload_th_error
+            .write(output_file, format!("{}-FR-Th", name));
     }
 }
 
@@ -205,8 +211,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         let mut r = vec![
             &self.flush_single_error,
             &self.flush_dual_error,
+            &self.flush_th_error,
             &self.reload_single_error,
             &self.reload_dual_error,
+            &self.reload_th_error,
         ]
         .into_par_iter()
         .map(|e| (f(e)))
@@ -215,8 +223,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         QuadErrors {
             flush_single_error: r.next().unwrap(),
             flush_dual_error: r.next().unwrap(),
+            flush_th_error: r.next().unwrap(),
             reload_single_error: r.next().unwrap(),
             reload_dual_error: r.next().unwrap(),
+            reload_th_error: r.next().unwrap(),
         }
     }
 
@@ -224,8 +234,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         let mut r = vec![
             &mut self.flush_single_error,
             &mut self.flush_dual_error,
+            &mut self.flush_th_error,
             &mut self.reload_single_error,
             &mut self.reload_dual_error,
+            &mut self.reload_th_error,
         ]
         .into_par_iter()
         .map(|e| (f(e)))
@@ -234,8 +246,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         QuadErrors {
             flush_single_error: r.next().unwrap(),
             flush_dual_error: r.next().unwrap(),
+            flush_th_error: r.next().unwrap(),
             reload_single_error: r.next().unwrap(),
             reload_dual_error: r.next().unwrap(),
+            reload_th_error: r.next().unwrap(),
         }
     }
 
@@ -243,8 +257,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         let mut r = vec![
             self.flush_single_error,
             self.flush_dual_error,
+            self.flush_th_error,
             self.reload_single_error,
             self.reload_dual_error,
+            self.reload_th_error,
         ]
         .into_par_iter()
         .map(|e| (f(e)))
@@ -253,8 +269,10 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
         QuadErrors {
             flush_single_error: r.next().unwrap(),
             flush_dual_error: r.next().unwrap(),
+            flush_th_error: r.next().unwrap(),
             reload_single_error: r.next().unwrap(),
             reload_dual_error: r.next().unwrap(),
+            reload_th_error: r.next().unwrap(),
         }
     }
 }
@@ -263,6 +281,7 @@ fn write_out_threshold_info<T: Bucket>(
     mut out: impl Write,
     basename: &str,
     thresholds: &QuadThresholdErrors<T>,
+    // thresholds: &(QuadThresholdErrors<T>, TheoreticalError<ErrorPrediction>),
 ) -> std::io::Result<()>
 where
     Threshold<T>: Display,
@@ -278,6 +297,11 @@ where
         "{}-FF-Dual: {}, Error prediction: {} ",
         basename, thresholds.flush_dual_threshold.0, thresholds.flush_dual_threshold.1
     )?;
+    /*writeln!(
+        out,
+        "{}-FF-Th: Error prediction: {} ",
+        basename, thresholds.1.flush_flush
+    )?;*/
     writeln!(
         out,
         "{}-FR-Single: {}, Error prediction: {} ",
@@ -287,7 +311,12 @@ where
         out,
         "{}-FR-Dual: {}, Error prediction: {} ",
         basename, thresholds.reload_dual_threshold.0, thresholds.reload_dual_threshold.1
-    )
+    ) /*?;
+    writeln!(
+    out,
+    "{}-FR-Th: Error prediction: {} ",
+    basename, thresholds.1.flush_reload
+    )*/
 }
 
 fn write_out_quad_errors<T>(
@@ -325,7 +354,13 @@ fn compute_errors<const WIDTH: u64, const N: usize>(
         PartialLocationOwned,
         CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
     >,
-) -> HashMap<PartialLocationOwned, QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>> {
+) -> HashMap<
+    PartialLocationOwned,
+    //(
+    QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>,
+    //    TheoreticalError<ErrorPrediction>,
+    //),
+> {
     let simple_threshold_builder: SimpleThresholdBuilder<WIDTH, { N + N }> =
         SimpleThresholdBuilder();
     let dual_threshold_builder: DualThresholdBuilder<WIDTH, { N + N }> = DualThresholdBuilder();
@@ -346,15 +381,85 @@ fn compute_errors<const WIDTH: u64, const N: usize>(
             let reload_dual_threshold = dual_threshold_builder
                 .find_best_classifier(&histograms.reload_hit, &histograms.reload_miss)
                 .expect("Failed to compute dual threshold");
-
+            /*
+            let flush_flush_optimal =
+                compute_theoretical_optimum_error(&histograms.flush_hit, &histograms.flush_miss);
+            let flush_reload_optimal =
+                compute_theoretical_optimum_error(&histograms.reload_hit, &histograms.reload_miss);
+            */
             (
                 *k,
+                //(
                 QuadThresholdErrors {
                     flush_single_threshold,
                     flush_dual_threshold,
                     reload_single_threshold,
                     reload_dual_threshold,
-                },
+                }, /*,
+                       TheoreticalError {
+                           flush_flush: flush_flush_optimal,
+                           flush_reload: flush_reload_optimal,
+                       },
+                   ),*/
+            )
+        })
+        .collect()
+}
+
+fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
+    histogram_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
+) -> HashMap<
+    AVMLocation,
+    //(
+    QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>,
+    //    TheoreticalError<ErrorPrediction>,
+    //),
+> {
+    let simple_threshold_builder: SimpleThresholdBuilder<WIDTH, { N + N }> =
+        SimpleThresholdBuilder();
+    let dual_threshold_builder: DualThresholdBuilder<WIDTH, { N + N }> = DualThresholdBuilder();
+
+    histogram_map
+        .par_iter()
+        .map(|(k, histograms)| {
+            let flush_hits = StaticHistogramCumSum::from(&histograms.flush_hit);
+            let flush_miss = StaticHistogramCumSum::from(&histograms.flush_miss);
+
+            let reload_hits = StaticHistogramCumSum::from(&histograms.reload_hit);
+            let reload_miss = StaticHistogramCumSum::from(&histograms.reload_miss);
+            let flush_single_threshold = simple_threshold_builder
+                .find_best_classifier(&flush_hits, &flush_miss)
+                .expect("Failed to compute single threshold");
+            let flush_dual_threshold = dual_threshold_builder
+                .find_best_classifier(&flush_hits, &flush_miss)
+                .expect("Failed to compute dual threshold");
+
+            let reload_single_threshold = simple_threshold_builder
+                .find_best_classifier(&reload_hits, &reload_miss)
+                .expect("Failed to compute single threshold");
+            let reload_dual_threshold = dual_threshold_builder
+                .find_best_classifier(&reload_hits, &reload_miss)
+                .expect("Failed to compute dual threshold");
+            /*
+            let flush_flush_optimal =
+                compute_theoretical_optimum_error(&histograms.flush_hit, &histograms.flush_miss);
+            let flush_reload_optimal =
+                compute_theoretical_optimum_error(&histograms.reload_hit, &histograms.reload_miss);
+            */
+            (
+                *k,
+                //(
+                QuadThresholdErrors {
+                    flush_single_threshold,
+                    flush_dual_threshold,
+                    reload_single_threshold,
+                    reload_dual_threshold,
+                }, /*,
+                       TheoreticalError {
+                           flush_flush: flush_flush_optimal,
+                           flush_reload: flush_reload_optimal,
+                       },
+                   ),*/
             )
         })
         .collect()
@@ -702,79 +807,101 @@ struct Statistics<T> {
 }
 
 fn build_statistics(
-    mut series: QuadErrors<Vec<(ErrorPrediction, PartialLocationOwned)>>,
+    mut quad_series: QuadErrors<Vec<(ErrorPrediction, PartialLocationOwned)>>,
 ) -> Statistics<QuadErrors<ErrorPrediction>> {
-    series
-        .flush_single_error
-        .sort_by_key(|(e, _l)| e.error_ratio());
-    series
-        .flush_dual_error
-        .sort_by_key(|(e, _l)| e.error_ratio());
-    series
-        .reload_single_error
-        .sort_by_key(|(e, _l)| e.error_ratio());
-    series
-        .reload_dual_error
-        .sort_by_key(|(e, _l)| e.error_ratio());
+    quad_series.apply_mut(|series| series.sort_by_key(|(e, _l)| e.error_ratio()));
 
-    let count = series.flush_single_error.len();
-    let min = QuadErrors {
-        flush_single_error: series.flush_single_error[0].0,
-        flush_dual_error: series.flush_dual_error[0].0,
-        reload_single_error: series.reload_single_error[0].0,
-        reload_dual_error: series.reload_dual_error[0].0,
+    let count = quad_series.flush_single_error.len();
+
+    let min = quad_series.apply(|series| series[0].0);
+    let max = quad_series.apply(|series| {
+        let len = series.len();
+        series[len - 1].0
+    });
+    let med = quad_series.apply(|series| {
+        let len = series.len();
+        series[(len - 1) >> 1].0
+    });
+    let q1 = quad_series.apply(|series| {
+        let len = series.len();
+        series[(len - 1) >> 2].0
+    });
+    let q3 = quad_series.apply(|series| {
+        let len = series.len();
+        series[(3 * len - 1) >> 2].0
+    });
+
+    let avg = quad_series.map(|series| series.into_par_iter().map(|(e, _p)| e).sum());
+
+    /*let min = QuadErrors {
+        flush_single_error: quad_series.flush_single_error[0].0,
+        flush_dual_error: quad_series.flush_dual_error[0].0,
+        flush_th_error: quad_series.flush_th_error[0].0,
+        reload_single_error: quad_series.reload_single_error[0].0,
+        reload_dual_error: quad_series.reload_dual_error[0].0,
+        reload_th_error: quad_series.reload_th_error[0].0,
     };
     let max = QuadErrors {
-        flush_single_error: series.flush_single_error[count - 1].0,
-        flush_dual_error: series.flush_dual_error[count - 1].0,
-        reload_single_error: series.reload_single_error[count - 1].0,
-        reload_dual_error: series.reload_dual_error[count - 1].0,
+        flush_single_error: quad_series.flush_single_error[count - 1].0,
+        flush_dual_error: quad_series.flush_dual_error[count - 1].0,
+        flush_th_error: quad_series.flush_th_error[count - 1].0,
+        reload_single_error: quad_series.reload_single_error[count - 1].0,
+        reload_dual_error: quad_series.reload_dual_error[count - 1].0,
+        reload_th_error: quad_series.reload_th_error[count - 1].0,
     };
     let med = QuadErrors {
-        flush_single_error: series.flush_single_error[(count - 1) >> 1].0,
-        flush_dual_error: series.flush_dual_error[(count - 1) >> 1].0,
-        reload_single_error: series.reload_single_error[(count - 1) >> 1].0,
-        reload_dual_error: series.reload_dual_error[(count - 1) >> 1].0,
+        flush_single_error: quad_series.flush_single_error[(count - 1) >> 1].0,
+        flush_dual_error: quad_series.flush_dual_error[(count - 1) >> 1].0,
+        flush_th_error: quad_series.flush_th_error[(count - 1) >> 1].0,
+        reload_single_error: quad_series.reload_single_error[(count - 1) >> 1].0,
+        reload_dual_error: quad_series.reload_dual_error[(count - 1) >> 1].0,
+        reload_th_error: quad_series.reload_th_error[(count - 1) >> 1].0,
     };
 
     let q1 = QuadErrors {
-        flush_single_error: series.flush_single_error[(count - 1) >> 2].0,
-        flush_dual_error: series.flush_dual_error[(count - 1) >> 2].0,
-        reload_single_error: series.reload_single_error[(count - 1) >> 2].0,
-        reload_dual_error: series.reload_dual_error[(count - 1) >> 2].0,
+        flush_single_error: quad_series.flush_single_error[(count - 1) >> 2].0,
+        flush_dual_error: quad_series.flush_dual_error[(count - 1) >> 2].0,
+        flush_th_error: quad_series.flush_th_error[(count - 1) >> 2].0,
+        reload_single_error: quad_series.reload_single_error[(count - 1) >> 2].0,
+        reload_dual_error: quad_series.reload_dual_error[(count - 1) >> 2].0,
+        reload_th_error: quad_series.reload_th_error[(count - 1) >> 2].0,
     };
 
     let q3 = QuadErrors {
-        flush_single_error: series.flush_single_error[(3 * count - 1) >> 2].0,
-        flush_dual_error: series.flush_dual_error[(3 * count - 1) >> 2].0,
-        reload_single_error: series.reload_single_error[(3 * count - 1) >> 2].0,
-        reload_dual_error: series.reload_dual_error[(3 * count - 1) >> 2].0,
+        flush_single_error: quad_series.flush_single_error[(3 * count - 1) >> 2].0,
+        flush_dual_error: quad_series.flush_dual_error[(3 * count - 1) >> 2].0,
+        flush_th_error: quad_series.flush_th_error[(3 * count - 1) >> 2].0,
+        reload_single_error: quad_series.reload_single_error[(3 * count - 1) >> 2].0,
+        reload_dual_error: quad_series.reload_dual_error[(3 * count - 1) >> 2].0,
+        reload_th_error: quad_series.reload_th_error[(3 * count - 1) >> 2].0,
     };
 
     let avg = QuadErrors {
-        flush_single_error: series
+        flush_single_error: quad_series
             .flush_single_error
             .into_par_iter()
             .map(|(e, l)| e)
             .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
-        flush_dual_error: series
+        flush_dual_error: quad_series
             .flush_dual_error
             .into_par_iter()
             .map(|(e, l)| e)
             .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
 
-        reload_single_error: series
+        flush_th_error: (),
+        reload_single_error: quad_series
             .reload_single_error
             .into_par_iter()
             .map(|(e, l)| e)
             .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
 
-        reload_dual_error: series
+        reload_dual_error: quad_series
             .reload_dual_error
             .into_par_iter()
             .map(|(e, l)| e)
             .reduce(ErrorPrediction::default, |e1, e2| e1 + e2),
-    };
+        reload_th_error: (),
+    };*/
     Statistics {
         min,
         max,
@@ -793,6 +920,8 @@ pub fn run_numa_analysis<const WIDTH: u64, const N: usize>(
 where
     [(); { WIDTH + WIDTH } as usize]:,
 {
+    // First, let's extract the data we want.
+
     println!(
         "Running analysis with folder: {} and basename: {}",
         folder.as_ref().display(),
@@ -847,6 +976,8 @@ where
         }
     };
 
+    // Build the Location Map from the raw structures
+
     let location_map = calibration_result_to_location_map_parallel(
         results,
         &|static_hist_result| {
@@ -883,11 +1014,7 @@ where
         &core_location,
     );
 
-    // 1. For each location, extract, FLUSH_HIT / FLUSH_MISS - RELOAD_HIT / RELOAD_MISS
-    // 2. From there, compute the various reductions from thresholding, without losing the initial data.
-    //    (This will require careful use of references, and probably warrants some sort of helper, given we have 34 different configs)
-    // 3. Use the reductions to determine thresholds.
-    // 4. Compute the expected errors, with average, min, max and stddev.
+    // Print some metadata
     let num_entries = location_map.iter().count();
     println!("Number of entries: {}", num_entries);
 
@@ -916,11 +1043,17 @@ where
     let victim_core_count = victim_core_set.iter().count();
     println!("Number of Victim Core: {}", victim_core_count);
 
+    let distinct_target_count = target_set.iter().count();
+    println!("Number of Targets (Node x Addr): {}", distinct_target_count);
+
+    // Output file
+
     let path = folder
         .as_ref()
         .join(format!("{}.Errors.txt", basename.as_ref()));
     let mut output_file = std::fs::File::create(path).unwrap();
 
+    // Note, the micro-architecture P5 corresponds to unknown architectures. Eventually we need to migrate all the data files.
     writeln!(
         output_file,
         "MicroArchitecture: {:?} - {:?}",
@@ -1085,14 +1218,20 @@ where
                     .reload_dual_threshold
                     .0
                     .error_prediction(&hists.reload_hit, &hists.reload_miss);
+                let flush_th_error =
+                    compute_theoretical_optimum_error(&hists.flush_hit, &hists.flush_miss);
+                let reload_th_error =
+                    compute_theoretical_optimum_error(&hists.reload_hit, &hists.reload_miss);
 
                 (
                     *k,
                     QuadErrors {
                         flush_single_error,
                         flush_dual_error,
+                        flush_th_error,
                         reload_single_error,
                         reload_dual_error,
+                        reload_th_error,
                     },
                 )
             })
@@ -1106,8 +1245,10 @@ where
         let mut full_series = QuadErrors {
             flush_single_error: Vec::new(),
             flush_dual_error: Vec::new(),
+            flush_th_error: Vec::new(),
             reload_single_error: Vec::new(),
             reload_dual_error: Vec::new(),
+            reload_th_error: Vec::new(),
         };
         for (location, quad_error) in &numa_errors_full_thresholds {
             let base = format!(
@@ -1150,8 +1291,10 @@ where
         let mut numa_series = QuadErrors {
             flush_single_error: Vec::new(),
             flush_dual_error: Vec::new(),
+            flush_th_error: Vec::new(),
             reload_single_error: Vec::new(),
             reload_dual_error: Vec::new(),
+            reload_th_error: Vec::new(),
         };
 
         for (location, threshold_errors) in sorted_numa_threshold_errors {
@@ -1295,49 +1438,51 @@ where
     }
 
     if numa_node_count * victim_core_count * attacker_core_count > 1 {
-        let projected_numa_m_core_av = make_projection(&location_map, projection_numa_m_core_av);
-        let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
+        {
+            let projected_numa_m_core_av =
+                make_projection(&location_map, projection_numa_m_core_av);
+            let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
 
-        let stat = error_statistics::compute_statistics(
-            &location_map,
-            projection_numa_m_core_av,
-            vec![(String::from("Best"), projection_numa_m_core_av)],
-            &numa_m_core_av_threshold_errors,
-        );
-        writeln!(output_file);
-        stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
+            let stat = error_statistics::compute_statistics(
+                &location_map,
+                projection_numa_m_core_av,
+                vec![(String::from("Best"), projection_numa_m_core_av)],
+                &numa_m_core_av_threshold_errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
+        }
+        // This is way too slow, and that treatment should be simpler, as we aren't doing any projection.
+        {
+            let numa_m_core_av_addr_threshold_errors = compute_errors_no_projection(&location_map);
 
-        // This is way too slow, and that treatment would should be simpler, as we aren't doing any projection.
-        /**/
-        let projected_numa_m_core_av_addr =
-            make_projection(&location_map, projection_numa_m_core_av_addr);
-        let numa_m_core_av_addr_threshold_errors = compute_errors(&projected_numa_m_core_av_addr);
+            let stat = error_statistics::compute_statistics_no_projection(
+                &location_map,
+                vec![
+                    (String::from("Best-Addr"), projection_numa_m_core_av_addr),
+                    (String::from("Best-No-Addr"), projection_numa_m_core_av),
+                ],
+                &numa_m_core_av_addr_threshold_errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
+        }
+        {
+            let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
+            let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
 
-        let stat = error_statistics::compute_statistics(
-            &location_map,
-            projection_numa_m_core_av_addr,
-            vec![
-                (String::from("Best-Addr"), projection_numa_m_core_av_addr),
-                (String::from("Best-No-Addr"), projection_numa_m_core_av),
-            ],
-            &numa_m_core_av_addr_threshold_errors,
-        );
-        writeln!(output_file);
-        stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors"); /**/
-        let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
-        let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
-
-        let stat = error_statistics::compute_statistics(
-            &location_map,
-            projection_numa_avm_addr,
-            vec![
-                (String::from("Best-MAV-Addr"), projection_numa_avm_addr),
-                (String::from("Best-MAV"), projection_socket),
-            ],
-            &numa_avm_addr_threshold_errors,
-        );
-        writeln!(output_file);
-        stat.write(&mut output_file, "Numa-MAV-Addr-Errors");
+            let stat = error_statistics::compute_statistics(
+                &location_map,
+                projection_numa_avm_addr,
+                vec![
+                    (String::from("Best-MAV-Addr"), projection_numa_avm_addr),
+                    (String::from("Best-MAV"), projection_socket),
+                ],
+                &numa_avm_addr_threshold_errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Numa-MAV-Addr-Errors");
+        }
     }
     //----------
 

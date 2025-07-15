@@ -874,7 +874,7 @@ where
     }
 }
 
-pub fn compute_theoretical_optimum_error<const WIDTH: u64, const N: usize, T>(
+pub fn compute_theoretical_optimum_error<const WIDTH: u64, const N: usize>(
     hits: &StaticHistogramCumSum<WIDTH, N>,
     miss: &StaticHistogramCumSum<WIDTH, N>,
 ) -> ErrorPrediction {
