@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod error_statistics;
+//mod utils;
 
 use calibration_results::calibration::{
     AVMLocation, CoreLocParameters, CoreLocation, ErrorPrediction, LocationParameters,
@@ -1264,11 +1265,17 @@ where
                 .flush_dual_error
                 .push((quad_error.flush_dual_error, *location));
             full_series
+                .flush_th_error
+                .push((quad_error.flush_th_error, *location));
+            full_series
                 .reload_single_error
                 .push((quad_error.reload_single_error, *location));
             full_series
                 .reload_dual_error
                 .push((quad_error.reload_dual_error, *location));
+            full_series
+                .reload_th_error
+                .push((quad_error.reload_th_error, *location));
             write_out_quad_errors(&mut output_file, &*base, quad_error).unwrap_or_default();
         }
 
@@ -1287,7 +1294,7 @@ where
         writeln!(output_file).unwrap_or_default();
 
         // Print out the numa model threshold (Known Numa node for A, V and M)
-
+        /*
         let mut numa_series = QuadErrors {
             flush_single_error: Vec::new(),
             flush_dual_error: Vec::new(),
@@ -1312,22 +1319,26 @@ where
                 .flush_dual_error
                 .push((threshold_errors.flush_dual_threshold.1, location));
             numa_series
+                .flush_th_error
+                .push((threshold_errors.flush_th_threshold.1, location));
+            numa_series
                 .reload_single_error
                 .push((threshold_errors.reload_single_threshold.1, location));
             numa_series
-                .reload_dual_error
-                .push((threshold_errors.reload_dual_threshold.1, location));
+                .reload_th_error
+                .push((threshold_errors.reload_th_threshold.1, location));
 
             write_out_threshold_info(&mut output_file, &*base, &threshold_errors)
                 .unwrap_or_default();
         }
 
-        writeln!(output_file).unwrap_or_default();
+        writeln!(output_file).unwrap_or_default();*/
 
         // Compute the min, max, median and average error.
 
-        let numa_stats = build_statistics(numa_series);
+        //let numa_stats = build_statistics(numa_series);
 
+        /*
         write_out_quad_errors(&mut output_file, "Numa-Best", &numa_stats.min).unwrap_or_default();
         write_out_quad_errors(&mut output_file, "Numa-Worst", &numa_stats.max).unwrap_or_default();
         write_out_quad_errors(&mut output_file, "Numa-Median", &numa_stats.med).unwrap_or_default();
@@ -1435,6 +1446,7 @@ where
                  full_stats.avg.flush_dual_error.error_rate() * 100., full_stats.min.flush_dual_error.error_rate() * 100., full_stats.q1.flush_dual_error.error_rate() * 100., full_stats.med.flush_dual_error.error_rate() * 100., full_stats.q3.flush_dual_error.error_rate() * 100., full_stats.max.flush_dual_error.error_rate() * 100.,
                  numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
         ).unwrap_or_default();
+        */
     }
 
     if numa_node_count * victim_core_count * attacker_core_count > 1 {
