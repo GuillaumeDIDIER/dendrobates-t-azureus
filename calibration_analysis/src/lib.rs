@@ -1193,161 +1193,10 @@ where
             writeln!(output_file);
             stat.write(&mut output_file, "Numa-AVM-Errors");
         }
-        let mut sorted_numa_threshold_errors: Vec<(_, _)> =
-            numa_threshold_errors.into_par_iter().collect();
-        sorted_numa_threshold_errors.sort_by(|a, b| ordering_numa(a.0, b.0));
-
-        let mut numa_errors_full_thresholds: Vec<(
-            PartialLocationOwned,
-            QuadErrors<ErrorPrediction>,
-        )> = projected_numa
-            .par_iter()
-            .map(|(k, hists)| {
-                let flush_single_error = full_threshold_errors
-                    .flush_single_threshold
-                    .0
-                    .error_prediction(&hists.flush_hit, &hists.flush_miss);
-                let flush_dual_error = full_threshold_errors
-                    .flush_dual_threshold
-                    .0
-                    .error_prediction(&hists.flush_hit, &hists.flush_miss);
-                let reload_single_error = full_threshold_errors
-                    .reload_single_threshold
-                    .0
-                    .error_prediction(&hists.reload_hit, &hists.reload_miss);
-                let reload_dual_error = full_threshold_errors
-                    .reload_dual_threshold
-                    .0
-                    .error_prediction(&hists.reload_hit, &hists.reload_miss);
-                let flush_th_error =
-                    compute_theoretical_optimum_error(&hists.flush_hit, &hists.flush_miss);
-                let reload_th_error =
-                    compute_theoretical_optimum_error(&hists.reload_hit, &hists.reload_miss);
-
-                (
-                    *k,
-                    QuadErrors {
-                        flush_single_error,
-                        flush_dual_error,
-                        flush_th_error,
-                        reload_single_error,
-                        reload_dual_error,
-                        reload_th_error,
-                    },
-                )
-            })
-            .collect();
-        numa_errors_full_thresholds.sort_by(|a, b| ordering_numa(a.0, b.0));
-
-        writeln!(output_file).unwrap_or_default();
-
-        // Write out per Numa AVM errors of these thresholds
-
-        let mut full_series = QuadErrors {
-            flush_single_error: Vec::new(),
-            flush_dual_error: Vec::new(),
-            flush_th_error: Vec::new(),
-            reload_single_error: Vec::new(),
-            reload_dual_error: Vec::new(),
-            reload_th_error: Vec::new(),
-        };
-        for (location, quad_error) in &numa_errors_full_thresholds {
-            let base = format!(
-                "Full-N{}-A{}-V{}",
-                location.get_numa_node().unwrap(),
-                location.get_attacker_socket().unwrap(),
-                location.get_victim_socket().unwrap()
-            );
-            full_series
-                .flush_single_error
-                .push((quad_error.flush_single_error, *location));
-            full_series
-                .flush_dual_error
-                .push((quad_error.flush_dual_error, *location));
-            full_series
-                .flush_th_error
-                .push((quad_error.flush_th_error, *location));
-            full_series
-                .reload_single_error
-                .push((quad_error.reload_single_error, *location));
-            full_series
-                .reload_dual_error
-                .push((quad_error.reload_dual_error, *location));
-            full_series
-                .reload_th_error
-                .push((quad_error.reload_th_error, *location));
-            write_out_quad_errors(&mut output_file, &*base, quad_error).unwrap_or_default();
-        }
-
-        writeln!(output_file).unwrap_or_default();
-
-        // Compute and write out min, max and median (average is already known)
-
-        let full_stats = build_statistics(full_series);
-
-        write_out_quad_errors(&mut output_file, "Full-Best", &full_stats.min).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Full-Worst", &full_stats.max).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Full-Median", &full_stats.med).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Full-Q1", &full_stats.q1).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Full-Q3", &full_stats.q3).unwrap_or_default();
-
-        writeln!(output_file).unwrap_or_default();
-
-        // Print out the numa model threshold (Known Numa node for A, V and M)
-        /*
-        let mut numa_series = QuadErrors {
-            flush_single_error: Vec::new(),
-            flush_dual_error: Vec::new(),
-            flush_th_error: Vec::new(),
-            reload_single_error: Vec::new(),
-            reload_dual_error: Vec::new(),
-            reload_th_error: Vec::new(),
-        };
-
-        for (location, threshold_errors) in sorted_numa_threshold_errors {
-            let base = format!(
-                "Numa-N{}-A{}-V{}",
-                location.get_numa_node().unwrap(),
-                location.get_attacker_socket().unwrap(),
-                location.get_victim_socket().unwrap()
-            );
-
-            numa_series
-                .flush_single_error
-                .push((threshold_errors.flush_single_threshold.1, location));
-            numa_series
-                .flush_dual_error
-                .push((threshold_errors.flush_dual_threshold.1, location));
-            numa_series
-                .flush_th_error
-                .push((threshold_errors.flush_th_threshold.1, location));
-            numa_series
-                .reload_single_error
-                .push((threshold_errors.reload_single_threshold.1, location));
-            numa_series
-                .reload_th_error
-                .push((threshold_errors.reload_th_threshold.1, location));
-
-            write_out_threshold_info(&mut output_file, &*base, &threshold_errors)
-                .unwrap_or_default();
-        }
-
-        writeln!(output_file).unwrap_or_default();*/
 
         // Compute the min, max, median and average error.
 
-        //let numa_stats = build_statistics(numa_series);
-
         /*
-        write_out_quad_errors(&mut output_file, "Numa-Best", &numa_stats.min).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Numa-Worst", &numa_stats.max).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Numa-Median", &numa_stats.med).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Numa-Average", &numa_stats.avg)
-            .unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Numa-Q1", &numa_stats.q1).unwrap_or_default();
-        write_out_quad_errors(&mut output_file, "Numa-Q2", &numa_stats.q3).unwrap_or_default();
-
-        writeln!(output_file, "").unwrap_or_default();
         writeln!(output_file, "% Numa-FF-Dual-Boxplot:  ").unwrap_or_default();
         writeln!(output_file,
                  "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
@@ -1420,7 +1269,7 @@ where
                  full_stats.avg.reload_single_error.error_rate() * 1.,
                  full_stats.q3.reload_single_error.error_rate() * 1.,
                  full_stats.max.reload_single_error.error_rate() * 1.).unwrap_or_default();
-
+        */
         make_projection_plots(
             projected_numa,
             &folder,
@@ -1432,7 +1281,7 @@ where
                 as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
         )
         .expect("Failed to make Full projection plot.");
-
+        /*
         writeln!(output_file).unwrap_or_default();
         writeln!(output_file, "Flush-Reload-Data:").unwrap_or_default();
         writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
