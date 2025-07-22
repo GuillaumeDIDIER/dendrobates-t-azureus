@@ -14,6 +14,8 @@ cache_utils = { path = "../cache_utils" }
 # nix = "0.28.0"
 cache_side_channel = { path = "../cache_side_channel" }
 numa_utils = { path = "../numa_utils" }
+serde = { version = "1.0.216", features = ["derive"] }
+num-rational = { version = "0.4.2" }
 
 [features]
 numa = ["numa_utils/numa"]

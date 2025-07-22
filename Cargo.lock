@@ -344,8 +344,10 @@ dependencies = [
  "bit_field",
  "cache_side_channel",
  "cache_utils",
+ "num-rational",
  "numa_utils",
  "rand 0.8.5",
+ "serde",
  "turn_lock",
 ]
 

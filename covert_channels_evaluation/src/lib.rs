@@ -15,15 +15,18 @@ const PAGE_SIZE: usize = 1 << 12; // FIXME Magic
 // Also time in order to determine duration, in rdtsc and seconds.
 
 use bit_field::BitField;
+pub use cache_side_channel::CovertChannel;
 use cache_side_channel::{restore_affinity, set_affinity, BitIterator};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::rdtsc_fence;
+use num_rational::Rational64;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::iter::Sum;
+use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::thread;
-
-pub use cache_side_channel::CovertChannel;
 /*  TODO : replace page with a handle type,
     require exclusive handle access,
     Handle protected by the turn lock
@@ -32,11 +35,119 @@ pub use cache_side_channel::CovertChannel;
  * Safety considerations : Not ensure thread safety, need proper locking as needed.
  */
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct ChannelError {
+    pub true_zero: usize,
+    pub true_one: usize,
+    pub false_one: usize,
+    pub false_zero: usize,
+}
+
+impl ChannelError {
+    pub fn bit_transmitted(&self) -> usize {
+        self.true_one + self.false_one + self.true_zero + self.false_zero
+    }
+
+    pub fn one_received(&self) -> usize {
+        self.true_one + self.false_one
+    }
+
+    pub fn zero_received(&self) -> usize {
+        self.true_zero + self.false_zero
+    }
+
+    pub fn one_transmitted(&self) -> usize {
+        self.true_one + self.false_zero
+    }
+
+    pub fn zero_transmitted(&self) -> usize {
+        self.true_zero + self.false_one
+    }
+
+    pub fn bit_error(&self) -> usize {
+        self.false_zero + self.false_one
+    }
+
+    pub fn error_rate(&self) -> f64 {
+        self.bit_error() as f64 / self.bit_transmitted() as f64
+    }
+
+    pub fn error_ratio(&self) -> Rational64 {
+        Rational64::new(self.bit_error() as i64, self.bit_transmitted() as i64)
+    }
+}
+
+impl Add for &ChannelError {
+    type Output = ChannelError;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        ChannelError {
+            true_zero: self.true_zero + rhs.true_zero,
+            true_one: self.true_one + rhs.true_one,
+            false_one: self.false_one + rhs.false_one,
+            false_zero: self.false_zero + rhs.false_zero,
+        }
+    }
+}
+
+impl AddAssign<&Self> for ChannelError {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.true_zero += rhs.true_zero;
+        self.true_one += rhs.true_one;
+        self.false_zero += rhs.false_zero;
+        self.false_one += rhs.false_one;
+    }
+}
+
+impl Add for ChannelError {
+    type Output = ChannelError;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<&Self> for ChannelError {
+    type Output = ChannelError;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add<ChannelError> for &ChannelError {
+    type Output = ChannelError;
+
+    fn add(self, mut rhs: ChannelError) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl AddAssign<Self> for ChannelError {
+    fn add_assign(&mut self, rhs: Self) {
+        *self += &rhs;
+    }
+}
+
+impl Sum<Self> for ChannelError {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(ChannelError::default(), |a, b| a + b)
+    }
+}
+
+impl<'a> Sum<&'a Self> for ChannelError {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(ChannelError::default(), |a, b| a + b)
+    }
+}
+
 #[derive(Debug)]
 pub struct CovertChannelBenchmarkResult {
     pub num_bytes_transmitted: usize,
-    pub num_bit_errors: usize,
-    pub error_rate: f64,
+    pub error: ChannelError,
     pub time_rdtsc: u64,
     pub time_seconds: std::time::Duration,
 }
@@ -47,7 +158,7 @@ impl CovertChannelBenchmarkResult {
     }
 
     pub fn true_capacity(&self) -> f64 {
-        let p = self.error_rate;
+        let p = self.error.error_rate();
         if p == 0.0 || p == 0.0 {
             self.capacity()
         } else {
@@ -59,8 +170,8 @@ impl CovertChannelBenchmarkResult {
         format!(
             "{},{},{},{},{}",
             self.num_bytes_transmitted,
-            self.num_bit_errors,
-            self.error_rate,
+            self.error.bit_error(),
+            self.error.error_rate(),
             self.time_rdtsc,
             self.time_seconds.as_nanos()
         )
