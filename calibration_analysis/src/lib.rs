@@ -913,7 +913,7 @@ fn build_statistics(
     }
 }
 
-pub fn run_numa_analysis<const WIDTH: u64, const N: usize>(
+pub fn run_analysis<const WIDTH: u64, const N: usize>(
     data: NumaCalibrationResult<WIDTH, { N + N }>,
     folder: impl AsRef<Path>,
     basename: impl AsRef<str>,
@@ -1296,6 +1296,12 @@ where
                  numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
         ).unwrap_or_default();
         */
+
+        // ---------------------------------------------------------------------------------
+    } else { // hence victim_socket_count * attacker_socket_count * numa_node_count <= 1
+        // Here we have extra single socket analysis.
+
+        // TODO Single Socket analysis
     }
 
     if numa_node_count * victim_core_count * attacker_core_count > 1 {
@@ -1345,37 +1351,6 @@ where
             stat.write(&mut output_file, "Numa-MAV-Addr-Errors");
         }
     }
-    //----------
-
-    /*
-    Displaying a histogram :
-    https://docs.rs/pgfplots/latest/pgfplots/axis/plot/enum.Type2D.html#variant.ConstLeft (TBC), but the bucket 0 correspond to values in [O;WIDTH[
-
-    1 axis environment, push two plots (HIT and MISS)
-
-    */
-
-    /* TODO Outstanding statistic question on how to validate if both types of cache cleanup (nope vs explicit flush) give the same distributions
-     */
-
-    /*
-    List of configurations :
-    For Single Threshold & Dual Threshold
-
-    Topology Unaware
-
-    Socket Aware (Known AV, Known A, Chosen AV, Chosen A, Chosen A-Known V)
-    Socket + Addr Aware (Known AV, Known A, Chosen AV, Chosen A, Chosen A-Known V) x (Chosen A | Known A)
-
-    Core Aware
-
-    Core + Addr Aware
-
-    Addr Aware (Chosen A | Known A)
-
-     */
-
-    //unimplemented!()
 }
 
 pub fn run_analysis_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()>
@@ -1466,7 +1441,7 @@ where
     }
     println!("Number of Calibration Results: {}", results.results.len());
     println!("Micro-architecture: {:?}", results.micro_architecture);
-    run_numa_analysis::<WIDTH, N>(results, folder, name);
+    run_analysis::<WIDTH, N>(results, folder, name);
     Ok(())
 }
 
