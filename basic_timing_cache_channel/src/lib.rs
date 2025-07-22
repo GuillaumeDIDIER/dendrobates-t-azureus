@@ -47,7 +47,6 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::ptr::{null, slice_from_raw_parts};
 
-pub mod dual_threshold;
 pub mod naive;
 pub mod topology_aware_generic_classifier;
 pub mod topology_aware_single_threshold;

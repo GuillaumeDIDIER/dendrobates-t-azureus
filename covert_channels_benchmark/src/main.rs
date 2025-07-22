@@ -25,11 +25,11 @@ const NUM_ITER: usize = 2;
 struct BenchmarkStats {
     raw_res: Vec<(
         CovertChannelBenchmarkResult,
-        usize,
+        usize, // page number
         NumaNode,
-        usize,
-        usize,
-        usize,
+        usize, // core 1
+        usize, // core 2
+        usize, // page_number_index
     )>,
     average_p: Vec<f64>,
     var_p: Vec<f64>,
@@ -192,6 +192,13 @@ fn main() {
         CovertChannelBenchmarkResult::csv_header()
     );
     println!("CSV:Benchmark,Pages,p,C,T,var_p,var_C,var_T");
+
+    // Refactor re-design.
+    // We need to list benchmarks that need to be run
+    // We need to determine which of these require core configuration.
+    // We should serialize the raw data set, with
+    // AVMLocation, Error Measurement (True positive, true negative, false positive, false negative), and the execution times.
+    // covert_channel_evaluation should probably be made to include the processing of the raw results.
 
     //let num_pages = (1..=32).collect();
     let num_pages = (1..=3).collect();
