@@ -147,6 +147,7 @@ pub trait CovertChannel: Send + Sync + LocationSpec + Debug {
     unsafe fn transmit(&self, handle: &mut Self::CovertChannelHandle, bits: &mut BitIterator);
     unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool>;
     unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()>; // TODO Error Type
+    unsafe fn unready_page(&mut self, handle: Self::CovertChannelHandle) -> Result<(), ()>;
 }
 
 pub struct BitIterator<'a> {

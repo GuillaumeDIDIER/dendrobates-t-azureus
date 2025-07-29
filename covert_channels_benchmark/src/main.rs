@@ -2,7 +2,7 @@
 
 use cache_utils::calibration::CLFLUSH_NUM_ITER;
 use calibration_results::calibration::{CoreLocParameters, ErrorPrediction, LocationParameters};
-use covert_channels_evaluation::{benchmark_channel, CovertChannel, CovertChannelBenchmarkResult};
+use covert_channels_evaluation::{benchmark_channel, BenchmarkResults, BenchmarkStats, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::FlushAndFlush;
 use flush_reload::FlushAndReload;
 use nix::sched::{sched_getaffinity, CpuSet};
@@ -18,26 +18,10 @@ const NUM_PAGES: usize = 1;
 
 const NUM_PAGES_2: usize = 4;
 
-const NUM_PAGE_MAX: usize = 32;
+//const NUM_PAGE_MAX: usize = 32;
+const NUM_PAGE_MAX: usize = 16;
 
 const NUM_ITER: usize = 2;
-
-struct BenchmarkStats {
-    raw_res: Vec<(
-        CovertChannelBenchmarkResult,
-        usize, // page number
-        NumaNode,
-        usize, // core 1
-        usize, // core 2
-        usize, // page_number_index
-    )>,
-    average_p: Vec<f64>,
-    var_p: Vec<f64>,
-    average_C: Vec<f64>,
-    var_C: Vec<f64>,
-    average_T: Vec<f64>,
-    var_T: Vec<f64>,
-}
 
 fn run_benchmark<T: CovertChannel + 'static + Clone>(
     name: &str,
@@ -56,40 +40,44 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
             for j in 0..CpuSet::count() {
                 for k in 0..CpuSet::count() {
                     if old.is_set(j).unwrap() && old.is_set(k).unwrap() && j != k {
-                        let channel = constructor(i, j, k);
+                        let mut channel = constructor(i, j, k);
                         for (l, num_page) in num_pages.iter().enumerate() {
-                            eprint!(
+                            eprintln!(
                                 "Benchmarking {} location({},{},{})  with {} pages",
                                 name, i, j, k, num_page
                             );
 
                             for _ in 0..num_iter {
                                 count[l] += 1;
-                                eprint!(".");
+                                //eprint!(".");
                                 stdout().flush().expect("Failed to flush");
 
-                                let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
+                                let rc = benchmark_channel(channel, *num_page, NUM_BYTES);
+                                let r = rc.0;
+                                channel = rc.1;
                                 results.push((r, *num_page, i, j, k, l));
                             }
-                            eprintln!()
+                            //eprintln!()
                         }
                     }
                 }
             }
         }
     } else {
-        let channel = constructor(Default::default(), 0, 0);
+        let mut channel = constructor(Default::default(), 0, 0);
         for (i, num_page) in num_pages.iter().enumerate() {
-            eprint!("Benchmarking {} with {} pages", name, num_page);
+            eprintln!("Benchmarking {} with {} pages", name, num_page);
             for _ in 0..num_iter {
                 count[i] += 1;
-                eprint!(".");
+                //eprint!(".");
                 stdout().flush().expect("Failed to flush");
 
-                let r = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
+                let rc = benchmark_channel(channel.clone(), *num_page, NUM_BYTES);
+                let r = rc.0;
+                channel = rc.1;
                 results.push((r, *num_page, Default::default(), 0, 0, i));
             }
-            eprintln!();
+            //eprintln!();
         }
     }
 
@@ -117,7 +105,7 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
             result.0.capacity(),
             result.0.true_capacity()
         );
-        average_p[result.5] += result.0.error_rate;
+        average_p[result.5] += result.0.error.error_rate();
         average_C[result.5] += result.0.capacity();
         average_T[result.5] += result.0.true_capacity()
     }
@@ -134,7 +122,7 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
     let mut var_C = vec![0.0; num_entries];
     let mut var_T = vec![0.0; num_entries];
     for result in results.iter() {
-        let p = result.0.error_rate - average_p[result.5];
+        let p = result.0.error.error_rate() - average_p[result.5];
         var_p[result.5] += p * p;
         let C = result.0.capacity() - average_C[result.5];
         var_C[result.5] += C * C;
@@ -200,8 +188,17 @@ fn main() {
     // AVMLocation, Error Measurement (True positive, true negative, false positive, false negative), and the execution times.
     // covert_channel_evaluation should probably be made to include the processing of the raw results.
 
-    //let num_pages = (1..=32).collect();
-    let num_pages = (1..=3).collect();
+    let num_pages = (1..=NUM_PAGE_MAX).collect();
+    //let num_pages = (1..=3).collect();
+
+    let mut results = BenchmarkResults::default();
+
+    // What we could do
+    // Topology un-aware ? {ST, DT} x {FF, FR}
+    // Numa-MAV, ST x {FF, FR}
+    // Numa-MAV-Addr, ST x {FF, FR}
+    // Numa-M-Core-AV-Addr, ST x {FF, FR}
+    // Numa-M-Core-AV-Addr, ST x {FF, FR}, Best-Numa-M-Core-AV-Addr
 
     /*    let (topology_unaware_ff_channel, old_mask, _node, _atttack, _victim) =
             FlushAndFlush::new_any_location(

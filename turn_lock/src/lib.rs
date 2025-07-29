@@ -110,6 +110,14 @@ impl<T> TurnHandle<T> {
     pub fn next(&self) {
         unsafe { self.raw.lock.next(self.index) };
     }
+
+    pub fn into_inner(self) -> Option<T> {
+        if let Some(raw) = Arc::into_inner(self.raw) {
+            Some(raw.data.into_inner())
+        } else {
+            None
+        }
+    }
 }
 
 #[must_use = "if unused the TurnLock will immediately unlock"]

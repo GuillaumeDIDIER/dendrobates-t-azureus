@@ -231,6 +231,10 @@ impl<T: TimingChannelPrimitives + Send + Sync> CovertChannel for NaiveTimingChan
     unsafe fn ready_page(&mut self, page: *const u8) -> Result<Self::CovertChannelHandle, ()> {
         unsafe { self.calibrate_impl(page) }.map_err(|_| ())
     }
+
+    unsafe fn unready_page(&mut self, handle: Self::CovertChannelHandle) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 impl<T: TimingChannelPrimitives> SingleAddrCacheSideChannel for NaiveTimingChannel<T> {

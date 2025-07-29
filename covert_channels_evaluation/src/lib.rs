@@ -27,6 +27,7 @@ use std::iter::Sum;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::thread;
+use numa_utils::NumaNode;
 /*  TODO : replace page with a handle type,
     require exclusive handle access,
     Handle protected by the turn lock
@@ -144,7 +145,7 @@ impl<'a> Sum<&'a Self> for ChannelError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct CovertChannelBenchmarkResult {
     pub num_bytes_transmitted: usize,
     pub error: ChannelError,
@@ -224,7 +225,7 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     mut channel: T,
     num_pages: usize,
     num_bytes: usize,
-) -> CovertChannelBenchmarkResult {
+) -> (CovertChannelBenchmarkResult, T) {
     // Allocate pages
 
     let old_affinity = set_affinity(&channel.main_core()).unwrap();
@@ -298,30 +299,72 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
 
     restore_affinity(&old_affinity);
 
-    let mut num_bit_error = 0;
+    //let mut num_bit_error = 0;
+    let mut num_true_ones = 0;
+    let mut num_true_zeros = 0;
+    let mut num_false_ones = 0;
+    let mut num_false_zeros = 0;
     for i in 0..num_bytes {
-        num_bit_error += (sent_bytes[i] ^ received_bytes[i]).count_ones() as usize;
+        let sent_byte = sent_bytes[i];
+        let received_byte = received_bytes[i];
+        let n_sent_byte = !sent_byte;
+        let n_received_byte = !received_byte;
+        num_true_ones += (sent_byte & received_byte).count_ones() as usize;
+        num_true_zeros += (n_sent_byte & n_received_byte).count_ones() as usize;
+        num_false_ones += (n_sent_byte & received_byte).count_ones() as usize;
+        num_false_zeros += (sent_byte & n_received_byte).count_ones() as usize;
     }
 
-    let error_rate = (num_bit_error as f64) / ((num_bytes * u8::BIT_LENGTH) as f64);
+    assert_eq!(num_true_zeros + num_true_ones + num_false_zeros + num_false_ones, num_bytes * u8::BIT_LENGTH);
 
-    CovertChannelBenchmarkResult {
+    //let error_rate = (num_bit_error as f64) / ((num_bytes * u8::BIT_LENGTH) as f64);
+
+    let mut channel = Arc::<T>::into_inner(covert_channel_arc).unwrap();
+
+    for mut handle in receiver_turn_handles {
+        let guard = handle.into_inner().unwrap();
+        unsafe {channel.unready_page(guard).unwrap()};
+    }
+
+    (CovertChannelBenchmarkResult {
         num_bytes_transmitted: num_bytes,
-        num_bit_errors: num_bit_error,
-        error_rate,
         time_rdtsc: stop - start,
         time_seconds: stop_time - start_time,
-    }
+        error: ChannelError{
+            true_zero: num_true_zeros,
+            true_one: num_true_ones,
+            false_one: num_false_ones,
+            false_zero: num_false_zeros,
+        },
+    }, channel)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BenchmarkStats {
+    pub raw_res: Vec<(
+        CovertChannelBenchmarkResult,
+        usize, // page number
+        NumaNode,
+        usize, // core 1
+        usize, // core 2
+        usize, // page_number_index
+    )>,
+    pub average_p: Vec<f64>,
+    pub var_p: Vec<f64>,
+    pub average_C: Vec<f64>,
+    pub var_C: Vec<f64>,
+    pub average_T: Vec<f64>,
+    pub var_T: Vec<f64>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct BenchmarkResults {
+    pub results: Vec<(String, BenchmarkStats)>
 }
 
 #[cfg(test)]
 mod tests {
     use crate::BitIterator;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 
     #[test]
     fn test_bit_vec() {

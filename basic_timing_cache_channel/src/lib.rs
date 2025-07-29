@@ -107,7 +107,7 @@ pub struct TopologyAwareTimingChannel<
     thresholds: HashMap<PartialLocationOwned, (E::E, Norm)>,
     norm_threshold: NFThres,
     norm_location: NFLoc,
-    addresses: HashSet<*const u8>,
+    //addresses: HashSet<*const u8>,
     preferred_address: HashMap<VPN, *const u8>,
     calibration_epoch: usize,
     calibration_iterations: u32,
@@ -168,7 +168,7 @@ impl<
                 thresholds: Default::default(),
                 norm_threshold,
                 norm_location,
-                addresses: Default::default(),
+                //addresses: Default::default(),
                 slicing,
                 preferred_address: Default::default(),
                 t: Default::default(),
@@ -199,6 +199,7 @@ impl<
         calibration_iterations: u32,
     ) -> Result<HashMap<PartialLocationOwned, (E::E, Norm, Vec<ErrorPrediction>)>, TopologyAwareError>
     {
+        println!("Calibrating...");
         let core_per_socket = find_core_per_socket();
 
         let operations = [
@@ -686,7 +687,7 @@ impl<
         // Call calibration with core pairs with a single core pair
         // Use results \o/ (or error out)
 
-        self.addresses.clear();
+        //self.addresses.clear();
         let locations = self.build_location_vector();
 
         let m;
@@ -834,7 +835,7 @@ impl<
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Topology Aware Channel")
             .field("thresholds", &self.thresholds)
-            .field("addresses", &self.addresses)
+            //.field("addresses", &self.addresses)
             .field("slicing", &self.slicing)
             .field("location", &self.fixed_location)
             .field("preferred_addresses", &self.preferred_address)
@@ -1126,7 +1127,7 @@ impl<
             .thresholds
             .iter()
             .filter(|(k, _v)| k.project(&location_params) == partial_location)
-            .min_by_key(|(k, v)| v.1.clone());
+            .min_by_key(|(k, v)| v.1.clone()); // TODO This is where a change is needed to avoid picking the best address.
 
         if threshold.is_none() {
             return Err(());
@@ -1166,6 +1167,16 @@ impl<
         unsafe { self.prepare_one_impl(&mut handle.0) }.unwrap();
 
         Ok(handle)
+    }
+
+    unsafe fn unready_page(&mut self, handle: Self::CovertChannelHandle) -> Result<(), ()> {
+        let vpn = get_vpn(handle.0.addr);
+        if let Some(addr) = self.preferred_address.get(&vpn) && *addr == handle.0.addr {
+            self.preferred_address.remove(&vpn);
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 

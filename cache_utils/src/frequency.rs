@@ -12,11 +12,11 @@ use std::convert::TryInto;
 use std::os::raw::{c_uint, c_ulong};
 
 pub enum Error {
-    InsufficentPrivileges,
+    InsufficientPrivileges,
     UnsupportedPlatform,
     Unimplemented,
 }
-
+/*
 #[cfg(all(target_os = "linux", feature = "use_std"))]
 #[link(name = "cpufreq")]
 extern "C" {
@@ -75,3 +75,4 @@ pub fn get_frequency_change_period(period: u64) -> Result<u64, Error> {
     }
     Ok(t / period)
 }
+*/
