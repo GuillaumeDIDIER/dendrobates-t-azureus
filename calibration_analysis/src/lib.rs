@@ -35,6 +35,8 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use json::object::Object;
+
 
 #[derive(Default)]
 pub struct CacheOps<T> {
@@ -190,6 +192,11 @@ struct QuadErrors<T> {
 pub trait Output {
     fn write(&self, output_file: &mut File, name: impl AsRef<str>);
 }
+
+pub trait JsonOutput {
+    fn to_json(&self, base: &Object) -> Vec<Object>;
+}
+
 impl<T: Output> QuadErrors<T> {
     pub fn write(&self, output_file: &mut File, name: &str) {
         self.flush_single_error

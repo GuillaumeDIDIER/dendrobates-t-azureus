@@ -1,7 +1,5 @@
-use crate::{CacheOps, Output, QuadErrors, QuadThresholdErrors};
-use calibration_results::calibration::{
-    AVMLocation, ErrorPrediction, LocationParameters, PartialLocationOwned,
-};
+use crate::{CacheOps, JsonOutput, Output, QuadErrors, QuadThresholdErrors};
+use calibration_results::calibration::{AVMLocation, ErrorPrediction, LocationParameters, PartialLocation, PartialLocationOwned};
 use calibration_results::classifiers::{ErrorPredictor, compute_theoretical_optimum_error};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
 use rayon::prelude::*;
@@ -9,6 +7,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Mutex, RwLock};
+use json::{object, JsonValue};
+use json::object::Object;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StatisticsResults {
@@ -20,10 +20,93 @@ pub struct StatisticsResults {
     pub max: (ErrorPrediction, AVMLocation),
 }
 
+fn error_prediction_json(e: ErrorPrediction) -> JsonValue {
+    object! {
+        "true_hit" => e.true_hit,
+        "true_miss" => e.true_miss,
+        "false_hit" => e.false_hit,
+        "false_miss" => e.false_miss,
+        "error_rate" => e.error_rate(),
+    }
+}
+
+fn avm_location_json(avm_loc: AVMLocation) -> JsonValue {
+    object! {
+        "memory_node" => avm_loc.memory_numa_node.index,
+        "attacker_socket" => avm_loc.attacker.socket,
+        "attacker_core" => avm_loc.attacker.core,
+        "victim_socket" => avm_loc.victim.socket,
+        "victim_core" => avm_loc.victim.core,
+        "memory_page" => avm_loc.memory_vpn,
+        "memory_offset" => avm_loc.memory_offset,
+        // Do not include slice, we don't have it properly.
+    }
+}
+
+fn partial_location_json(partial_location: &PartialLocationOwned) -> JsonValue {
+    let mut result = Object::new();
+    let params = partial_location.get_params();
+    let loc = partial_location.get_location();
+    if params.memory_numa_node {
+        result.insert("memory_node", loc.memory_numa_node.index.into());
+    }
+    if params.attacker.socket {
+        result.insert("attacker_socket", loc.attacker.socket.into());
+    }
+    if params.attacker.core {
+        result.insert("attacker_core", loc.attacker.core.into());
+    }
+    if params.victim.socket {
+        result.insert("victim_socket", loc.victim.socket.into());
+    }
+    if params.victim.core {
+        result.insert("victim_core", loc.victim.core.into());
+    }
+    if params.memory_vpn {
+        result.insert("memory_page", loc.memory_vpn.into());
+    }
+    if params.memory_offset {
+        result.insert("memory_offset", loc.memory_offset.into());
+    }
+    JsonValue::Object(result)
+}
+impl JsonOutput for StatisticsResults {
+    fn to_json(&self, base: &Object) -> Vec<Object> {
+        let mut result = base.clone();
+        result.insert("avg_err", error_prediction_json(self.average));
+        result.insert("min_err", error_prediction_json(self.min.0));
+        result.insert("min_err_loc", avm_location_json(self.min.1));
+        result.insert("q1_err", error_prediction_json(self.q1.0));
+        result.insert("q1_err_loc", avm_location_json(self.q1.1));
+        result.insert("med_err", error_prediction_json(self.med.0));
+        result.insert("med_err_loc", avm_location_json(self.med.1));
+        result.insert("q3_err", error_prediction_json(self.q3.0));
+        result.insert("q3_err_loc", avm_location_json(self.q3.1));
+        result.insert("max_err", error_prediction_json(self.max.0));
+        result.insert("max_err_loc", avm_location_json(self.max.1));
+        vec![result]
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ErrorStatisticsResults {
     pub average: StatisticsResults,
     pub choice: Vec<(String, PartialLocationOwned, StatisticsResults)>,
+}
+
+impl JsonOutput for ErrorStatisticsResults {
+    fn to_json(&self, base: &Object) -> Vec<Object> {
+        let mut key = base.clone();
+        key.insert("selection", JsonValue::Null);
+        let mut result = self.average.to_json(&key);
+        for choice in &self.choice {
+            let mut key = base.clone();
+            key.insert("selection", JsonValue::String(choice.0.clone()));
+            key.insert("selected_location", partial_location_json(&choice.1));
+            result.extend(choice.2.to_json(&key));
+        }
+        result
+    }
 }
 
 impl Output for ErrorStatisticsResults {
