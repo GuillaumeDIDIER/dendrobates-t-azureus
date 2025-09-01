@@ -30,9 +30,22 @@ fn error_prediction_json(e: ErrorPrediction) -> JsonValue {
     }
 }
 
-fn avm_location_json(avm_loc: AVMLocation) -> JsonValue {
+pub fn avm_location_json(avm_loc: AVMLocation) -> JsonValue {
     object! {
         "memory_node" => avm_loc.memory_numa_node.index,
+        "attacker_socket" => avm_loc.attacker.socket,
+        "attacker_core" => avm_loc.attacker.core,
+        "victim_socket" => avm_loc.victim.socket,
+        "victim_core" => avm_loc.victim.core,
+        "memory_page" => avm_loc.memory_vpn,
+        "memory_offset" => avm_loc.memory_offset,
+        // Do not include slice, we don't have it properly.
+    }
+}
+
+pub fn location_parameters_json(avm_loc: LocationParameters) -> JsonValue {
+    object! {
+        "memory_node" => avm_loc.memory_numa_node,
         "attacker_socket" => avm_loc.attacker.socket,
         "attacker_core" => avm_loc.attacker.core,
         "victim_socket" => avm_loc.victim.socket,

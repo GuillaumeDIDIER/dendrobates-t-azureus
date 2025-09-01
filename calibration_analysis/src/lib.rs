@@ -35,8 +35,9 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use json::JsonValue;
 use json::object::Object;
-
+use crate::error_statistics::location_parameters_json;
 
 #[derive(Default)]
 pub struct CacheOps<T> {
@@ -282,6 +283,42 @@ impl<T: Sized + Send + Sync> QuadErrors<T> {
             reload_dual_error: r.next().unwrap(),
             reload_th_error: r.next().unwrap(),
         }
+    }
+}
+
+impl<T:JsonOutput> JsonOutput for QuadErrors<T> {
+    fn to_json(&self, base: &Object) -> Vec<Object> {
+        let mut result = Vec::new();
+        let mut ff_s_base = base.clone();
+        ff_s_base.insert("method", JsonValue::String(String::from("FF")));
+        ff_s_base.insert("classifier", JsonValue::String(String::from("S")));
+        result.extend(self.flush_single_error.to_json(&ff_s_base));
+
+        let mut ff_d_base = base.clone();
+        ff_d_base.insert("method", JsonValue::String(String::from("FF")));
+        ff_d_base.insert("classifier", JsonValue::String(String::from("D")));
+        result.extend(self.flush_dual_error.to_json(&ff_d_base));
+
+        let mut fr_s_base = base.clone();
+        fr_s_base.insert("method", JsonValue::String(String::from("FR")));
+        fr_s_base.insert("classifier", JsonValue::String(String::from("S")));
+        result.extend(self.reload_single_error.to_json(&fr_s_base));
+
+        let mut fr_d_base = base.clone();
+        fr_d_base.insert("method", JsonValue::String(String::from("FR")));
+        fr_d_base.insert("classifier", JsonValue::String(String::from("D")));
+        result.extend(self.reload_dual_error.to_json(&fr_d_base));
+
+        let mut ff_t_base = base.clone();
+        ff_t_base.insert("method", JsonValue::String(String::from("FF")));
+        ff_t_base.insert("classifier", JsonValue::String(String::from("T")));
+        result.extend(self.flush_single_error.to_json(&ff_t_base));
+
+        let mut fr_t_base = base.clone();
+        fr_t_base.insert("method", JsonValue::String(String::from("FR")));
+        fr_t_base.insert("classifier", JsonValue::String(String::from("T")));
+        result.extend(self.flush_single_error.to_json(&fr_t_base));
+        result
     }
 }
 
@@ -1169,11 +1206,16 @@ where
     )
     .expect("Failed to make Full projection plot.");
 
+    let mut json = Vec::new();
+
     if num_entries > 1 {
         let stat =
             error_statistics::compute_statistics(&location_map, projection_full, vec![], &errors);
         writeln!(output_file);
         stat.write(&mut output_file, "Full-AVM-Errors");
+        let mut base = Object::new();
+        base.insert("projection", location_parameters_json(projection_full));
+        json.extend(stat.to_json(&base))
     }
 
     /*
