@@ -19,9 +19,9 @@ const NUM_PAGES: usize = 1;
 const NUM_PAGES_2: usize = 4;
 
 //const NUM_PAGE_MAX: usize = 32;
-const NUM_PAGE_MAX: usize = 16;
+const NUM_PAGE_MAX: usize = 10;
 
-const NUM_ITER: usize = 2;
+const NUM_ITER: usize = 16;
 
 fn run_benchmark<T: CovertChannel + 'static + Clone>(
     name: &str,
@@ -30,13 +30,20 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
     num_pages: &Vec<usize>,
     old: CpuSet,
     iterate_locations: bool,
+    optimize_numa: Option<NumaNode>,
 ) -> BenchmarkStats {
     let mut results = Vec::new();
     let num_entries = num_pages.len();
 
     let mut count = vec![0; num_entries];
     if iterate_locations {
-        for i in numa_utils::available_nodes().unwrap() {
+        let numa_nodes = if let Some(node) = optimize_numa {
+            assert!(numa_utils::available_nodes().unwrap().contains(&node));
+            vec![node]
+        } else {
+            numa_utils::available_nodes().unwrap().into_iter().collect()
+        };
+        for i in numa_nodes {
             for j in 0..CpuSet::count() {
                 for k in 0..CpuSet::count() {
                     if old.is_set(j).unwrap() && old.is_set(k).unwrap() && j != k {
@@ -189,6 +196,7 @@ fn main() {
     // covert_channel_evaluation should probably be made to include the processing of the raw results.
 
     let num_pages = (1..=NUM_PAGE_MAX).collect();
+    let optimize_numa = Some(NumaNode::default());
     //let num_pages = (1..=3).collect();
 
     let mut results = BenchmarkResults::default();
@@ -351,7 +359,10 @@ fn main() {
         &num_pages,
         old,
         true,
+        optimize_numa
     );
+
+    results.results.push(("Topology Aware F+F".to_owned(), singlethreshold_ff));
 
     let fr = run_benchmark(
         "Topology Aware F+R",
@@ -399,5 +410,18 @@ fn main() {
         &num_pages,
         old,
         true,
+        optimize_numa
     );
+    results.results.push(("Topology Aware F+R".to_owned(), fr));
+
+    use chrono::Local;
+    let time = Local::now();
+
+    results.write_msgpack(format!(
+        "{}.{}",
+        time.format("%Y-%m-%dT%H-%M-%S%z"),
+        BenchmarkResults::EXTENSION_ZSTD
+    ))
+        .expect("Failed to write out results");
+
 }

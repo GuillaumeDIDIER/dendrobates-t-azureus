@@ -28,6 +28,8 @@ use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::thread;
 use numa_utils::NumaNode;
+use rmp_serde::{Deserializer, Serializer};
+
 /*  TODO : replace page with a handle type,
     require exclusive handle access,
     Handle protected by the turn lock
@@ -190,6 +192,7 @@ struct CovertChannelParams<T: CovertChannel + Send> {
 
 unsafe impl<T: 'static + CovertChannel + Send> Send for CovertChannelParams<T> {}
 
+#[cfg(target_os = "linux")]
 fn transmit_thread<T: CovertChannel>(
     num_bytes: usize,
     mut params: CovertChannelParams<T>,
@@ -221,6 +224,7 @@ fn transmit_thread<T: CovertChannel>(
     (start, start_time, result)
 }
 
+#[cfg(target_os = "linux")]
 pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
     mut channel: T,
     num_pages: usize,
@@ -360,6 +364,48 @@ pub struct BenchmarkStats {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BenchmarkResults {
     pub results: Vec<(String, BenchmarkStats)>
+}
+
+impl BenchmarkResults {
+    //pub const EXTENSION: &'static str = "CBR.msgpack";
+    pub const EXTENSION_ZSTD: &'static str = "CBR.msgpack.zst";
+    /*pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let buf = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(format!("Failed to open path: {}", e));
+            }
+        };
+        let mut deserializer = Deserializer::new(&buf[..]);
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
+            .map_err(|e| format!("{:?}", e))
+    }*/
+
+    /*pub fn write_msgpack(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
+        let mut f1 = std::fs::File::create(path).map_err(|_e| {})?;
+        let mut s = Serializer::new(&mut f1);
+        self.serialize(&mut s).map_err(|_e| {})
+    }*/
+
+    pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let buf = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(format!("Failed to open path: {}", e));
+            }
+        };
+        let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
+        let mut deserializer = Deserializer::new(&mut decoder);
+        BenchmarkResults::deserialize(&mut deserializer)
+            .map_err(|e| format!("{:?}", e))
+    }
+
+    pub fn write_msgpack(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
+        let f1 = std::fs::File::create(path).map_err(|_e| {})?;
+        let mut encoder = zstd::Encoder::new(f1, 0).map_err(|_e| {})?.auto_finish();
+        let mut s = Serializer::new(&mut encoder);
+        self.serialize(&mut s).map_err(|_e| {})
+    }
 }
 
 #[cfg(test)]

@@ -16,6 +16,8 @@ cache_side_channel = { path = "../cache_side_channel" }
 numa_utils = { path = "../numa_utils" }
 serde = { version = "1.0.216", features = ["derive"] }
 num-rational = { version = "0.4.2" }
+zstd = "0.13.3"
+rmp-serde = { version = "1.3.0" }
 
 [features]
 numa = ["numa_utils/numa"]

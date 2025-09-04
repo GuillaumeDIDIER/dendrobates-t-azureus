@@ -330,6 +330,7 @@ dependencies = [
  "cache_side_channel",
  "cache_utils",
  "calibration_results",
+ "chrono",
  "covert_channels_evaluation",
  "flush_flush",
  "flush_reload",
@@ -348,8 +349,10 @@ dependencies = [
  "num-rational",
  "numa_utils",
  "rand 0.8.5",
+ "rmp-serde",
  "serde",
  "turn_lock",
+ "zstd",
 ]
 
 [[package]]
