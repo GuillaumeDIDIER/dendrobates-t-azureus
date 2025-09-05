@@ -1,21 +1,24 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use std::collections::HashMap;
-use rayon::iter::ParallelIterator;
+use cache_side_channel::set_affinity;
 use cache_utils::calibration::CLFLUSH_NUM_ITER;
 use calibration_results::calibration::{CoreLocParameters, ErrorPrediction, LocationParameters};
-use covert_channels_evaluation::{benchmark_channel, BenchmarkResults, BenchmarkStats, ChannelError, CovertChannel, CovertChannelBenchmarkResult};
+use calibration_results::{accumulate, reduce};
+use covert_channels_evaluation::{
+    benchmark_channel, BenchmarkResults, BenchmarkStats, ChannelError, CovertChannel,
+    CovertChannelBenchmarkResult,
+};
 use flush_flush::FlushAndFlush;
 use flush_reload::FlushAndReload;
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 use num_rational::Rational64;
 use numa_utils::NumaNode;
-use std::io::{stdout, Write};
 use rayon;
+use rayon::iter::ParallelIterator;
 use rayon::prelude::IntoParallelRefIterator;
-use cache_side_channel::set_affinity;
-use calibration_results::{accumulate, reduce};
+use std::collections::HashMap;
+use std::io::{stdout, Write};
 
 //const NUM_BYTES: usize = 1 << 12;
 const NUM_BYTES: usize = 1 << 10;
@@ -207,125 +210,130 @@ fn main() {
 
     let mut results = BenchmarkResults::default();
     {
-    // TU-ST-FR
-    // FIXME, build the channel outside, and then clone it when needed !
-    let tu_st_fr_name = String::from("TU-ST-FR");
-    let (mut topology_unaware_fr_channel, old_mask, _node, _attacker, _victim) = FlushAndReload::new_any_location(
-        false,
-        LocationParameters {
-            attacker: CoreLocParameters {
-                socket: true,
-                core: true,
-            },
-            victim: CoreLocParameters {
-                socket: true,
-                core: true,
-            },
-            memory_numa_node: true,
-            memory_slice: true,
-            memory_vpn: true,
-            memory_offset: true,
-        },
-        LocationParameters {
-            attacker: CoreLocParameters {
-                socket: false,
-                core: false,
-            },
-            victim: CoreLocParameters {
-                socket: false,
-                core: false,
-            },
-            memory_numa_node: false,
-            memory_slice: false,
-            memory_vpn: false,
-            memory_offset: false,
-        },
-        norm_threshold,
-        norm_location,
-        calibration_results::classifiers::SimpleThresholdBuilder {},
-        CLFLUSH_NUM_ITER,
-    )
-        .unwrap();
+        // TU-ST-FR
+        // FIXME, build the channel outside, and then clone it when needed !
+        let tu_st_fr_name = String::from("TU-ST-FR");
+        let (mut topology_unaware_fr_channel, old_mask, _node, _attacker, _victim) =
+            FlushAndReload::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
 
-    set_affinity(&old_mask).unwrap();
+        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
 
-    let results_tu_st_fr = run_benchmark(
-        &tu_st_fr_name,
-        |i, j, k| {
-            let mut r = topology_unaware_fr_channel.clone();
-            r.set_location(Some(i), Some(j), Some(k)).unwrap();
-            r
-        },
-        NUM_ITER,
-        &num_pages,
-        old,
-        true,
-        optimize_numa
-    );
+        set_affinity(&old_mask).unwrap();
 
-    results.results.push((tu_st_fr_name, results_tu_st_fr));
-}
+        let results_tu_st_fr = run_benchmark(
+            &tu_st_fr_name,
+            |i, j, k| {
+                let mut r = topology_unaware_fr_channel.clone();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
+            },
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+            optimize_numa,
+        );
+
+        results.results.push((tu_st_fr_name, results_tu_st_fr));
+    }
     {
-    // TU-ST-FF
-    // FIXME, build the channel outside, and then clone it when needed !
-    let tu_st_ff_name = String::from("TU-ST-FF");
+        // TU-ST-FF
+        // FIXME, build the channel outside, and then clone it when needed !
+        let tu_st_ff_name = String::from("TU-ST-FF");
 
-    let (mut topology_unaware_ff_channel, old_mask, _node, _attacker, _victim) = FlushAndFlush::new_any_location(
-        false,
-        LocationParameters {
-            attacker: CoreLocParameters {
-                socket: true,
-                core: true,
+        let (mut topology_unaware_ff_channel, old_mask, _node, _attacker, _victim) =
+            FlushAndFlush::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+            .unwrap();
+
+        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
+
+        set_affinity(&old_mask).unwrap();
+
+        let results_tu_st_ff = run_benchmark(
+            &tu_st_ff_name,
+            |i, j, k| {
+                let mut r = topology_unaware_ff_channel.clone();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
             },
-            victim: CoreLocParameters {
-                socket: true,
-                core: true,
-            },
-            memory_numa_node: true,
-            memory_slice: true,
-            memory_vpn: true,
-            memory_offset: true,
-        },
-        LocationParameters {
-            attacker: CoreLocParameters {
-                socket: false,
-                core: false,
-            },
-            victim: CoreLocParameters {
-                socket: false,
-                core: false,
-            },
-            memory_numa_node: false,
-            memory_slice: false,
-            memory_vpn: false,
-            memory_offset: false,
-        },
-        norm_threshold,
-        norm_location,
-        calibration_results::classifiers::SimpleThresholdBuilder {},
-        CLFLUSH_NUM_ITER,
-    )
-        .unwrap();
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+            optimize_numa,
+        );
 
-    set_affinity(&old_mask).unwrap();
-
-
-    let results_tu_st_ff = run_benchmark(
-        &tu_st_ff_name,
-        |i, j, k| {
-            let mut r = topology_unaware_ff_channel.clone();
-            r.set_location(Some(i), Some(j), Some(k)).unwrap();
-            r
-        },
-        NUM_ITER,
-        &num_pages,
-        old,
-        true,
-        optimize_numa
-    );
-
-    results.results.push((tu_st_ff_name, results_tu_st_ff));
-}
+        results.results.push((tu_st_ff_name, results_tu_st_ff));
+    }
     {
         // Numa-M-Core-AV-Addr-ST-FR
         let numa_m_core_av_addr_st_fr_name = String::from("Numa-M-Core-AV-Addr-ST-FR");
@@ -367,7 +375,7 @@ fn main() {
                     calibration_results::classifiers::SimpleThresholdBuilder {},
                     CLFLUSH_NUM_ITER,
                 )
-                    .unwrap();
+                .unwrap();
                 r.set_location(Some(i), Some(j), Some(k)).unwrap();
                 r
             },
@@ -375,20 +383,52 @@ fn main() {
             &num_pages,
             old,
             true,
-            optimize_numa
+            optimize_numa,
         );
 
         let best_numa_m_core_av_addr_st_fr_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FR");
         let results_best_numa_m_core_av_addr_st_fr = {
             let name = &best_numa_m_core_av_addr_st_fr_name;
-            let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_fr.raw_res.par_iter().map(|(result, page_number, node, core_1, core_2, page_number_index)| { ((page_number, node, core_1, core_2, page_number_index), result) }).collect();
+            let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_fr
+                .raw_res
+                .par_iter()
+                .map(
+                    |(result, page_number, node, core_1, core_2, page_number_index)| {
+                        (
+                            (page_number, node, core_1, core_2, page_number_index),
+                            result,
+                        )
+                    },
+                )
+                .collect();
 
-            let remapped = reduce(per_location, |(_pn, node, core_1, core_2, _pni)| { (node, core_1, core_2) }, || { (ChannelError::default(), Vec::new()) }, |acc, v, k, rk| {
-                acc.0 += v.error;
-                acc.1.push((k, v))
-            }, |acc, rk| { acc });
-            let best = remapped.par_iter().min_by_key(|(k, v)| { v.0.error_ratio() }).unwrap();
-            let raw_res_best: Vec<(CovertChannelBenchmarkResult, usize, NumaNode, usize, usize, usize)> = best.1.1.par_iter().map(|(k, r)| { ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4) }).collect();
+            let remapped = reduce(
+                per_location,
+                |(_pn, node, core_1, core_2, _pni)| (node, core_1, core_2),
+                || (ChannelError::default(), Vec::new()),
+                |acc, v, k, rk| {
+                    acc.0 += v.error;
+                    acc.1.push((k, v))
+                },
+                |acc, rk| acc,
+            );
+            let best = remapped
+                .par_iter()
+                .min_by_key(|(k, v)| v.0.error_ratio())
+                .unwrap();
+            let raw_res_best: Vec<(
+                CovertChannelBenchmarkResult,
+                usize,
+                NumaNode,
+                usize,
+                usize,
+                usize,
+            )> = best
+                .1
+                 .1
+                .par_iter()
+                .map(|(k, r)| ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4))
+                .collect();
             let num_entries = num_pages.len();
             let mut count = vec![0; num_entries];
             let mut average_p = vec![0.0; num_entries];
@@ -463,11 +503,16 @@ fn main() {
                 var_T,
             }
         };
-        results.results.push((numa_m_core_av_addr_st_fr_name, results_numa_m_core_av_addr_st_fr));
+        results.results.push((
+            numa_m_core_av_addr_st_fr_name,
+            results_numa_m_core_av_addr_st_fr,
+        ));
 
         // Best-Numa-M-Core-AV-Addr-ST-FR
-        results.results.push((best_numa_m_core_av_addr_st_fr_name, results_best_numa_m_core_av_addr_st_fr));
-
+        results.results.push((
+            best_numa_m_core_av_addr_st_fr_name,
+            results_best_numa_m_core_av_addr_st_fr,
+        ));
     }
     {
         // Numa-M-Core-AV-Addr-ST-FF
@@ -510,7 +555,7 @@ fn main() {
                     calibration_results::classifiers::SimpleThresholdBuilder {},
                     CLFLUSH_NUM_ITER,
                 )
-                    .unwrap();
+                .unwrap();
                 r.set_location(Some(i), Some(j), Some(k)).unwrap();
                 r
             },
@@ -518,20 +563,52 @@ fn main() {
             &num_pages,
             old,
             true,
-            optimize_numa
+            optimize_numa,
         );
 
         let best_numa_m_core_av_addr_st_ff_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FF");
         let results_best_numa_m_core_av_addr_st_ff = {
             let name = &best_numa_m_core_av_addr_st_ff_name;
-            let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_ff.raw_res.par_iter().map(|(result, page_number, node, core_1, core_2, page_number_index)| { ((page_number, node, core_1, core_2, page_number_index), result) }).collect();
+            let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_ff
+                .raw_res
+                .par_iter()
+                .map(
+                    |(result, page_number, node, core_1, core_2, page_number_index)| {
+                        (
+                            (page_number, node, core_1, core_2, page_number_index),
+                            result,
+                        )
+                    },
+                )
+                .collect();
 
-            let remapped = reduce(per_location, |(_pn, node, core_1, core_2, _pni)| { (node, core_1, core_2) }, || { (ChannelError::default(), Vec::new()) }, |acc, v, k, rk| {
-                acc.0 += v.error;
-                acc.1.push((k, v))
-            }, |acc, rk| { acc });
-            let best = remapped.par_iter().min_by_key(|(k, v)| { v.0.error_ratio() }).unwrap();
-            let raw_res_best: Vec<(CovertChannelBenchmarkResult, usize, NumaNode, usize, usize, usize)> = best.1.1.par_iter().map(|(k, r)| { ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4) }).collect();
+            let remapped = reduce(
+                per_location,
+                |(_pn, node, core_1, core_2, _pni)| (node, core_1, core_2),
+                || (ChannelError::default(), Vec::new()),
+                |acc, v, k, rk| {
+                    acc.0 += v.error;
+                    acc.1.push((k, v))
+                },
+                |acc, rk| acc,
+            );
+            let best = remapped
+                .par_iter()
+                .min_by_key(|(k, v)| v.0.error_ratio())
+                .unwrap();
+            let raw_res_best: Vec<(
+                CovertChannelBenchmarkResult,
+                usize,
+                NumaNode,
+                usize,
+                usize,
+                usize,
+            )> = best
+                .1
+                 .1
+                .par_iter()
+                .map(|(k, r)| ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4))
+                .collect();
             let num_entries = num_pages.len();
             let mut count = vec![0; num_entries];
             let mut average_p = vec![0.0; num_entries];
@@ -606,9 +683,15 @@ fn main() {
                 var_T,
             }
         };
-        results.results.push((numa_m_core_av_addr_st_ff_name, results_numa_m_core_av_addr_st_ff));
+        results.results.push((
+            numa_m_core_av_addr_st_ff_name,
+            results_numa_m_core_av_addr_st_ff,
+        ));
         // Best-Numa-M-Core-AV-Addr-ST-FF
-        results.results.push((best_numa_m_core_av_addr_st_ff_name, results_best_numa_m_core_av_addr_st_ff));
+        results.results.push((
+            best_numa_m_core_av_addr_st_ff_name,
+            results_best_numa_m_core_av_addr_st_ff,
+        ));
     }
     // Numa-MAV-ST-FR
 
@@ -839,11 +922,11 @@ fn main() {
     use chrono::Local;
     let time = Local::now();
 
-    results.write_msgpack(format!(
-        "{}.{}",
-        time.format("%Y-%m-%dT%H-%M-%S%z"),
-        BenchmarkResults::EXTENSION_ZSTD
-    ))
+    results
+        .write_msgpack(format!(
+            "{}.{}",
+            time.format("%Y-%m-%dT%H-%M-%S%z"),
+            BenchmarkResults::EXTENSION_ZSTD
+        ))
         .expect("Failed to write out results");
-
 }
