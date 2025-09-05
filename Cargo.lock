@@ -337,6 +337,7 @@ dependencies = [
  "nix",
  "num-rational",
  "numa_utils",
+ "rayon",
 ]
 
 [[package]]

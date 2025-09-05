@@ -1,8 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use std::collections::HashMap;
+use rayon::iter::ParallelIterator;
 use cache_utils::calibration::CLFLUSH_NUM_ITER;
 use calibration_results::calibration::{CoreLocParameters, ErrorPrediction, LocationParameters};
-use covert_channels_evaluation::{benchmark_channel, BenchmarkResults, BenchmarkStats, CovertChannel, CovertChannelBenchmarkResult};
+use covert_channels_evaluation::{benchmark_channel, BenchmarkResults, BenchmarkStats, ChannelError, CovertChannel, CovertChannelBenchmarkResult};
 use flush_flush::FlushAndFlush;
 use flush_reload::FlushAndReload;
 use nix::sched::{sched_getaffinity, CpuSet};
@@ -10,6 +12,9 @@ use nix::unistd::Pid;
 use num_rational::Rational64;
 use numa_utils::NumaNode;
 use std::io::{stdout, Write};
+use rayon;
+use rayon::prelude::IntoParallelRefIterator;
+use calibration_results::{accumulate, reduce};
 
 //const NUM_BYTES: usize = 1 << 12;
 const NUM_BYTES: usize = 1 << 10;
@@ -195,11 +200,407 @@ fn main() {
     // AVMLocation, Error Measurement (True positive, true negative, false positive, false negative), and the execution times.
     // covert_channel_evaluation should probably be made to include the processing of the raw results.
 
-    let num_pages = (1..=NUM_PAGE_MAX).collect();
+    let num_pages = (1..=NUM_PAGE_MAX).rev().collect();
     let optimize_numa = Some(NumaNode::default());
     //let num_pages = (1..=3).collect();
 
     let mut results = BenchmarkResults::default();
+
+    // TU-ST-FR
+    let tu_st_fr_name = String::from("TU-ST-FR");
+    let results_tu_st_fr = run_benchmark(
+        &tu_st_fr_name,
+        |i, j, k| {
+            let (mut r, old_mask, _node, _attacker, _victim) = FlushAndReload::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+                .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+        optimize_numa
+    );
+
+    results.results.push((tu_st_fr_name, results_tu_st_fr));
+
+
+    // TU-ST-FF
+    let tu_st_ff_name = String::from("TU-ST-FF");
+    let results_tu_st_ff = run_benchmark(
+        &tu_st_ff_name,
+        |i, j, k| {
+            let (mut r, old_mask, _node, _attacker, _victim) = FlushAndFlush::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+                .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+        optimize_numa
+    );
+
+    results.results.push((tu_st_ff_name, results_tu_st_ff));
+
+
+    // Numa-M-Core-AV-Addr-ST-FR
+    let numa_m_core_av_addr_st_fr_name = String::from("Numa-M-Core-AV-Addr-ST-FR");
+    let results_numa_m_core_av_addr_st_fr = run_benchmark(
+        &numa_m_core_av_addr_st_fr_name,
+        |i, j, k| {
+            let (mut r, (node, attacker, victim)) = FlushAndReload::new_with_locations(
+                vec![(i, j, k)].into_iter(),
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+                .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+        optimize_numa
+    );
+
+    let best_numa_m_core_av_addr_st_fr_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FR");
+    let results_best_numa_m_core_av_addr_st_fr = {
+        let name = &best_numa_m_core_av_addr_st_fr_name;
+        let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_fr.raw_res.par_iter().map(|(result, page_number, node, core_1, core_2, page_number_index)| { ((page_number, node, core_1, core_2, page_number_index), result) }).collect();
+
+        let remapped = reduce(per_location, |(_pn, node, core_1, core_2, _pni)| {(node, core_1, core_2)}, ||{(ChannelError::default(), Vec::new())}, |acc, v, k, rk|{acc.0 += v.error; acc.1.push((k, v))}, |acc, rk| {acc} );
+        let best = remapped.par_iter().min_by_key(|(k, v)|{v.0.error_ratio()}).unwrap();
+        let raw_res_best:  Vec<(CovertChannelBenchmarkResult, usize, NumaNode, usize, usize, usize)> = best.1.1.par_iter().map(|(k, r)| {((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4)}).collect();
+        let num_entries = num_pages.len();
+        let mut count = vec![0; num_entries];
+        let mut average_p = vec![0.0; num_entries];
+        let mut average_C = vec![0.0; num_entries];
+        let mut average_T = vec![0.0; num_entries];
+        for result in raw_res_best.iter() {
+            count[result.5] += 1;
+            println!(
+                "num_page: {}, node: {}, main: {}, helper: {}, result: {:?}",
+                result.1, result.2, result.3, result.4, result.0
+            );
+            println!(
+                "C: {}, T: {}",
+                result.0.capacity(),
+                result.0.true_capacity()
+            );
+            println!(
+                "Detailed:\"{}\",{},{},{},{},{},{},{}",
+                name,
+                result.1,
+                result.2,
+                result.3,
+                result.4,
+                result.0.csv(),
+                result.0.capacity(),
+                result.0.true_capacity()
+            );
+            average_p[result.5] += result.0.error.error_rate();
+            average_C[result.5] += result.0.capacity();
+            average_T[result.5] += result.0.true_capacity()
+        }
+        for i in 0..num_entries {
+            average_p[i] /= count[i] as f64;
+            average_C[i] /= count[i] as f64;
+            average_T[i] /= count[i] as f64;
+            println!(
+                "{} - {} Average p: {} C: {}, T: {}",
+                name, i, average_p[i], average_C[i], average_T[i]
+            );
+        }
+        let mut var_p = vec![0.0; num_entries];
+        let mut var_C = vec![0.0; num_entries];
+        let mut var_T = vec![0.0; num_entries];
+        for result in raw_res_best.iter() {
+            let p = result.0.error.error_rate() - average_p[result.5];
+            var_p[result.5] += p * p;
+            let C = result.0.capacity() - average_C[result.5];
+            var_C[result.5] += C * C;
+            let T = result.0.true_capacity() - average_T[result.5];
+            var_T[result.5] += T * T;
+        }
+        for i in 0..num_entries {
+            var_p[i] /= count[i] as f64;
+            var_C[i] /= count[i] as f64;
+            var_T[i] /= count[i] as f64;
+            println!(
+                "{} - {} Variance of p: {}, C: {}, T:{}",
+                name, i, var_p[i], var_C[i], var_T[i]
+            );
+            println!(
+                "CSV:\"{}\",{},{},{},{},{},{},{}",
+                name, i, average_p[i], average_C[i], average_T[i], var_p[i], var_C[i], var_T[i]
+            );
+        }
+        BenchmarkStats {
+            raw_res: raw_res_best,
+            average_p,
+            var_p,
+            average_C,
+            var_C,
+            average_T,
+            var_T,
+        }
+    };
+    results.results.push((numa_m_core_av_addr_st_fr_name, results_numa_m_core_av_addr_st_fr));
+
+    // Best-Numa-M-Core-AV-Addr-ST-FR
+    results.results.push((best_numa_m_core_av_addr_st_fr_name, results_best_numa_m_core_av_addr_st_fr));
+
+    // Numa-M-Core-AV-Addr-ST-FF
+    let numa_m_core_av_addr_st_ff_name = String::from("Numa-M-Core-AV-Addr-ST-FF");
+    let results_numa_m_core_av_addr_st_ff = run_benchmark(
+        &numa_m_core_av_addr_st_ff_name,
+        |i, j, k| {
+            let (mut r, (node, attacker, victim)) = FlushAndFlush::new_with_locations(
+                vec![(i, j, k)].into_iter(),
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+                .unwrap();
+            r.set_location(Some(i), Some(j), Some(k)).unwrap();
+            r
+        },
+        NUM_ITER,
+        &num_pages,
+        old,
+        true,
+        optimize_numa
+    );
+
+    let best_numa_m_core_av_addr_st_ff_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FF");
+    let results_best_numa_m_core_av_addr_st_ff = {
+        let name = &best_numa_m_core_av_addr_st_ff_name;
+        let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_ff.raw_res.par_iter().map(|(result, page_number, node, core_1, core_2, page_number_index)| { ((page_number, node, core_1, core_2, page_number_index), result) }).collect();
+
+        let remapped = reduce(per_location, |(_pn, node, core_1, core_2, _pni)| {(node, core_1, core_2)}, ||{(ChannelError::default(), Vec::new())}, |acc, v, k, rk|{acc.0 += v.error; acc.1.push((k, v))}, |acc, rk| {acc} );
+        let best = remapped.par_iter().min_by_key(|(k, v)|{v.0.error_ratio()}).unwrap();
+        let raw_res_best:  Vec<(CovertChannelBenchmarkResult, usize, NumaNode, usize, usize, usize)> = best.1.1.par_iter().map(|(k, r)| {((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4)}).collect();
+        let num_entries = num_pages.len();
+        let mut count = vec![0; num_entries];
+        let mut average_p = vec![0.0; num_entries];
+        let mut average_C = vec![0.0; num_entries];
+        let mut average_T = vec![0.0; num_entries];
+        for result in raw_res_best.iter() {
+            count[result.5] += 1;
+            println!(
+                "num_page: {}, node: {}, main: {}, helper: {}, result: {:?}",
+                result.1, result.2, result.3, result.4, result.0
+            );
+            println!(
+                "C: {}, T: {}",
+                result.0.capacity(),
+                result.0.true_capacity()
+            );
+            println!(
+                "Detailed:\"{}\",{},{},{},{},{},{},{}",
+                name,
+                result.1,
+                result.2,
+                result.3,
+                result.4,
+                result.0.csv(),
+                result.0.capacity(),
+                result.0.true_capacity()
+            );
+            average_p[result.5] += result.0.error.error_rate();
+            average_C[result.5] += result.0.capacity();
+            average_T[result.5] += result.0.true_capacity()
+        }
+        for i in 0..num_entries {
+            average_p[i] /= count[i] as f64;
+            average_C[i] /= count[i] as f64;
+            average_T[i] /= count[i] as f64;
+            println!(
+                "{} - {} Average p: {} C: {}, T: {}",
+                name, i, average_p[i], average_C[i], average_T[i]
+            );
+        }
+        let mut var_p = vec![0.0; num_entries];
+        let mut var_C = vec![0.0; num_entries];
+        let mut var_T = vec![0.0; num_entries];
+        for result in raw_res_best.iter() {
+            let p = result.0.error.error_rate() - average_p[result.5];
+            var_p[result.5] += p * p;
+            let C = result.0.capacity() - average_C[result.5];
+            var_C[result.5] += C * C;
+            let T = result.0.true_capacity() - average_T[result.5];
+            var_T[result.5] += T * T;
+        }
+        for i in 0..num_entries {
+            var_p[i] /= count[i] as f64;
+            var_C[i] /= count[i] as f64;
+            var_T[i] /= count[i] as f64;
+            println!(
+                "{} - {} Variance of p: {}, C: {}, T:{}",
+                name, i, var_p[i], var_C[i], var_T[i]
+            );
+            println!(
+                "CSV:\"{}\",{},{},{},{},{},{},{}",
+                name, i, average_p[i], average_C[i], average_T[i], var_p[i], var_C[i], var_T[i]
+            );
+        }
+        BenchmarkStats {
+            raw_res: raw_res_best,
+            average_p,
+            var_p,
+            average_C,
+            var_C,
+            average_T,
+            var_T,
+        }
+    };
+    results.results.push((numa_m_core_av_addr_st_ff_name, results_numa_m_core_av_addr_st_ff));
+    // Best-Numa-M-Core-AV-Addr-ST-FF
+    results.results.push((best_numa_m_core_av_addr_st_ff_name, results_best_numa_m_core_av_addr_st_ff));
+
+    // Numa-MAV-ST-FR
+
+    // Numa-MAV-ST-FF
+
+    // Numa-MAV-DT-FR
+
+    // Numa-MAV-DT-FF
+
+    // Meilleurs cas et Pire cas
+    // Topology Unaware ST FF-FR
+    // Prendre tout en compte ST / FF - FR
+    // Et Juste Numa ST / DT FF - FR
 
     // What we could do
     // Topology un-aware ? {ST, DT} x {FF, FR}
@@ -313,7 +714,7 @@ fn main() {
             true,
         );
     */
-    let singlethreshold_ff = run_benchmark(
+    /*let singlethreshold_ff = run_benchmark(
         "Topology Aware F+F",
         |i, j, k| {
             let (mut r, (node, attacker, victim)) = FlushAndFlush::new_with_locations(
@@ -412,7 +813,7 @@ fn main() {
         true,
         optimize_numa
     );
-    results.results.push(("Topology Aware F+R".to_owned(), fr));
+    results.results.push(("Topology Aware F+R".to_owned(), fr));*/
 
     use chrono::Local;
     let time = Local::now();
