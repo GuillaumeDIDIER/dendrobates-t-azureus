@@ -280,7 +280,7 @@ fn main() {
             &operations,
             CalibrationOptions {
                 iterations: CLFLUSH_NUM_ITER,
-                verbosity: Verbosity::NoOutput,//verbose_level,
+                verbosity: verbose_level, //Verbosity::NoOutput,//,
                 optimised_addresses: true,
                 measure_hash: false,
                 warmup_iterations: CALIBRATION_WARMUP_ITER,
