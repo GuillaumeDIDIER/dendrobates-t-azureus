@@ -9,7 +9,7 @@ use covert_channels_evaluation::{
     CovertChannelBenchmarkResult,
 };
 use flush_flush::FlushAndFlush;
-use flush_reload::FlushAndReload;
+use flush_reload::{FlushAndReload, FlushAndReloadCovertOpt};
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
 use num_rational::Rational64;
@@ -272,6 +272,68 @@ fn main() {
         results.results.push((tu_st_fr_name, results_tu_st_fr));
     }
     {
+        // TU-ST-FRO
+        // FIXME, build the channel outside, and then clone it when needed !
+        let tu_st_fro_name = String::from("TU-ST-FRO");
+        let (mut topology_unaware_fro_channel, old_mask, _node, _attacker, _victim) =
+            FlushAndReloadCovertOpt::new_any_location(
+                false,
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    victim: CoreLocParameters {
+                        socket: true,
+                        core: true,
+                    },
+                    memory_numa_node: true,
+                    memory_slice: true,
+                    memory_vpn: true,
+                    memory_offset: true,
+                },
+                LocationParameters {
+                    attacker: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    victim: CoreLocParameters {
+                        socket: false,
+                        core: false,
+                    },
+                    memory_numa_node: false,
+                    memory_slice: false,
+                    memory_vpn: false,
+                    memory_offset: false,
+                },
+                norm_threshold,
+                norm_location,
+                calibration_results::classifiers::SimpleThresholdBuilder {},
+                CLFLUSH_NUM_ITER,
+            )
+                .unwrap();
+
+        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
+
+        set_affinity(&old_mask).unwrap();
+
+        let results_tu_st_fro = run_benchmark(
+            &tu_st_fro_name,
+            |i, j, k| {
+                let mut r = topology_unaware_fro_channel.clone();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
+            },
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+            optimize_numa,
+        );
+
+        results.results.push((tu_st_fro_name, results_tu_st_fro));
+    }
+    {
         // TU-ST-FF
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_ff_name = String::from("TU-ST-FF");
@@ -512,6 +574,186 @@ fn main() {
         results.results.push((
             best_numa_m_core_av_addr_st_fr_name,
             results_best_numa_m_core_av_addr_st_fr,
+        ));
+    }
+    {
+        // Numa-M-Core-AV-Addr-ST-FRO
+        let numa_m_core_av_addr_st_fro_name = String::from("Numa-M-Core-AV-Addr-ST-FRO");
+        let results_numa_m_core_av_addr_st_fro = run_benchmark(
+            &numa_m_core_av_addr_st_fro_name,
+            |i, j, k| {
+                let (mut r, (node, attacker, victim)) = FlushAndReloadCovertOpt::new_with_locations(
+                    vec![(i, j, k)].into_iter(),
+                    LocationParameters {
+                        attacker: CoreLocParameters {
+                            socket: true,
+                            core: true,
+                        },
+                        victim: CoreLocParameters {
+                            socket: true,
+                            core: true,
+                        },
+                        memory_numa_node: true,
+                        memory_slice: true,
+                        memory_vpn: true,
+                        memory_offset: true,
+                    },
+                    LocationParameters {
+                        attacker: CoreLocParameters {
+                            socket: true,
+                            core: true,
+                        },
+                        victim: CoreLocParameters {
+                            socket: true,
+                            core: true,
+                        },
+                        memory_numa_node: true,
+                        memory_slice: true,
+                        memory_vpn: true,
+                        memory_offset: false,
+                    },
+                    norm_threshold,
+                    norm_location,
+                    calibration_results::classifiers::SimpleThresholdBuilder {},
+                    CLFLUSH_NUM_ITER,
+                )
+                    .unwrap();
+                r.set_location(Some(i), Some(j), Some(k)).unwrap();
+                r
+            },
+            NUM_ITER,
+            &num_pages,
+            old,
+            true,
+            optimize_numa,
+        );
+
+        let best_numa_m_core_av_addr_st_fro_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FRO");
+        let results_best_numa_m_core_av_addr_st_fro = {
+            let name = &best_numa_m_core_av_addr_st_fro_name;
+            let per_location: HashMap<_, _> = results_numa_m_core_av_addr_st_fro
+                .raw_res
+                .par_iter()
+                .map(
+                    |(result, page_number, node, core_1, core_2, page_number_index)| {
+                        (
+                            (page_number, node, core_1, core_2, page_number_index),
+                            result,
+                        )
+                    },
+                )
+                .collect();
+
+            let remapped = reduce(
+                per_location,
+                |(_pn, node, core_1, core_2, _pni)| (node, core_1, core_2),
+                || (ChannelError::default(), Vec::new()),
+                |acc, v, k, rk| {
+                    acc.0 += v.error;
+                    acc.1.push((k, v))
+                },
+                |acc, rk| acc,
+            );
+            let best = remapped
+                .par_iter()
+                .min_by_key(|(k, v)| v.0.error_ratio())
+                .unwrap();
+            let raw_res_best: Vec<(
+                CovertChannelBenchmarkResult,
+                usize,
+                NumaNode,
+                usize,
+                usize,
+                usize,
+            )> = best
+                .1
+                .1
+                .par_iter()
+                .map(|(k, r)| ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4))
+                .collect();
+            let num_entries = num_pages.len();
+            let mut count = vec![0; num_entries];
+            let mut average_p = vec![0.0; num_entries];
+            let mut average_C = vec![0.0; num_entries];
+            let mut average_T = vec![0.0; num_entries];
+            for result in raw_res_best.iter() {
+                count[result.5] += 1;
+                println!(
+                    "num_page: {}, node: {}, main: {}, helper: {}, result: {:?}",
+                    result.1, result.2, result.3, result.4, result.0
+                );
+                println!(
+                    "C: {}, T: {}",
+                    result.0.capacity(),
+                    result.0.true_capacity()
+                );
+                println!(
+                    "Detailed:\"{}\",{},{},{},{},{},{},{}",
+                    name,
+                    result.1,
+                    result.2,
+                    result.3,
+                    result.4,
+                    result.0.csv(),
+                    result.0.capacity(),
+                    result.0.true_capacity()
+                );
+                average_p[result.5] += result.0.error.error_rate();
+                average_C[result.5] += result.0.capacity();
+                average_T[result.5] += result.0.true_capacity()
+            }
+            for i in 0..num_entries {
+                average_p[i] /= count[i] as f64;
+                average_C[i] /= count[i] as f64;
+                average_T[i] /= count[i] as f64;
+                println!(
+                    "{} - {} Average p: {} C: {}, T: {}",
+                    name, i, average_p[i], average_C[i], average_T[i]
+                );
+            }
+            let mut var_p = vec![0.0; num_entries];
+            let mut var_C = vec![0.0; num_entries];
+            let mut var_T = vec![0.0; num_entries];
+            for result in raw_res_best.iter() {
+                let p = result.0.error.error_rate() - average_p[result.5];
+                var_p[result.5] += p * p;
+                let C = result.0.capacity() - average_C[result.5];
+                var_C[result.5] += C * C;
+                let T = result.0.true_capacity() - average_T[result.5];
+                var_T[result.5] += T * T;
+            }
+            for i in 0..num_entries {
+                var_p[i] /= count[i] as f64;
+                var_C[i] /= count[i] as f64;
+                var_T[i] /= count[i] as f64;
+                println!(
+                    "{} - {} Variance of p: {}, C: {}, T:{}",
+                    name, i, var_p[i], var_C[i], var_T[i]
+                );
+                println!(
+                    "CSV:\"{}\",{},{},{},{},{},{},{}",
+                    name, i, average_p[i], average_C[i], average_T[i], var_p[i], var_C[i], var_T[i]
+                );
+            }
+            BenchmarkStats {
+                raw_res: raw_res_best,
+                average_p,
+                var_p,
+                average_C,
+                var_C,
+                average_T,
+                var_T,
+            }
+        };
+        results.results.push((
+            numa_m_core_av_addr_st_fro_name,
+            results_numa_m_core_av_addr_st_fro,
+        ));
+
+        // Best-Numa-M-Core-AV-Addr-ST-FR
+        results.results.push((
+            best_numa_m_core_av_addr_st_fro_name,
+            results_best_numa_m_core_av_addr_st_fro,
         ));
     }
     {
