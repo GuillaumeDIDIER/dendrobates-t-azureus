@@ -106,6 +106,24 @@ unsafe fn reload_and_flush_wrap(_: &(), addr: *const u8) -> u64 {
     unsafe { reload_and_flush(addr) }
 }
 
+struct Dummy {}
+
+impl Dummy {
+    fn only_flush(&self, addr: *const u8) -> u64 {
+        unsafe { only_flush(addr) }
+    }
+    fn only_reload(&self, addr: *const u8) -> u64 {
+        unsafe { only_reload(addr) }
+    }
+
+    fn reload_flush(&self, addr: *const u8) -> u64 {
+        let r = unsafe { only_reload(addr) };
+        unsafe{ multiple_access(addr) };
+        unsafe { only_flush(addr) };
+        r
+    }
+}
+
 fn main() {
     // Grab a slice of memory
 
@@ -163,13 +181,43 @@ fn main() {
         panic!("not aligned nicely");
     }
 
+    let dummy = Dummy{};
+
     let operations = [
         CalibrateOperation2T {
-            prepare: maccess::<u8>,
-            op: only_flush_wrap,
+            prepare: maccess::<u8>, //maccess::<u8>, //maccess_fenced::<u8>,
+            op: Dummy::only_reload,
+            name: "shared_hit",
+            display_name: "shared hit",
+            t: &dummy,
+        },
+        CalibrateOperation2T {
+            prepare: maccess::<u8>, //multiple_access, maccess::<u8>, //maccess_fenced::<u8>,
+            op: Dummy::reload_flush,
+            name: "reload_remote_hit",
+            display_name: "reload remote hit",
+            t: &dummy,
+        },
+        CalibrateOperation2T {
+            prepare: noop::<u8>, //flush, //noop::<u8>,             //noop::<u8>,
+            op: Dummy::reload_flush, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
+            name: "reload_miss_n",
+            display_name: "reload miss - n",
+            t: &dummy,
+        },
+        CalibrateOperation2T {
+            prepare: flush, //flush, //noop::<u8>,             //noop::<u8>,
+            op: Dummy::only_reload, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
+            name: "reload_miss_f",
+            display_name: "reload miss - f",
+            t: &dummy,
+        },
+        CalibrateOperation2T {
+            prepare: maccess::<u8>, //maccess_fenced::<u8>,
+            op: Dummy::only_flush,
             name: "clflush_remote_hit",
             display_name: "clflush remote hit",
-            t: &(),
+            t: &dummy,
         },
         /*        CalibrateOperation2T {
             prepare: maccess::<u8>,
@@ -180,10 +228,10 @@ fn main() {
         },*/
         CalibrateOperation2T {
             prepare: flush,
-            op: only_flush_wrap,
+            op: Dummy::only_flush,
             name: "clflush_miss_f",
             display_name: "clflush miss - f",
-            t: &(),
+            t: &dummy,
         },
         /*        CalibrateOperation2T {
             prepare: flush,
@@ -194,10 +242,10 @@ fn main() {
         },*/
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: only_flush_wrap,
+            op: Dummy::only_flush,
             name: "clflush_miss_n",
             display_name: "clflush miss - n",
-            t: &(),
+            t: &dummy,
         },
         /*        CalibrateOperation2T {
             prepare: noop::<u8>,
@@ -206,20 +254,7 @@ fn main() {
             display_name: "clflush local hit - n",
             t: &(),
         },*/
-        CalibrateOperation2T {
-            prepare: noop::<u8>,
-            op: flush_and_reload_wrap,
-            name: "reload_miss",
-            display_name: "reload miss",
-            t: &(),
-        },
-        CalibrateOperation2T {
-            prepare: maccess::<u8>,
-            op: reload_and_flush_wrap,
-            name: "reload_remote_hit",
-            display_name: "reload remote hit",
-            t: &(),
-        },
+
         /*        CalibrateOperation2T {
             prepare: maccess::<u8>,
             op: only_reload_wrap,
@@ -245,7 +280,7 @@ fn main() {
             &operations,
             CalibrationOptions {
                 iterations: CLFLUSH_NUM_ITER,
-                verbosity: verbose_level,
+                verbosity: Verbosity::NoOutput,//verbose_level,
                 optimised_addresses: true,
                 measure_hash: false,
                 warmup_iterations: CALIBRATION_WARMUP_ITER,

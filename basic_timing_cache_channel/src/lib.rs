@@ -19,28 +19,28 @@ use cache_side_channel::{
     MultipleAddrCacheSideChannel, SideChannelError, SingleAddrCacheSideChannel,
 };
 use cache_utils::calibration::{
-    calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn, only_flush, only_reload,
-    CalibrateOperation2T, CalibrationOptions, HashMap, Verbosity, CALIBRATION_WARMUP_ITER,
-    PAGE_LEN, PAGE_SHIFT,
+    CALIBRATION_WARMUP_ITER, CalibrateOperation2T, CalibrationOptions, HashMap, PAGE_LEN,
+    PAGE_SHIFT, Verbosity, calibrate_fixed_freq_2_thread_numa, get_cache_attack_slicing, get_vpn,
+    only_flush, only_reload,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{find_core_per_socket, flush, maccess};
+use cache_utils::{find_core_per_socket, flush, maccess, noop};
 use calibration_results::calibration::{
     AVMLocation, CoreLocation, ErrorPrediction, LocationParameters, PartialLocation,
     PartialLocationOwned, StaticHistCalibrateResult, VPN,
 };
 use calibration_results::calibration_2t::{
-    calibration_result_to_location_map, CalibrateResult2TNuma,
+    CalibrateResult2TNuma, calibration_result_to_location_map,
 };
 use calibration_results::classifiers::{ErrorPredictionsBuilder, ErrorPredictor, HitClassifier};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
 use calibration_results::{map_values, reduce};
 use cpuid::complex_addressing::CacheAttackSlicing;
-use nix::sched::sched_getaffinity;
 use nix::sched::CpuSet;
+use nix::sched::sched_getaffinity;
 use nix::unistd::Pid;
-use numa_utils::numa_node_of_cpu;
 use numa_utils::NumaNode;
+use numa_utils::numa_node_of_cpu;
 use rand::seq::IndexedRandom;
 use std::collections::HashSet;
 use std::fmt;
@@ -54,8 +54,10 @@ pub mod topology_aware_single_threshold;
 const CACHE_LINE_LENGTH: usize = 64; // FIXME MAGIC to be autodetected.
 
 pub trait TimingChannelPrimitives: Debug + Send + Sync + Default {
+    unsafe fn reset(&self, addr: *const u8);
     unsafe fn attack(&self, addr: *const u8) -> u64;
-    const NEED_RESET: bool;
+    unsafe fn attack_reset(&self, addr: *const u8) -> u64;
+    //const NEED_RESET: bool;
 }
 
 #[derive(Debug)]
@@ -98,6 +100,7 @@ pub struct TopologyAwareTimingChannel<
     Norm: Ord + Debug + Clone,
     NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
     NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool = true,
 > {
     slicing: CacheAttackSlicing,
     t: T,
@@ -117,38 +120,41 @@ pub struct TopologyAwareTimingChannel<
 }
 
 unsafe impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives + Send,
-        E: ErrorPredictionsBuilder<WIDTH, N> + Send,
-        Norm: Ord + Send + Debug + Clone,
-        NFThres: Send + Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Send + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > Send for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives + Send,
+    E: ErrorPredictionsBuilder<WIDTH, N> + Send,
+    Norm: Ord + Send + Debug + Clone,
+    NFThres: Send + Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Send + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> Send for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
 }
 
 unsafe impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives + Sync,
-        E: ErrorPredictionsBuilder<WIDTH, N> + Sync,
-        Norm: Ord + Sync + Debug + Clone,
-        NFThres: Sync + Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Sync + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > Sync for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives + Sync,
+    E: ErrorPredictionsBuilder<WIDTH, N> + Sync,
+    Norm: Ord + Sync + Debug + Clone,
+    NFThres: Sync + Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Sync + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> Sync for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     pub fn new(
         fixed_location: (Option<NumaNode>, Option<usize>, Option<usize>), // Those might need to change to a simpler types (core numbers, numa node ?)
@@ -203,16 +209,17 @@ impl<
         let core_per_socket = find_core_per_socket();
 
         let operations = [
+
             CalibrateOperation2T {
                 prepare: maccess::<u8>,
-                op: T::attack,
+                op: if COVERT_CHANNEL_RESET {T::attack_reset} else {T::attack},
                 name: "hit",
                 display_name: "hit",
                 t: &t,
             },
             CalibrateOperation2T {
-                prepare: flush,
-                op: T::attack,
+                prepare: if COVERT_CHANNEL_RESET {noop::<u8>} else {flush},
+                op: if COVERT_CHANNEL_RESET {T::attack_reset} else {T::attack},
                 name: "miss",
                 display_name: "miss",
                 t: &t,
@@ -383,6 +390,13 @@ impl<
                 ((*(best.0)).clone(), norm, accumulator[best.1].clone())
             },
         );
+        if result.iter().count() == 1 {
+            let threshold = result.iter().next().unwrap();
+            eprintln!(
+                "Single Threshold: {:?} ({:?})",
+                threshold.1.0, threshold.1.1
+            );
+        }
         Ok(result)
     }
 
@@ -740,8 +754,8 @@ impl<
             return Err(SideChannelError::NeedRecalibration);
         }
         let time = unsafe { self.t.attack(handle.addr) };
-        if T::NEED_RESET && reset {
-            unsafe { flush(handle.addr) };
+        if reset {
+            unsafe { self.t.reset(handle.addr) };
         }
         if let Ok(bucket) = SimpleBucketU64::try_from(time) {
             if handle.threshold.is_hit(bucket) {
@@ -780,8 +794,8 @@ impl<
                     return Err(e);
                 }
             }
-            if T::NEED_RESET && reset {
-                unsafe { flush(addr) };
+            if reset {
+                unsafe { self.t.reset(addr) };
             }
         }
         Ok(result)
@@ -794,7 +808,7 @@ impl<
         if handle.calibration_epoch != self.calibration_epoch {
             return Err(SideChannelError::NeedRecalibration);
         }
-        unsafe { flush(handle.addr) };
+        unsafe { flush(handle.addr) }; // FIXME if the set up is not a flush.
         handle.ready = true;
         Ok(())
     }
@@ -823,14 +837,15 @@ impl<
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > Debug for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> Debug for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Topology Aware Channel")
@@ -850,14 +865,16 @@ impl<
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > LocationSpec for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> LocationSpec
+    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     fn main_core(&self) -> CpuSet {
         let mut main = CpuSet::new();
@@ -879,15 +896,16 @@ impl<
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > MultipleAddrCacheSideChannel
-    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> MultipleAddrCacheSideChannel
+    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     type Handle = TopologyAwareTimingChannelHandle<WIDTH, N, E::E>;
     const MAX_ADDR: u32 = 0;
@@ -975,6 +993,9 @@ impl<
             for (k, v) in hashmap {
                 self.thresholds.insert(k, v);
             }
+            if self.thresholds.iter().count() == 1 {
+                eprintln!("Single Threshold: {:?}", self.thresholds);
+            }
         }
 
         // extract all the thresholds.
@@ -998,15 +1019,15 @@ impl<
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > SingleAddrCacheSideChannel
-    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> SingleAddrCacheSideChannel for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     type Handle = TopologyAwareTimingChannelHandle<WIDTH, N, E::E>;
 
@@ -1035,18 +1056,19 @@ impl<
 }
 
 impl<
-        'a,
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Send + Sync + Debug + Clone,
-        NFThres: Send + Sync + Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Send + Sync + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > CovertChannel for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    'a,
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Send + Sync + Debug + Clone,
+    NFThres: Send + Sync + Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Send + Sync + Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> CovertChannel for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     type CovertChannelHandle =
-        CovertChannelHandle<TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>>;
+        CovertChannelHandle<TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>>;
     const BIT_PER_PAGE: usize = 1;
 
     unsafe fn transmit<'b>(
@@ -1059,14 +1081,14 @@ impl<
         if let Some(b) = bits.next() {
             if b {
                 unsafe { only_reload(page) };
-            } else {
+            } else if !COVERT_CHANNEL_RESET {
                 unsafe { only_flush(page) };
             }
         }
     }
 
     unsafe fn receive(&self, handle: &mut Self::CovertChannelHandle) -> Vec<bool> {
-        let r = unsafe { self.test_one_impl(&mut handle.0, false) }; // transmit does the reload / flush as needed.
+        let r = unsafe { self.test_one_impl(&mut handle.0, COVERT_CHANNEL_RESET) }; // transmit does the reload / flush as needed.
         match r {
             Err(e) => panic!("{:?}", e),
             Ok(status) => {
@@ -1171,7 +1193,9 @@ impl<
 
     unsafe fn unready_page(&mut self, handle: Self::CovertChannelHandle) -> Result<(), ()> {
         let vpn = get_vpn(handle.0.addr);
-        if let Some(addr) = self.preferred_address.get(&vpn) && *addr == handle.0.addr {
+        if let Some(addr) = self.preferred_address.get(&vpn)
+            && *addr == handle.0.addr
+        {
             self.preferred_address.remove(&vpn);
             Ok(())
         } else {
@@ -1181,15 +1205,16 @@ impl<
 }
 
 impl<
-        const WIDTH: u64,
-        const N: usize,
-        T: TimingChannelPrimitives,
-        E: ErrorPredictionsBuilder<WIDTH, N>,
-        Norm: Ord + Debug + Clone,
-        NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
-        NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
-    > TableCacheSideChannel<TopologyAwareTimingChannelHandle<WIDTH, N, E::E>>
-    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc>
+    const WIDTH: u64,
+    const N: usize,
+    T: TimingChannelPrimitives,
+    E: ErrorPredictionsBuilder<WIDTH, N>,
+    Norm: Ord + Debug + Clone,
+    NFThres: Fn(&Vec<ErrorPrediction>) -> Norm,
+    NFLoc: Fn(&Vec<(Norm, Vec<ErrorPrediction>)>) -> Norm,
+    const COVERT_CHANNEL_RESET: bool,
+> TableCacheSideChannel<TopologyAwareTimingChannelHandle<WIDTH, N, E::E>>
+    for TopologyAwareTimingChannel<WIDTH, N, T, E, Norm, NFThres, NFLoc, COVERT_CHANNEL_RESET>
 {
     unsafe fn tcalibrate(
         &mut self,

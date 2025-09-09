@@ -48,9 +48,21 @@ pub unsafe fn maccess<T>(p: *const T) {
     unsafe { ptr::read_volatile(p) };
 }
 
+pub unsafe fn maccess_fenced<T>(p: *const T) {
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { ptr::read_volatile(p) };
+    unsafe { arch_x86::_mm_mfence() };
+}
+
 // flush (cflush)
 pub unsafe fn flush(p: *const u8) {
     unsafe { arch_x86::_mm_clflush(p) };
+}
+
+pub unsafe fn flush_fenced(p: *const u8) {
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { arch_x86::_mm_clflush(p) };
+    unsafe { arch_x86::_mm_mfence() };
 }
 
 pub fn noop<T>(_: *const T) {}

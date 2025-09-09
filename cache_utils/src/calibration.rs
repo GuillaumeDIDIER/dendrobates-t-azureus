@@ -77,7 +77,9 @@ pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
 
 pub unsafe fn reload_and_flush(p: *const u8) -> u64 {
     let r = unsafe { only_reload(p) };
+    unsafe { arch_x86::_mm_mfence() };
     unsafe { flush(p) };
+    unsafe { arch_x86::_mm_mfence() };
     r
 }
 

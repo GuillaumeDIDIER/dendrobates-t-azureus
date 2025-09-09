@@ -76,10 +76,10 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         reset: bool,
     ) -> Result<CacheStatus, SideChannelError> {
         // This should be handled in prepare / unprepare
-        let t = unsafe { self.channel_primitive.attack(handle.addr) };
-        if T::NEED_RESET && reset {
-            unsafe { flush(handle.addr) };
-        }
+        let t = unsafe { self.channel_primitive.attack_reset(handle.addr) };
+        //if T::NEED_RESET && reset {
+        //    unsafe { flush(handle.addr) };
+        //}
         if self.threshold.is_hit(NaiveBucketU64::from(t)) {
             Ok(CacheStatus::Hit)
         } else {
@@ -97,7 +97,7 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         let mut tmp = Vec::new();
         let mut i = 0;
         for addr in handles {
-            let r = unsafe { self.test_one_impl(addr, false) };
+            let r = unsafe { self.test_one_impl(addr, true) };
             tmp.push((addr.to_const_u8_pointer(), r));
             i += 1;
             if i == limit {
@@ -113,9 +113,9 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
                     return Err(e);
                 }
             }
-            if T::NEED_RESET && reset {
-                unsafe { flush(addr) };
-            }
+            //if T::NEED_RESET && reset {
+            //    unsafe { flush(addr) };
+            //}
         }
         Ok(result)
     }
@@ -173,10 +173,10 @@ impl<T: TimingChannelPrimitives> NaiveTimingChannel<T> {
         reset: bool,
     ) -> Result<(CacheStatus, u64), SideChannelError> {
         // This should be handled in prepare / unprepare
-        let t = unsafe { self.channel_primitive.attack(handle.addr) };
-        if T::NEED_RESET && reset {
-            unsafe { flush(handle.addr) };
-        }
+        let t = unsafe { self.channel_primitive.attack_reset(handle.addr) };
+        //if T::NEED_RESET && reset {
+        //    unsafe { flush(handle.addr) };
+        //}
         if self.threshold.is_hit(NaiveBucketU64::from(t)) {
             Ok((CacheStatus::Hit, t))
         } else {

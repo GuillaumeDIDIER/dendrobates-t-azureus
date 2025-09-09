@@ -201,10 +201,19 @@ fn transmit_thread<T: CovertChannel>(
 
     let mut result = Vec::new();
     result.reserve(num_bytes);
+    
     for _ in 0..num_bytes {
         let byte = rand::random();
         result.push(byte);
     }
+    /*for _ in 0..(num_bytes>>1) {
+        let byte = 0xff;
+        result.push(byte);
+    }
+    for _ in (num_bytes>>1)..num_bytes {
+        let byte = 0x0;
+        result.push(byte);
+    }*/
 
     let mut _bit_sent = 0;
     let mut bit_iter = BitIterator::new(&result);
@@ -287,8 +296,6 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
                 break;
             }
         }
-        // TODO
-        // receiver thread
     }
 
     let stop = unsafe { rdtsc_fence() };

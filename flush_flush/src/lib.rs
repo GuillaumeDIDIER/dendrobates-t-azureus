@@ -19,7 +19,13 @@ impl TimingChannelPrimitives for FFPrimitives {
     unsafe fn attack(&self, addr: *const u8) -> u64 {
         unsafe { only_flush(addr) }
     }
-    const NEED_RESET: bool = false;
+    unsafe fn reset(&self, addr: *const u8) {
+        unsafe { only_flush(addr) };
+    }
+    unsafe fn attack_reset(&self, addr: *const u8) -> u64 {
+        unsafe { only_flush(addr) }
+    }
+    //const NEED_RESET: bool = false;
 }
 
 pub type FlushAndFlush<E, NFThresh, NFLoc> = TopologyAwareTimingChannel<

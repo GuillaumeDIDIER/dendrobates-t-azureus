@@ -1,4 +1,4 @@
-use crate::{CacheOps, JsonOutput, Output, QuadErrors, QuadThresholdErrors};
+use crate::{CacheOps, JsonOutput, Output, MultiErrors, MultiThresholdErrors};
 use calibration_results::calibration::{AVMLocation, ErrorPrediction, LocationParameters, PartialLocation, PartialLocationOwned};
 use calibration_results::classifiers::{ErrorPredictor, compute_theoretical_optimum_error};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
@@ -205,18 +205,20 @@ impl Output for ErrorStatisticsResults {
 pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
     full_location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
     choices: Vec<(String, LocationParameters)>,
-    thresholds_map: &HashMap<AVMLocation, QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>>,
-) -> QuadErrors<ErrorStatisticsResults> {
+    thresholds_map: &HashMap<AVMLocation, MultiThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>>,
+) -> MultiErrors<ErrorStatisticsResults> {
     assert_ne!(full_location_map.par_iter().count(), 1);
     println!("Computing statistics...");
 
-    let all_error_predictions: Vec<(AVMLocation, QuadErrors<ErrorPrediction>)> = full_location_map
+    let all_error_predictions: Vec<(AVMLocation, MultiErrors<ErrorPrediction>)> = full_location_map
         .par_iter()
         .map(|(k, hists)| {
             let thresholds = &thresholds_map[k];
             let hist_cum_sums = CacheOps {
                 flush_hit: StaticHistogramCumSum::from(&hists.flush_hit),
                 flush_miss: StaticHistogramCumSum::from(&hists.flush_miss),
+                reload_opt_hit: StaticHistogramCumSum::from(&hists.flush_opt_hit),
+                reload_opt_miss: StaticHistogramCumSum::from(&hists.flush_opt_miss),
                 reload_hit: StaticHistogramCumSum::from(&hists.reload_hit),
                 reload_miss: StaticHistogramCumSum::from(&hists.reload_miss),
             };
@@ -236,6 +238,15 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 .reload_dual_threshold
                 .0
                 .error_prediction(&hist_cum_sums.reload_hit, &hist_cum_sums.reload_miss);
+            let reload_opt_single_error = thresholds
+                .flush_single_threshold
+                .0
+                .error_prediction(&hist_cum_sums.reload_opt_hit, &hist_cum_sums.reload_opt_miss);
+            let reload_opt_dual_error = thresholds
+                .flush_dual_threshold
+                .0
+                .error_prediction(&hist_cum_sums.reload_opt_hit, &hist_cum_sums.reload_opt_miss);
+
             let flush_th_error = compute_theoretical_optimum_error(
                 &hist_cum_sums.flush_hit,
                 &hist_cum_sums.flush_miss,
@@ -244,16 +255,23 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 &hist_cum_sums.reload_hit,
                 &hist_cum_sums.reload_miss,
             );
+            let reload_opt_th_error = compute_theoretical_optimum_error(
+                &hist_cum_sums.reload_opt_hit,
+                &hist_cum_sums.reload_opt_miss,
+            );
 
             (
                 *k,
-                QuadErrors {
+                MultiErrors {
                     flush_single_error,
                     flush_dual_error,
                     flush_th_error,
                     reload_single_error,
                     reload_dual_error,
                     reload_th_error,
+                    reload_opt_single_error,
+                    reload_opt_dual_error,
+                    reload_opt_th_error,
                 },
             )
         })
@@ -261,7 +279,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
 
     println!("Computed all error predictions");
 
-    let mut quad_all_error_pred: QuadErrors<Vec<(AVMLocation, ErrorPrediction)>> = QuadErrors {
+    let mut quad_all_error_pred: MultiErrors<Vec<(AVMLocation, ErrorPrediction)>> = MultiErrors {
         flush_single_error: all_error_predictions
             .par_iter()
             .map(|(l, q)| (*l, q.flush_single_error))
@@ -298,7 +316,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
             // we probably want to turn this into an accumulate / reduce parallel version.
             let mapped = RwLock::new(HashMap::<
                 PartialLocationOwned,
-                Mutex<Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>>,
+                Mutex<Vec<(AVMLocation, MultiErrors<ErrorPrediction>)>>,
             >::new());
 
             all_error_predictions.par_iter().for_each(|(k, q)| {
@@ -328,7 +346,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
 
             let two_level_error_predictions: Vec<(
                 PartialLocationOwned,
-                Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>,
+                Vec<(AVMLocation, MultiErrors<ErrorPrediction>)>,
             )> = mapped
                 .into_inner()
                 .unwrap()
@@ -340,13 +358,13 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 })
                 .collect();
 
-            let quad_two_level_error_predictions: QuadErrors<
+            let quad_two_level_error_predictions: MultiErrors<
                 Vec<(
                     PartialLocationOwned,
                     ErrorPrediction,
                     Vec<(AVMLocation, ErrorPrediction)>,
                 )>,
-            > = QuadErrors {
+            > = MultiErrors {
                 flush_single_error: two_level_error_predictions
                     .par_iter()
                     .map(|(p, qv)| {
@@ -564,7 +582,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                     max: (best_max.reload_th_error.1, best_max.reload_th_error.0),
                 },
             );
-            QuadErrors {
+            MultiErrors {
                 flush_single_error,
                 flush_dual_error,
                 flush_th_error,
@@ -576,7 +594,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         .collect::<Vec<_>>();
     println!("Computed choices");
 
-    let mut choice = QuadErrors {
+    let mut choice = MultiErrors {
         flush_single_error: Vec::new(),
         flush_dual_error: Vec::new(),
         flush_th_error: Vec::new(),
@@ -642,7 +660,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         all_e_p[(3 * len - 1) >> 2]
     });
 
-    let all_avg: QuadErrors<ErrorPrediction> =
+    let all_avg: MultiErrors<ErrorPrediction> =
         quad_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, e)| e).sum());
 
     println!("Extracted statistics");
@@ -718,7 +736,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
 
     println!("Done");
 
-    QuadErrors {
+    MultiErrors {
         flush_single_error,
         flush_dual_error,
         flush_th_error,
@@ -734,9 +752,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     choices: Vec<(String, LocationParameters)>,
     thresholds_map: &HashMap<
         PartialLocationOwned,
-        QuadThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>,
+        MultiThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>,
     >,
-) -> QuadErrors<ErrorStatisticsResults> {
+) -> MultiErrors<ErrorStatisticsResults> {
     assert_ne!(full_location_map.par_iter().count(), 1);
 
     println!("Computing statistics...");
@@ -744,7 +762,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     let all_error_predictions: Vec<(
         AVMLocation,
         PartialLocationOwned,
-        QuadErrors<ErrorPrediction>,
+        MultiErrors<ErrorPrediction>,
     )> = full_location_map
         .par_iter()
         .map(|(k, hists)| {
@@ -784,7 +802,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             (
                 *k,
                 key,
-                QuadErrors {
+                MultiErrors {
                     flush_single_error,
                     flush_dual_error,
                     flush_th_error,
@@ -798,9 +816,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
 
     println!("Computed all error predictions");
 
-    let mut quad_all_error_pred: QuadErrors<
+    let mut quad_all_error_pred: MultiErrors<
         Vec<(AVMLocation, PartialLocationOwned, ErrorPrediction)>,
-    > = QuadErrors {
+    > = MultiErrors {
         flush_single_error: all_error_predictions
             .par_iter()
             .map(|(l, p, q)| (*l, *p, q.flush_single_error))
@@ -837,7 +855,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             // we probably want to turn this into an accumulate / reduce parallel version.
             let mapped = RwLock::new(HashMap::<
                 PartialLocationOwned,
-                Mutex<Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>>,
+                Mutex<Vec<(AVMLocation, MultiErrors<ErrorPrediction>)>>,
             >::new());
 
             all_error_predictions.par_iter().for_each(|(k, _p, q)| {
@@ -867,7 +885,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
 
             let two_level_error_predictions: Vec<(
                 PartialLocationOwned,
-                Vec<(AVMLocation, QuadErrors<ErrorPrediction>)>,
+                Vec<(AVMLocation, MultiErrors<ErrorPrediction>)>,
             )> = mapped
                 .into_inner()
                 .unwrap()
@@ -879,13 +897,13 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 })
                 .collect();
 
-            let quad_two_level_error_predictions: QuadErrors<
+            let quad_two_level_error_predictions: MultiErrors<
                 Vec<(
                     PartialLocationOwned,
                     ErrorPrediction,
                     Vec<(AVMLocation, ErrorPrediction)>,
                 )>,
-            > = QuadErrors {
+            > = MultiErrors {
                 flush_single_error: two_level_error_predictions
                     .par_iter()
                     .map(|(p, qv)| {
@@ -1103,7 +1121,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                     max: (best_max.reload_th_error.1, best_max.reload_th_error.0),
                 },
             );
-            QuadErrors {
+            MultiErrors {
                 flush_single_error,
                 flush_dual_error,
                 flush_th_error,
@@ -1115,7 +1133,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         .collect::<Vec<_>>();
     println!("Computed choices");
 
-    let mut choice = QuadErrors {
+    let mut choice = MultiErrors {
         flush_single_error: Vec::new(),
         flush_dual_error: Vec::new(),
         flush_th_error: Vec::new(),
@@ -1181,7 +1199,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         all_e_p[(3 * len - 1) >> 2]
     });
 
-    let all_avg: QuadErrors<ErrorPrediction> =
+    let all_avg: MultiErrors<ErrorPrediction> =
         quad_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, _p, e)| e).sum());
 
     println!("Extracted statistics");
@@ -1257,7 +1275,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
 
     println!("Done");
 
-    QuadErrors {
+    MultiErrors {
         flush_single_error,
         flush_dual_error,
         flush_th_error,
