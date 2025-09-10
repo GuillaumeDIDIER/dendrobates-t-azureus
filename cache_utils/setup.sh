@@ -11,3 +11,7 @@ cd ~/dendrobates-t-azureus/cache_utils/
 cargo build --release --bin numa_calibration
 cargo build --release --bin numa_calibration_1500
 cargo build --release --bin numa_calibration_3000
+cd ../covert_channels_benchmark
+cargo build --release --bin covert_channels_benchmark
+cargo build --release --bin covert_channels_benchmark_1500
+cargo build --release --bin covert_channels_benchmark_3000
