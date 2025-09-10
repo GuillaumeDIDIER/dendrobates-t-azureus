@@ -246,7 +246,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                 },
                 norm_threshold,
                 norm_location,
-                calibration_results::classifiers::SimpleThresholdBuilder {},
+                calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                 CLFLUSH_NUM_ITER,
             )
             .unwrap();
@@ -311,7 +311,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                 },
                 norm_threshold,
                 norm_location,
-                calibration_results::classifiers::SimpleThresholdBuilder {},
+                calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                 CLFLUSH_NUM_ITER,
             )
             .unwrap();
@@ -377,7 +377,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                 },
                 norm_threshold,
                 norm_location,
-                calibration_results::classifiers::SimpleThresholdBuilder {},
+                calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                 CLFLUSH_NUM_ITER,
             )
             .unwrap();
@@ -443,7 +443,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                     },
                     norm_threshold,
                     norm_location,
-                    calibration_results::classifiers::SimpleThresholdBuilder {},
+                    calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                     CLFLUSH_NUM_ITER,
                 )
                 .unwrap();
@@ -624,7 +624,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                         },
                         norm_threshold,
                         norm_location,
-                        calibration_results::classifiers::SimpleThresholdBuilder {},
+                        calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                         CLFLUSH_NUM_ITER,
                     )
                     .unwrap();
@@ -804,7 +804,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
                     },
                     norm_threshold,
                     norm_location,
-                    calibration_results::classifiers::SimpleThresholdBuilder {},
+                    calibration_results::classifiers::SimpleThresholdBuilder::<W, N> {},
                     CLFLUSH_NUM_ITER,
                 )
                 .unwrap();
