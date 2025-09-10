@@ -1,6 +1,6 @@
 #!/bin/bash
 
-$SUDO=sudo-g5k
+SUDO=sudo-g5k
 
 $SUDO apt-get update
 $SUDO apt-get install libnuma-dev curl git bzip2 gcc hwloc htop libclang-dev libcpufreq-dev -y
