@@ -26,18 +26,18 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 //use rmp_serde::Deserializer;
 //use serde::Deserialize;
+use crate::error_statistics::location_parameters_json;
 use calibration_results::classifiers::{
     DualThreshold, DualThresholdBuilder, ErrorPredictionsBuilder, ErrorPredictor,
     SimpleThresholdBuilder, Threshold, compute_theoretical_optimum_error,
 };
+use json::JsonValue;
+use json::object::Object;
 use num::integer::gcd;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use json::JsonValue;
-use json::object::Object;
-use crate::error_statistics::location_parameters_json;
 
 #[derive(Default)]
 pub struct CacheOps<T> {
@@ -321,7 +321,7 @@ impl<T: Sized + Send + Sync> MultiErrors<T> {
     }
 }
 
-impl<T:JsonOutput> JsonOutput for MultiErrors<T> {
+impl<T: JsonOutput> JsonOutput for MultiErrors<T> {
     fn to_json(&self, base: &Object) -> Vec<Object> {
         let mut result = Vec::new();
         let mut ff_s_base = base.clone();
@@ -415,7 +415,9 @@ where
     writeln!(
         out,
         "{}-FRO-Single: {}, Error prediction: {} ",
-        basename, thresholds.reload_opt_single_threshold.0, thresholds.reload_opt_single_threshold.1
+        basename,
+        thresholds.reload_opt_single_threshold.0,
+        thresholds.reload_opt_single_threshold.1
     )?;
     writeln!(
         out,
@@ -815,7 +817,7 @@ where
             folder.as_ref().join(picture_fro_jobname_tex),
             picture_fro.standalone_string(),
         )
-            .expect("Failed to write plot");
+        .expect("Failed to write plot");
         picture_fro
             .to_pdf(folder.as_ref(), picture_fro_jobname, Engine::LuaLatex)
             .expect("Failed to create PDF");
@@ -978,7 +980,7 @@ where
             folder.as_ref().join(picture_fro_jobname_tex),
             picture_fro.standalone_string(),
         )
-            .expect("Failed to write plot");
+        .expect("Failed to write plot");
         match picture_fro.to_pdf(folder.as_ref(), &picture_fro_jobname, Engine::LuaLatex) {
             Ok(_) => {}
             Err(e) => {
@@ -1315,6 +1317,7 @@ where
         basename_all,
         true,
         true,
+        true,
         GroupDimension::Horizontal(1),
         &(ordering_all as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
     )
@@ -1437,6 +1440,7 @@ where
             projected_numa,
             &folder,
             basename_numa,
+            true,
             true,
             true,
             GroupDimension::Rectangle(victim_socket_count * attacker_socket_count, numa_node_count),

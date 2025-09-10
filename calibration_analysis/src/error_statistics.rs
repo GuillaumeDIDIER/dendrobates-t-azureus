@@ -1,14 +1,16 @@
-use crate::{CacheOps, JsonOutput, Output, MultiErrors, MultiThresholdErrors};
-use calibration_results::calibration::{AVMLocation, ErrorPrediction, LocationParameters, PartialLocation, PartialLocationOwned};
+use crate::{CacheOps, JsonOutput, MultiErrors, MultiThresholdErrors, Output};
+use calibration_results::calibration::{
+    AVMLocation, ErrorPrediction, LocationParameters, PartialLocation, PartialLocationOwned,
+};
 use calibration_results::classifiers::{ErrorPredictor, compute_theoretical_optimum_error};
 use calibration_results::histograms::{SimpleBucketU64, StaticHistogram, StaticHistogramCumSum};
+use json::object::Object;
+use json::{JsonValue, object};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Mutex, RwLock};
-use json::{object, JsonValue};
-use json::object::Object;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StatisticsResults {
@@ -217,8 +219,8 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
             let hist_cum_sums = CacheOps {
                 flush_hit: StaticHistogramCumSum::from(&hists.flush_hit),
                 flush_miss: StaticHistogramCumSum::from(&hists.flush_miss),
-                reload_opt_hit: StaticHistogramCumSum::from(&hists.flush_opt_hit),
-                reload_opt_miss: StaticHistogramCumSum::from(&hists.flush_opt_miss),
+                reload_opt_hit: StaticHistogramCumSum::from(&hists.reload_opt_hit),
+                reload_opt_miss: StaticHistogramCumSum::from(&hists.reload_opt_miss),
                 reload_hit: StaticHistogramCumSum::from(&hists.reload_hit),
                 reload_miss: StaticHistogramCumSum::from(&hists.reload_miss),
             };
@@ -238,14 +240,15 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 .reload_dual_threshold
                 .0
                 .error_prediction(&hist_cum_sums.reload_hit, &hist_cum_sums.reload_miss);
-            let reload_opt_single_error = thresholds
-                .flush_single_threshold
-                .0
-                .error_prediction(&hist_cum_sums.reload_opt_hit, &hist_cum_sums.reload_opt_miss);
-            let reload_opt_dual_error = thresholds
-                .flush_dual_threshold
-                .0
-                .error_prediction(&hist_cum_sums.reload_opt_hit, &hist_cum_sums.reload_opt_miss);
+            let reload_opt_single_error =
+                thresholds.reload_opt_single_threshold.0.error_prediction(
+                    &hist_cum_sums.reload_opt_hit,
+                    &hist_cum_sums.reload_opt_miss,
+                );
+            let reload_opt_dual_error = thresholds.reload_opt_dual_threshold.0.error_prediction(
+                &hist_cum_sums.reload_opt_hit,
+                &hist_cum_sums.reload_opt_miss,
+            );
 
             let flush_th_error = compute_theoretical_optimum_error(
                 &hist_cum_sums.flush_hit,
@@ -279,7 +282,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
 
     println!("Computed all error predictions");
 
-    let mut quad_all_error_pred: MultiErrors<Vec<(AVMLocation, ErrorPrediction)>> = MultiErrors {
+    let mut multi_all_error_pred: MultiErrors<Vec<(AVMLocation, ErrorPrediction)>> = MultiErrors {
         flush_single_error: all_error_predictions
             .par_iter()
             .map(|(l, q)| (*l, q.flush_single_error))
@@ -303,6 +306,18 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         reload_th_error: all_error_predictions
             .par_iter()
             .map(|(l, q)| (*l, q.reload_th_error))
+            .collect(),
+        reload_opt_single_error: all_error_predictions
+            .par_iter()
+            .map(|(l, q)| (*l, q.reload_opt_single_error))
+            .collect(),
+        reload_opt_dual_error: all_error_predictions
+            .par_iter()
+            .map(|(l, q)| (*l, q.reload_opt_dual_error))
+            .collect(),
+        reload_opt_th_error: all_error_predictions
+            .par_iter()
+            .map(|(l, q)| (*l, q.reload_opt_th_error))
             .collect(),
     };
 
@@ -358,7 +373,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 })
                 .collect();
 
-            let quad_two_level_error_predictions: MultiErrors<
+            let multi_two_level_error_predictions: MultiErrors<
                 Vec<(
                     PartialLocationOwned,
                     ErrorPrediction,
@@ -435,6 +450,42 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                         (*p, e_avg, v)
                     })
                     .collect(),
+                reload_opt_single_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_single_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
+                reload_opt_dual_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_dual_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
+                reload_opt_th_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_th_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
             };
 
             // TODO replace this with quickselect by  key
@@ -442,21 +493,21 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
             //quad_two_level_error_predictions
             //    .apply_mut(|v| v.par_sort_by_key(|(_p, e, _v)| e.error_ratio()));
 
-            let mut quad_best_choice = quad_two_level_error_predictions.map(|v| {
+            let mut multi_best_choice = multi_two_level_error_predictions.map(|v| {
                 v.into_par_iter()
                     .min_by_key(|(_p, e, _v)| e.error_ratio())
                     .unwrap()
             });
 
-            quad_best_choice.apply_mut(|v| v.2.par_sort_by_key(|(_l, e)| e.error_ratio()));
+            multi_best_choice.apply_mut(|v| v.2.par_sort_by_key(|(_l, e)| e.error_ratio()));
 
-            let best_min = quad_best_choice.apply(|v| {
+            let best_min = multi_best_choice.apply(|v| {
                 v.2[0]
                 /* *v.2.par_iter()
                 .min_by_key(|(_l, e)| e.error_ratio())
                 .unwrap()*/
             });
-            let best_max = quad_best_choice.apply(|v| {
+            let best_max = multi_best_choice.apply(|v| {
                 let len = v.2.len();
                 v.2[len - 1]
                 /* *v.2.par_iter()
@@ -464,7 +515,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 .unwrap()*/
             });
 
-            let best_med = quad_best_choice.apply(|v| {
+            let best_med = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (len - 1) >> 1, |(_l, e)| e.error_ratio())
@@ -474,7 +525,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 v.2[(len - 1) >> 1]
             });
 
-            let best_q1 = quad_best_choice.apply(|v| {
+            let best_q1 = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (len - 1) >> 2, |(_l, e)| e.error_ratio())
@@ -483,7 +534,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 let len = v.2.len();
                 v.2[(len - 1) >> 2] // Use the definition, first such that at least 25% are <=
             });
-            let best_q3 = quad_best_choice.apply(|v| {
+            let best_q3 = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (3 * len - 1) >> 2, |(_l, e)| e.error_ratio())
@@ -494,9 +545,9 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
             });
 
             // This one is easy, it's already computed.
-            let best_avg = quad_best_choice.apply(|v| v.1);
+            let best_avg = multi_best_choice.apply(|v| v.1);
 
-            let best_location = quad_best_choice.apply(|v| v.0);
+            let best_location = multi_best_choice.apply(|v| v.0);
             let flush_single_error = (
                 choice_name.clone(),
                 best_location.flush_single_error,
@@ -571,7 +622,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 },
             );
             let reload_th_error = (
-                choice_name,
+                choice_name.clone(),
                 best_location.reload_th_error,
                 StatisticsResults {
                     average: best_avg.reload_th_error,
@@ -582,6 +633,84 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                     max: (best_max.reload_th_error.1, best_max.reload_th_error.0),
                 },
             );
+
+            let reload_opt_single_error = (
+                choice_name.clone(),
+                best_location.reload_opt_single_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_single_error,
+                    min: (
+                        best_min.reload_opt_single_error.1,
+                        best_min.reload_opt_single_error.0,
+                    ),
+                    q1: (
+                        best_q1.reload_opt_single_error.1,
+                        best_q1.reload_opt_single_error.0,
+                    ),
+                    med: (
+                        best_med.reload_opt_single_error.1,
+                        best_med.reload_opt_single_error.0,
+                    ),
+                    q3: (
+                        best_q3.reload_opt_single_error.1,
+                        best_q3.reload_opt_single_error.0,
+                    ),
+                    max: (
+                        best_max.reload_opt_single_error.1,
+                        best_max.reload_opt_single_error.0,
+                    ),
+                },
+            );
+
+            let reload_opt_dual_error = (
+                choice_name.clone(),
+                best_location.reload_opt_dual_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_dual_error,
+                    min: (
+                        best_min.reload_opt_dual_error.1,
+                        best_min.reload_opt_dual_error.0,
+                    ),
+                    q1: (
+                        best_q1.reload_opt_dual_error.1,
+                        best_q1.reload_opt_dual_error.0,
+                    ),
+                    med: (
+                        best_med.reload_opt_dual_error.1,
+                        best_med.reload_opt_dual_error.0,
+                    ),
+                    q3: (
+                        best_q3.reload_opt_dual_error.1,
+                        best_q3.reload_opt_dual_error.0,
+                    ),
+                    max: (
+                        best_max.reload_opt_dual_error.1,
+                        best_max.reload_opt_dual_error.0,
+                    ),
+                },
+            );
+            let reload_opt_th_error = (
+                choice_name,
+                best_location.reload_opt_th_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_th_error,
+                    min: (
+                        best_min.reload_opt_th_error.1,
+                        best_min.reload_opt_th_error.0,
+                    ),
+                    q1: (best_q1.reload_opt_th_error.1, best_q1.reload_opt_th_error.0),
+                    med: (
+                        best_med.reload_opt_th_error.1,
+                        best_med.reload_opt_th_error.0,
+                    ),
+                    q3: (best_q3.reload_opt_th_error.1, best_q3.reload_opt_th_error.0),
+                    max: (
+                        best_max.reload_opt_th_error.1,
+                        best_max.reload_opt_th_error.0,
+                    ),
+                },
+            );
+
             MultiErrors {
                 flush_single_error,
                 flush_dual_error,
@@ -589,6 +718,9 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
                 reload_single_error,
                 reload_dual_error,
                 reload_th_error,
+                reload_opt_single_error,
+                reload_opt_dual_error,
+                reload_opt_th_error,
             }
         })
         .collect::<Vec<_>>();
@@ -601,6 +733,9 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         reload_single_error: Vec::new(),
         reload_dual_error: Vec::new(),
         reload_th_error: Vec::new(),
+        reload_opt_single_error: Vec::new(),
+        reload_opt_dual_error: Vec::new(),
+        reload_opt_th_error: Vec::new(),
     };
 
     for q in results {
@@ -610,6 +745,11 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         choice.reload_single_error.push(q.reload_single_error);
         choice.reload_dual_error.push(q.reload_dual_error);
         choice.reload_th_error.push(q.reload_th_error);
+        choice
+            .reload_opt_single_error
+            .push(q.reload_opt_single_error);
+        choice.reload_opt_dual_error.push(q.reload_opt_dual_error);
+        choice.reload_opt_th_error.push(q.reload_opt_th_error);
     }
 
     // Rewrite this in parallel.
@@ -618,18 +758,18 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
     // The final swap should be reasonably easy though.
 
     // This is faster than quickselect, apparently
-    quad_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, e)| e.error_ratio()));
+    multi_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, e)| e.error_ratio()));
 
     //theoretical_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, _p, e)| e.error_ratio()));
 
-    let all_min = quad_all_error_pred.apply(|all_e_p| {
+    let all_min = multi_all_error_pred.apply(|all_e_p| {
         /* *all_e_p
         .par_iter()
         .min_by_key(|(_l, _p, e)| e.error_ratio())
         .unwrap()*/
         all_e_p[0]
     });
-    let all_max = quad_all_error_pred.apply(|all_e_p| {
+    let all_max = multi_all_error_pred.apply(|all_e_p| {
         /* *all_e_p
         .par_iter()
         .max_by_key(|(_l, _p, e)| e.error_ratio())
@@ -638,21 +778,21 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         all_e_p[len - 1]
     }); // TODO, extend rayon to have min_max_by_key ?
 
-    let all_med = quad_all_error_pred.apply(|all_e_p| {
+    let all_med = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (len - 1) >> 1, |(_l, _p, e)| e.error_ratio())
         .unwrap()
         .1*/
         all_e_p[(len - 1) >> 1]
     });
-    let all_q1 = quad_all_error_pred.apply(|all_e_p| {
+    let all_q1 = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (len - 1) >> 2, |(_l, _p, e)| e.error_ratio())
         .unwrap()
         .1*/
         all_e_p[(len - 1) >> 2]
     });
-    let all_q3 = quad_all_error_pred.apply(|all_e_p| {
+    let all_q3 = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (3*len - 1) >> 2, |(_l, _p, e)| e.error_ratio())
         .unwrap()
@@ -661,7 +801,7 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
     });
 
     let all_avg: MultiErrors<ErrorPrediction> =
-        quad_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, e)| e).sum());
+        multi_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, e)| e).sum());
 
     println!("Extracted statistics");
 
@@ -734,6 +874,71 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         choice: choice.reload_th_error,
     };
 
+    let reload_opt_single_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_single_error,
+            min: (
+                all_min.reload_opt_single_error.1,
+                all_min.reload_opt_single_error.0,
+            ),
+            q1: (
+                all_q1.reload_opt_single_error.1,
+                all_q1.reload_opt_single_error.0,
+            ),
+            med: (
+                all_med.reload_opt_single_error.1,
+                all_med.reload_opt_single_error.0,
+            ),
+            q3: (
+                all_q3.reload_opt_single_error.1,
+                all_q3.reload_opt_single_error.0,
+            ),
+            max: (
+                all_max.reload_opt_single_error.1,
+                all_max.reload_opt_single_error.0,
+            ),
+        },
+        choice: choice.reload_opt_single_error,
+    };
+    let reload_opt_dual_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_dual_error,
+            min: (
+                all_min.reload_opt_dual_error.1,
+                all_min.reload_opt_dual_error.0,
+            ),
+            q1: (
+                all_q1.reload_opt_dual_error.1,
+                all_q1.reload_opt_dual_error.0,
+            ),
+            med: (
+                all_med.reload_opt_dual_error.1,
+                all_med.reload_opt_dual_error.0,
+            ),
+            q3: (
+                all_q3.reload_opt_dual_error.1,
+                all_q3.reload_opt_dual_error.0,
+            ),
+            max: (
+                all_max.reload_opt_dual_error.1,
+                all_max.reload_opt_dual_error.0,
+            ),
+        },
+        choice: choice.reload_opt_dual_error,
+    };
+
+    let reload_opt_th_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_th_error,
+            min: (all_min.reload_opt_th_error.1, all_min.reload_opt_th_error.0),
+            q1: (all_q1.reload_opt_th_error.1, all_q1.reload_opt_th_error.0),
+            med: (all_med.reload_opt_th_error.1, all_med.reload_opt_th_error.0),
+            q3: (all_q3.reload_opt_th_error.1, all_q3.reload_opt_th_error.0),
+            max: (all_max.reload_opt_th_error.1, all_max.reload_opt_th_error.0),
+        },
+        choice: choice.reload_opt_th_error,
+    };
+
     println!("Done");
 
     MultiErrors {
@@ -743,6 +948,9 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
         reload_single_error,
         reload_dual_error,
         reload_th_error,
+        reload_opt_single_error,
+        reload_opt_dual_error,
+        reload_opt_th_error,
     }
 }
 
@@ -773,6 +981,8 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 flush_miss: StaticHistogramCumSum::from(&hists.flush_miss),
                 reload_hit: StaticHistogramCumSum::from(&hists.reload_hit),
                 reload_miss: StaticHistogramCumSum::from(&hists.reload_miss),
+                reload_opt_hit: StaticHistogramCumSum::from(&hists.reload_opt_hit),
+                reload_opt_miss: StaticHistogramCumSum::from(&hists.reload_opt_miss),
             };
             let flush_single_error = thresholds
                 .flush_single_threshold
@@ -790,6 +1000,16 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 .reload_dual_threshold
                 .0
                 .error_prediction(&hist_cum_sums.reload_hit, &hist_cum_sums.reload_miss);
+            let reload_opt_single_error =
+                thresholds.reload_opt_single_threshold.0.error_prediction(
+                    &hist_cum_sums.reload_opt_hit,
+                    &hist_cum_sums.reload_opt_miss,
+                );
+            let reload_opt_dual_error = thresholds.reload_opt_dual_threshold.0.error_prediction(
+                &hist_cum_sums.reload_opt_hit,
+                &hist_cum_sums.reload_opt_miss,
+            );
+
             let flush_th_error = compute_theoretical_optimum_error(
                 &hist_cum_sums.flush_hit,
                 &hist_cum_sums.flush_miss,
@@ -797,6 +1017,10 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             let reload_th_error = compute_theoretical_optimum_error(
                 &hist_cum_sums.reload_hit,
                 &hist_cum_sums.reload_miss,
+            );
+            let reload_opt_th_error = compute_theoretical_optimum_error(
+                &hist_cum_sums.reload_opt_hit,
+                &hist_cum_sums.reload_opt_miss,
             );
 
             (
@@ -809,6 +1033,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                     reload_single_error,
                     reload_dual_error,
                     reload_th_error,
+                    reload_opt_single_error,
+                    reload_opt_dual_error,
+                    reload_opt_th_error,
                 },
             )
         })
@@ -816,7 +1043,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
 
     println!("Computed all error predictions");
 
-    let mut quad_all_error_pred: MultiErrors<
+    let mut multi_all_error_pred: MultiErrors<
         Vec<(AVMLocation, PartialLocationOwned, ErrorPrediction)>,
     > = MultiErrors {
         flush_single_error: all_error_predictions
@@ -842,6 +1069,18 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         reload_th_error: all_error_predictions
             .par_iter()
             .map(|(l, p, q)| (*l, *p, q.reload_th_error))
+            .collect(),
+        reload_opt_single_error: all_error_predictions
+            .par_iter()
+            .map(|(l, p, q)| (*l, *p, q.reload_opt_single_error))
+            .collect(),
+        reload_opt_dual_error: all_error_predictions
+            .par_iter()
+            .map(|(l, p, q)| (*l, *p, q.reload_opt_dual_error))
+            .collect(),
+        reload_opt_th_error: all_error_predictions
+            .par_iter()
+            .map(|(l, p, q)| (*l, *p, q.reload_opt_th_error))
             .collect(),
     };
 
@@ -897,7 +1136,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 })
                 .collect();
 
-            let quad_two_level_error_predictions: MultiErrors<
+            let multi_two_level_error_predictions: MultiErrors<
                 Vec<(
                     PartialLocationOwned,
                     ErrorPrediction,
@@ -974,6 +1213,42 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                         (*p, e_avg, v)
                     })
                     .collect(),
+                reload_opt_single_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_single_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
+                reload_opt_dual_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_dual_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
+                reload_opt_th_error: two_level_error_predictions
+                    .par_iter()
+                    .map(|(p, qv)| {
+                        let v: Vec<(AVMLocation, ErrorPrediction)> = qv
+                            .par_iter()
+                            .map(|(l, q)| (*l, q.reload_opt_th_error))
+                            .collect();
+                        //v.par_sort_by_key(|(_l, e)| e.error_ratio()); // TODO, remove this.
+                        let e_avg = v.par_iter().map(|(_l, e)| e).sum();
+                        (*p, e_avg, v)
+                    })
+                    .collect(),
             };
 
             // TODO replace this with quickselect by  key
@@ -981,21 +1256,21 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             //quad_two_level_error_predictions
             //    .apply_mut(|v| v.par_sort_by_key(|(_p, e, _v)| e.error_ratio()));
 
-            let mut quad_best_choice = quad_two_level_error_predictions.map(|v| {
+            let mut multi_best_choice = multi_two_level_error_predictions.map(|v| {
                 v.into_par_iter()
                     .min_by_key(|(_p, e, _v)| e.error_ratio())
                     .unwrap()
             });
 
-            quad_best_choice.apply_mut(|v| v.2.par_sort_by_key(|(_l, e)| e.error_ratio()));
+            multi_best_choice.apply_mut(|v| v.2.par_sort_by_key(|(_l, e)| e.error_ratio()));
 
-            let best_min = quad_best_choice.apply(|v| {
+            let best_min = multi_best_choice.apply(|v| {
                 v.2[0]
                 /* *v.2.par_iter()
                 .min_by_key(|(_l, e)| e.error_ratio())
                 .unwrap()*/
             });
-            let best_max = quad_best_choice.apply(|v| {
+            let best_max = multi_best_choice.apply(|v| {
                 let len = v.2.len();
                 v.2[len - 1]
                 /* *v.2.par_iter()
@@ -1003,7 +1278,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 .unwrap()*/
             });
 
-            let best_med = quad_best_choice.apply(|v| {
+            let best_med = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (len - 1) >> 1, |(_l, e)| e.error_ratio())
@@ -1013,7 +1288,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 v.2[(len - 1) >> 1]
             });
 
-            let best_q1 = quad_best_choice.apply(|v| {
+            let best_q1 = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (len - 1) >> 2, |(_l, e)| e.error_ratio())
@@ -1022,7 +1297,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 let len = v.2.len();
                 v.2[(len - 1) >> 2] // Use the definition, first such that at least 25% are <=
             });
-            let best_q3 = quad_best_choice.apply(|v| {
+            let best_q3 = multi_best_choice.apply(|v| {
                 /*let inner = &mut v.2;
                 let len = inner.len();
                 quickselect_by_key(inner, (3 * len - 1) >> 2, |(_l, e)| e.error_ratio())
@@ -1033,9 +1308,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
             });
 
             // This one is easy, it's already computed.
-            let best_avg = quad_best_choice.apply(|v| v.1);
+            let best_avg = multi_best_choice.apply(|v| v.1);
 
-            let best_location = quad_best_choice.apply(|v| v.0);
+            let best_location = multi_best_choice.apply(|v| v.0);
             let flush_single_error = (
                 choice_name.clone(),
                 best_location.flush_single_error,
@@ -1110,7 +1385,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 },
             );
             let reload_th_error = (
-                choice_name,
+                choice_name.clone(),
                 best_location.reload_th_error,
                 StatisticsResults {
                     average: best_avg.reload_th_error,
@@ -1121,6 +1396,82 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                     max: (best_max.reload_th_error.1, best_max.reload_th_error.0),
                 },
             );
+            let reload_opt_single_error = (
+                choice_name.clone(),
+                best_location.reload_opt_single_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_single_error,
+                    min: (
+                        best_min.reload_opt_single_error.1,
+                        best_min.reload_opt_single_error.0,
+                    ),
+                    q1: (
+                        best_q1.reload_opt_single_error.1,
+                        best_q1.reload_opt_single_error.0,
+                    ),
+                    med: (
+                        best_med.reload_opt_single_error.1,
+                        best_med.reload_opt_single_error.0,
+                    ),
+                    q3: (
+                        best_q3.reload_opt_single_error.1,
+                        best_q3.reload_opt_single_error.0,
+                    ),
+                    max: (
+                        best_max.reload_opt_single_error.1,
+                        best_max.reload_opt_single_error.0,
+                    ),
+                },
+            );
+
+            let reload_opt_dual_error = (
+                choice_name.clone(),
+                best_location.reload_opt_dual_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_dual_error,
+                    min: (
+                        best_min.reload_opt_dual_error.1,
+                        best_min.reload_opt_dual_error.0,
+                    ),
+                    q1: (
+                        best_q1.reload_opt_dual_error.1,
+                        best_q1.reload_opt_dual_error.0,
+                    ),
+                    med: (
+                        best_med.reload_opt_dual_error.1,
+                        best_med.reload_opt_dual_error.0,
+                    ),
+                    q3: (
+                        best_q3.reload_opt_dual_error.1,
+                        best_q3.reload_opt_dual_error.0,
+                    ),
+                    max: (
+                        best_max.reload_opt_dual_error.1,
+                        best_max.reload_opt_dual_error.0,
+                    ),
+                },
+            );
+            let reload_opt_th_error = (
+                choice_name,
+                best_location.reload_opt_th_error,
+                StatisticsResults {
+                    average: best_avg.reload_opt_th_error,
+                    min: (
+                        best_min.reload_opt_th_error.1,
+                        best_min.reload_opt_th_error.0,
+                    ),
+                    q1: (best_q1.reload_opt_th_error.1, best_q1.reload_opt_th_error.0),
+                    med: (
+                        best_med.reload_opt_th_error.1,
+                        best_med.reload_opt_th_error.0,
+                    ),
+                    q3: (best_q3.reload_opt_th_error.1, best_q3.reload_opt_th_error.0),
+                    max: (
+                        best_max.reload_opt_th_error.1,
+                        best_max.reload_opt_th_error.0,
+                    ),
+                },
+            );
             MultiErrors {
                 flush_single_error,
                 flush_dual_error,
@@ -1128,6 +1479,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
                 reload_single_error,
                 reload_dual_error,
                 reload_th_error,
+                reload_opt_single_error,
+                reload_opt_dual_error,
+                reload_opt_th_error,
             }
         })
         .collect::<Vec<_>>();
@@ -1140,6 +1494,9 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         reload_single_error: Vec::new(),
         reload_dual_error: Vec::new(),
         reload_th_error: Vec::new(),
+        reload_opt_single_error: Vec::new(),
+        reload_opt_dual_error: Vec::new(),
+        reload_opt_th_error: Vec::new(),
     };
 
     for q in results {
@@ -1149,6 +1506,11 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         choice.reload_single_error.push(q.reload_single_error);
         choice.reload_dual_error.push(q.reload_dual_error);
         choice.reload_th_error.push(q.reload_th_error);
+        choice
+            .reload_opt_single_error
+            .push(q.reload_opt_single_error);
+        choice.reload_opt_dual_error.push(q.reload_opt_dual_error);
+        choice.reload_opt_th_error.push(q.reload_opt_th_error);
     }
 
     // Rewrite this in parallel.
@@ -1157,18 +1519,19 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     // The final swap should be reasonably easy though.
 
     // TODO replace this with a quickselect by key.
-    quad_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, _p, e)| e.error_ratio()));
+    multi_all_error_pred
+        .apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, _p, e)| e.error_ratio()));
 
     //theoretical_all_error_pred.apply_mut(|all_e_p| all_e_p.par_sort_by_key(|(_l, _p, e)| e.error_ratio()));
 
-    let all_min = quad_all_error_pred.apply(|all_e_p| {
+    let all_min = multi_all_error_pred.apply(|all_e_p| {
         /* *all_e_p
         .par_iter()
         .min_by_key(|(_l, _p, e)| e.error_ratio())
         .unwrap()*/
         all_e_p[0]
     });
-    let all_max = quad_all_error_pred.apply(|all_e_p| {
+    let all_max = multi_all_error_pred.apply(|all_e_p| {
         /* *all_e_p
         .par_iter()
         .max_by_key(|(_l, _p, e)| e.error_ratio())
@@ -1177,21 +1540,21 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         all_e_p[len - 1]
     }); // TODO, extend rayon to have min_max_by_key ?
 
-    let all_med = quad_all_error_pred.apply(|all_e_p| {
+    let all_med = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (len - 1) >> 1, |(_l, _p, e)| e.error_ratio())
         .unwrap()
         .1*/
         all_e_p[(len - 1) >> 1]
     });
-    let all_q1 = quad_all_error_pred.apply(|all_e_p| {
+    let all_q1 = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (len - 1) >> 2, |(_l, _p, e)| e.error_ratio())
         .unwrap()
         .1*/
         all_e_p[(len - 1) >> 2]
     });
-    let all_q3 = quad_all_error_pred.apply(|all_e_p| {
+    let all_q3 = multi_all_error_pred.apply(|all_e_p| {
         let len = all_e_p.len();
         /*quickselect_by_key(&mut all_e_p, (3*len - 1) >> 2, |(_l, _p, e)| e.error_ratio())
         .unwrap()
@@ -1200,7 +1563,7 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
     });
 
     let all_avg: MultiErrors<ErrorPrediction> =
-        quad_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, _p, e)| e).sum());
+        multi_all_error_pred.apply(|all_e_p| all_e_p.par_iter().map(|(_l, _p, e)| e).sum());
 
     println!("Extracted statistics");
 
@@ -1273,6 +1636,71 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         choice: choice.reload_th_error,
     };
 
+    let reload_opt_single_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_single_error,
+            min: (
+                all_min.reload_opt_single_error.2,
+                all_min.reload_opt_single_error.0,
+            ),
+            q1: (
+                all_q1.reload_opt_single_error.2,
+                all_q1.reload_opt_single_error.0,
+            ),
+            med: (
+                all_med.reload_opt_single_error.2,
+                all_med.reload_opt_single_error.0,
+            ),
+            q3: (
+                all_q3.reload_opt_single_error.2,
+                all_q3.reload_opt_single_error.0,
+            ),
+            max: (
+                all_max.reload_opt_single_error.2,
+                all_max.reload_opt_single_error.0,
+            ),
+        },
+        choice: choice.reload_opt_single_error,
+    };
+    let reload_opt_dual_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_dual_error,
+            min: (
+                all_min.reload_opt_dual_error.2,
+                all_min.reload_opt_dual_error.0,
+            ),
+            q1: (
+                all_q1.reload_opt_dual_error.2,
+                all_q1.reload_opt_dual_error.0,
+            ),
+            med: (
+                all_med.reload_opt_dual_error.2,
+                all_med.reload_opt_dual_error.0,
+            ),
+            q3: (
+                all_q3.reload_opt_dual_error.2,
+                all_q3.reload_opt_dual_error.0,
+            ),
+            max: (
+                all_max.reload_opt_dual_error.2,
+                all_max.reload_opt_dual_error.0,
+            ),
+        },
+        choice: choice.reload_opt_dual_error,
+    };
+
+    let reload_opt_th_error = ErrorStatisticsResults {
+        average: StatisticsResults {
+            average: all_avg.reload_opt_th_error,
+            min: (all_min.reload_opt_th_error.2, all_min.reload_opt_th_error.0),
+            q1: (all_q1.reload_opt_th_error.2, all_q1.reload_opt_th_error.0),
+            med: (all_med.reload_opt_th_error.2, all_med.reload_opt_th_error.0),
+            q3: (all_q3.reload_opt_th_error.2, all_q3.reload_opt_th_error.0),
+            max: (all_max.reload_opt_th_error.2, all_max.reload_opt_th_error.0),
+        },
+        choice: choice.reload_opt_th_error,
+    };
+
     println!("Done");
 
     MultiErrors {
@@ -1282,5 +1710,8 @@ pub fn compute_statistics<const WIDTH: u64, const N: usize>(
         reload_single_error,
         reload_dual_error,
         reload_th_error,
+        reload_opt_single_error,
+        reload_opt_dual_error,
+        reload_opt_th_error,
     }
 }
