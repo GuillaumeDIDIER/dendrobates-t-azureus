@@ -189,7 +189,7 @@ fn norm_location(v: &Vec<(Rational64, Vec<ErrorPrediction>)>) -> Rational64 {
     result / count
 }
 
-fn main() {
+pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     println!(
         "Detailed:Benchmark,Pages,numa_node,main_core,helper_core,{},C,T",
@@ -251,7 +251,10 @@ fn main() {
             )
             .unwrap();
 
-        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
+        eprintln!(
+            "Selected: node {:?}, core_1 {:?}, core_2 {:?}",
+            _node, _attacker, _victim
+        );
 
         set_affinity(&old_mask).unwrap();
 
@@ -311,9 +314,12 @@ fn main() {
                 calibration_results::classifiers::SimpleThresholdBuilder {},
                 CLFLUSH_NUM_ITER,
             )
-                .unwrap();
+            .unwrap();
 
-        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
+        eprintln!(
+            "Selected: node {:?}, core_1 {:?}, core_2 {:?}",
+            _node, _attacker, _victim
+        );
 
         set_affinity(&old_mask).unwrap();
 
@@ -376,7 +382,10 @@ fn main() {
             )
             .unwrap();
 
-        eprintln!("Selected: node {:?}, core_1 {:?}, core_2 {:?}", _node, _attacker, _victim);
+        eprintln!(
+            "Selected: node {:?}, core_1 {:?}, core_2 {:?}",
+            _node, _attacker, _victim
+        );
 
         set_affinity(&old_mask).unwrap();
 
@@ -582,41 +591,42 @@ fn main() {
         let results_numa_m_core_av_addr_st_fro = run_benchmark(
             &numa_m_core_av_addr_st_fro_name,
             |i, j, k| {
-                let (mut r, (node, attacker, victim)) = FlushAndReloadCovertOpt::new_with_locations(
-                    vec![(i, j, k)].into_iter(),
-                    LocationParameters {
-                        attacker: CoreLocParameters {
-                            socket: true,
-                            core: true,
+                let (mut r, (node, attacker, victim)) =
+                    FlushAndReloadCovertOpt::new_with_locations(
+                        vec![(i, j, k)].into_iter(),
+                        LocationParameters {
+                            attacker: CoreLocParameters {
+                                socket: true,
+                                core: true,
+                            },
+                            victim: CoreLocParameters {
+                                socket: true,
+                                core: true,
+                            },
+                            memory_numa_node: true,
+                            memory_slice: true,
+                            memory_vpn: true,
+                            memory_offset: true,
                         },
-                        victim: CoreLocParameters {
-                            socket: true,
-                            core: true,
+                        LocationParameters {
+                            attacker: CoreLocParameters {
+                                socket: true,
+                                core: true,
+                            },
+                            victim: CoreLocParameters {
+                                socket: true,
+                                core: true,
+                            },
+                            memory_numa_node: true,
+                            memory_slice: true,
+                            memory_vpn: true,
+                            memory_offset: false,
                         },
-                        memory_numa_node: true,
-                        memory_slice: true,
-                        memory_vpn: true,
-                        memory_offset: true,
-                    },
-                    LocationParameters {
-                        attacker: CoreLocParameters {
-                            socket: true,
-                            core: true,
-                        },
-                        victim: CoreLocParameters {
-                            socket: true,
-                            core: true,
-                        },
-                        memory_numa_node: true,
-                        memory_slice: true,
-                        memory_vpn: true,
-                        memory_offset: false,
-                    },
-                    norm_threshold,
-                    norm_location,
-                    calibration_results::classifiers::SimpleThresholdBuilder {},
-                    CLFLUSH_NUM_ITER,
-                )
+                        norm_threshold,
+                        norm_location,
+                        calibration_results::classifiers::SimpleThresholdBuilder {},
+                        CLFLUSH_NUM_ITER,
+                    )
                     .unwrap();
                 r.set_location(Some(i), Some(j), Some(k)).unwrap();
                 r
@@ -667,7 +677,7 @@ fn main() {
                 usize,
             )> = best
                 .1
-                .1
+                 .1
                 .par_iter()
                 .map(|(k, r)| ((*r).clone(), *k.0, *k.1, *k.2, *k.3, *k.4))
                 .collect();
