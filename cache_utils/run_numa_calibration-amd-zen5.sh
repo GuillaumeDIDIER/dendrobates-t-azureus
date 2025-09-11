@@ -12,8 +12,8 @@ echo $cache_utils
 #cargo build --release --bin numa_calibration
 #popd
 
-sudo apt install msr-tools
-sudo modprobe msr
+$SUDO apt install msr-tools
+$SUDO modprobe msr
 
 lstopo --of xml > topo.xml
 lscpu > cpu.txt
@@ -21,11 +21,11 @@ lscpu > cpu.txt
 mkdir -p /tmp/numa_cal_variable
 pushd /tmp/numa_cal_variable
 
-sudo sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+$SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
 $cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
 
-sudo sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+$SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
 
 xz *.txt
 
@@ -48,21 +48,21 @@ pushd /tmp/numa_cal_fixed
 
 # For family 1A, 57238_C1_pub_1.pdf documents MSRC000_0108 [Prefetch Control]
 # Bit 5, 3, 2, 1 and 0 should be set to 1 to disable prefetchers.
-sudo wrmsr -a 0xC0000108 0x2f
+$SUDO wrmsr -a 0xC0000108 0x2f
 
-sudo cpupower frequency-set -g performance
-#sudo sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-sudo sh -c "echo 0 > /sys/devices/system/cpu/cpufreq/boost"
-sudo sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+$SUDO cpupower frequency-set -g performance
+#$SUDO sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+$SUDO sh -c "echo 0 > /sys/devices/system/cpu/cpufreq/boost"
+$SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
 $cache_utils/../target/release/numa_calibration > log.txt 2> err.txt
 
-#sudo sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-sudo sh -c "echo 1 > /sys/devices/system/cpu/cpufreq/boost"
-sudo sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
-sudo wrmsr -a 0xC0000108 0x3c0
+#$SUDO sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+$SUDO sh -c "echo 1 > /sys/devices/system/cpu/cpufreq/boost"
+$SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+$SUDO wrmsr -a 0xC0000108 0x3c0
 
-sudo rdmsr 0xC0000108
+$SUDO rdmsr 0xC0000108
 #3c0
 
 
