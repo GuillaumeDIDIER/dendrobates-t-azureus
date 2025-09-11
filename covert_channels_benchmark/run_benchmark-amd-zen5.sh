@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SUDO=sudo
+SUDO=sudo-g5k
 
 echo "$0"
 abs_self=`realpath "$0"`
@@ -33,7 +33,7 @@ xz *.txt
 popd
 
 mkdir -p ./variable_freq
-cp /tmp/numa_cal_variable/*.xz ./variable_freq/
+cp /tmp/numa_cal_variable/*.xz /tmp/numa_cal_variable/*.zst ./variable_freq/
 rm -Rf /tmp/numa_cal_variable
 
 mkdir -p /tmp/numa_cal_fixed
@@ -69,5 +69,5 @@ popd
 
 
 mkdir -p ./fixed_freq
-cp /tmp/numa_cal_fixed/*.xz ./fixed_freq/
+cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq/
 rm -Rf /tmp/numa_cal_fixed

@@ -5,8 +5,8 @@ SUDO=sudo-g5k
 echo "$0"
 abs_self=`realpath "$0"`
 echo $abs_self
-cache_utils=`dirname "$abs_self"`
-echo $cache_utils
+benchmark=`dirname "$abs_self"`
+echo $benchmark
 
 #pushd $cache_utils
 #cargo build --release --bin numa_calibration
@@ -23,7 +23,7 @@ pushd /tmp/numa_cal_variable
 
 $SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration_1500 > log.txt 2> err.txt
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark_1500 > log.txt 2> err.txt
 
 $SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
 
@@ -55,7 +55,7 @@ $SUDO cpupower frequency-set -g performance
 $SUDO sh -c "echo 0 > /sys/devices/system/cpu/cpufreq/boost"
 $SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration_1500 > log.txt 2> err.txt
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark_1500 > log.txt 2> err.txt
 
 #sudo sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
 $SUDO sh -c "echo 1 > /sys/devices/system/cpu/cpufreq/boost"

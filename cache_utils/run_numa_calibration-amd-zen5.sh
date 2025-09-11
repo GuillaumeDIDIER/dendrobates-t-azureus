@@ -1,5 +1,7 @@
 #!/bin/bash
 
+SUDO=sudo-g5k
+
 echo "$0"
 abs_self=`realpath "$0"`
 echo $abs_self
@@ -72,4 +74,3 @@ popd
 mkdir -p ./fixed_freq
 cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq/
 rm -Rf /tmp/numa_cal_fixed
-

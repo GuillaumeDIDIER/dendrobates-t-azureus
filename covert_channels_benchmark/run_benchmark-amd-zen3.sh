@@ -1,12 +1,12 @@
-#!/bin/bash
+!/bin/bash
 
 SUDO=sudo-g5k
 
 echo "$0"
 abs_self=`realpath "$0"`
 echo $abs_self
-cache_utils=`dirname "$abs_self"`
-echo $cache_utils
+benchmark=`dirname "$abs_self"`
+echo $benchmark
 
 #pushd $cache_utils
 #cargo build --release --bin numa_calibration
@@ -23,7 +23,7 @@ pushd /tmp/numa_cal_variable
 
 $SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration_1500 > log.txt 2> err.txt
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark > log.txt 2> err.txt
 
 $SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
 
@@ -32,8 +32,8 @@ xz *.txt
 
 popd
 
-mkdir -p ./variable_freq_1500
-cp /tmp/numa_cal_variable/*.xz /tmp/numa_cal_variable/*.zst ./variable_freq_1500/
+mkdir -p ./variable_freq
+cp /tmp/numa_cal_variable/*.xz /tmp/numa_cal_variable/*.zst ./variable_freq/
 
 rm -Rf /tmp/numa_cal_variable
 
@@ -48,21 +48,22 @@ pushd /tmp/numa_cal_fixed
 
 # For family 1A, 57238_C1_pub_1.pdf documents MSRC000_0108 [Prefetch Control]
 # Bit 5, 3, 2, 1 and 0 should be set to 1 to disable prefetchers.
-#sudo wrmsr -a 0xC0000108 0x2f
+$SUDO rdmsr    0xC0000108
+$SUDO wrmsr -a 0xC0000108 0x2f
 
-$SUDO cpupower frequency-set -g performance
+sudo cpupower frequency-set -g performance
 #sudo sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
 $SUDO sh -c "echo 0 > /sys/devices/system/cpu/cpufreq/boost"
 $SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
 
-$cache_utils/../target/release/numa_calibration_1500 > log.txt 2> err.txt
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark > log.txt 2> err.txt
 
 #sudo sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
 $SUDO sh -c "echo 1 > /sys/devices/system/cpu/cpufreq/boost"
 $SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
-#sudo wrmsr -a 0xC0000108 0x3c0
+$SUDO wrmsr -a 0xC0000108 0x0
 
-#sudo rdmsr 0xC0000108
+$SUDO rdmsr 0xC0000108
 #3c0
 
 
@@ -71,6 +72,6 @@ xz *.txt
 popd
 
 
-mkdir -p ./fixed_freq_1500
-cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq_1500/
+mkdir -p ./fixed_freq
+cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq/
 rm -Rf /tmp/numa_cal_fixed

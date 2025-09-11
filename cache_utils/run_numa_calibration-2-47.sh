@@ -1,6 +1,6 @@
 #!/bin/bash
 
-$SUDO=sudo-g5k
+SUDO=sudo-g5k
 
 echo "$0"
 abs_self=`realpath "$0"`

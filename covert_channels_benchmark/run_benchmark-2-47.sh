@@ -1,4 +1,5 @@
 #!/bin/bash
+
 $SUDO=sudo-g5k
 
 echo "$0"
@@ -16,7 +17,6 @@ $SUDO modprobe msr
 
 lstopo --of xml > topo.xml
 lscpu > cpu.txt
-
 
 mkdir -p /tmp/numa_cal_variable
 pushd /tmp/numa_cal_variable
