@@ -706,8 +706,10 @@ where
         )
         .expect("Failed to write plot");
         picture_ff
-            .to_pdf(folder.as_ref(), picture_ff_jobname, Engine::LuaLatex)
-            .expect("Failed to create PDF");
+            .to_pdf(folder.as_ref(), &picture_ff_jobname, Engine::LuaLatex)
+            .inspect_err(|e| {
+                eprintln!("Failed to create {}: {}", picture_ff_jobname, e);
+            });
 
         // ------ Reload -------------
         /*
@@ -788,7 +790,9 @@ where
         .expect("Failed to write plot");
         picture_fr
             .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::LuaLatex)
-            .expect("Failed to create PDF");
+            .inspect_err(|e| {
+                eprintln!("Failed to create {}: {}", picture_ff_jobname, e);
+            });
 
         // ------ Reload Opt -------------
 
@@ -820,7 +824,9 @@ where
         .expect("Failed to write plot");
         picture_fro
             .to_pdf(folder.as_ref(), picture_fro_jobname, Engine::LuaLatex)
-            .expect("Failed to create PDF");
+            .inspect_err(|e| {
+                eprintln!("Failed to create {}: {}", picture_ff_jobname, e);
+            });
 
         // -----------------------------------------------------------------------------------------
     } else {
