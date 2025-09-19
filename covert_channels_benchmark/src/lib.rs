@@ -59,17 +59,19 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
                 cpu_count += 1;
             }
         }
-        let mut count = 0;
+
         let mut first_hyperthread_index = 0;
-        for i in 0..CpuSet::count() {
-            if old.is_set(i).unwrap() {
-                count += 2;
-            }
-            if count > cpu_count {
-                first_hyperthread_index = i;
+        {
+            let mut count = 0;
+            for i in 0..CpuSet::count() {
+                if old.is_set(i).unwrap() {
+                    count += 2;
+                }
+                if count > cpu_count {
+                    first_hyperthread_index = i;
+                }
             }
         }
-
         for i in numa_nodes {
             for j in 0..CpuSet::count() {
                 for k in 0..CpuSet::count() {
