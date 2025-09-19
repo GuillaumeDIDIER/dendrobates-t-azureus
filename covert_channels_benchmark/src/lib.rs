@@ -40,6 +40,7 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
     old: CpuSet,
     iterate_locations: bool,
     optimize_numa: Option<NumaNode>,
+    optimize_hyperthreads: bool,
 ) -> BenchmarkStats {
     let mut results = Vec::new();
     let num_entries = num_pages.len();
@@ -52,10 +53,33 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
         } else {
             numa_utils::available_nodes().unwrap().into_iter().collect()
         };
+        let mut cpu_count = 0;
+        for i in 0..CpuSet::count() {
+            if old.is_set(i).unwrap() {
+                cpu_count += 1;
+            }
+        }
+        let mut count = 0;
+        let mut first_hyperthread_index = 0;
+        for i in 0..CpuSet::count() {
+            if old.is_set(i).unwrap() {
+                count += 2;
+            }
+            if count > cpu_count {
+                first_hyperthread_index = i;
+            }
+        }
+
         for i in numa_nodes {
             for j in 0..CpuSet::count() {
                 for k in 0..CpuSet::count() {
-                    if old.is_set(j).unwrap() && old.is_set(k).unwrap() && j != k {
+                    if old.is_set(j).unwrap()
+                        && old.is_set(k).unwrap()
+                        && j != k
+                        && (!optimize_hyperthreads
+                            || (j < first_hyperthread_index && k < first_hyperthread_index)
+                            || (k == j + first_hyperthread_index))
+                    {
                         let mut channel = constructor(i, j, k);
                         for (l, num_page) in num_pages.iter().enumerate() {
                             eprintln!(
@@ -189,7 +213,7 @@ fn norm_location(v: &Vec<(Rational64, Vec<ErrorPrediction>)>) -> Rational64 {
     result / count
 }
 
-pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
+pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthread: bool) {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     println!(
         "Detailed:Benchmark,Pages,numa_node,main_core,helper_core,{},C,T",
@@ -270,6 +294,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         results.results.push((tu_st_fr_name, results_tu_st_fr));
@@ -335,6 +360,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         results.results.push((tu_st_fro_name, results_tu_st_fro));
@@ -401,6 +427,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         results.results.push((tu_st_ff_name, results_tu_st_ff));
@@ -455,6 +482,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         let best_numa_m_core_av_addr_st_fr_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FR");
@@ -636,6 +664,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         let best_numa_m_core_av_addr_st_fro_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FRO");
@@ -816,6 +845,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>() {
             old,
             true,
             optimize_numa,
+            optimize_hyperthread,
         );
 
         let best_numa_m_core_av_addr_st_ff_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FF");
