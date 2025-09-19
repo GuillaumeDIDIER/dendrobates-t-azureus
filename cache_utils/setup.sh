@@ -15,3 +15,6 @@ cd ../covert_channels_benchmark
 cargo build --release --bin covert_channels_benchmark
 cargo build --release --bin covert_channels_benchmark_1500
 cargo build --release --bin covert_channels_benchmark_3000
+cargo build --release --bin covert_channels_benchmark_opt
+cargo build --release --bin covert_channels_benchmark_opt_1500
+cargo build --release --bin covert_channels_benchmark_opt_3000
