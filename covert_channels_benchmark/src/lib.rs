@@ -69,6 +69,7 @@ fn run_benchmark<T: CovertChannel + 'static + Clone>(
                 }
                 if count > cpu_count {
                     first_hyperthread_index = i;
+                    break;
                 }
             }
         }
@@ -215,7 +216,7 @@ fn norm_location(v: &Vec<(Rational64, Vec<ErrorPrediction>)>) -> Rational64 {
     result / count
 }
 
-pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthread: bool) {
+pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthreads: bool) {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
     println!(
         "Detailed:Benchmark,Pages,numa_node,main_core,helper_core,{},C,T",
@@ -234,14 +235,58 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
     let optimize_numa = Some(NumaNode::default());
     //let num_pages = (1..=3).collect();
 
+    let mut locations = Vec::new();
+    let numa_nodes = if let Some(node) = optimize_numa {
+        assert!(numa_utils::available_nodes().unwrap().contains(&node));
+        vec![node]
+    } else {
+        numa_utils::available_nodes().unwrap().into_iter().collect()
+    };
+    let mut cpu_count = 0;
+    for i in 0..CpuSet::count() {
+        if old.is_set(i).unwrap() {
+            cpu_count += 1;
+        }
+    }
+
+    let mut first_hyperthread_index = 0;
+    {
+        let mut count = 0;
+        for i in 0..CpuSet::count() {
+            if old.is_set(i).unwrap() {
+                count += 2;
+            }
+            if count > cpu_count {
+                first_hyperthread_index = i;
+                break;
+            }
+        }
+    }
+    println!("CPU Count: {}, First hyperthread: {}", cpu_count, first_hyperthread_index);
+    for i in numa_nodes {
+        for j in 0..CpuSet::count() {
+            for k in 0..CpuSet::count() {
+                if old.is_set(j).unwrap()
+                    && old.is_set(k).unwrap()
+                    && j != k
+                    && (!optimize_hyperthreads
+                    || (j < first_hyperthread_index && k < first_hyperthread_index)
+                    || (k == j + first_hyperthread_index))
+                {
+                    locations.push((i, j, k));
+                }
+            }
+        }
+    }
+    println!("Optimized_Hyperthreads: {}, Locations: {:?}", optimize_hyperthreads, locations);
     let mut results = BenchmarkResults::default();
     {
         // TU-ST-FR
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_fr_name = String::from("TU-ST-FR");
-        let (mut topology_unaware_fr_channel, old_mask, _node, _attacker, _victim) =
-            FlushAndReload::new_any_location(
-                false,
+        let (mut topology_unaware_fr_channel, ( _node, _attacker, _victim)) =
+            FlushAndReloadCovertOpt::new_with_locations(
+                locations.clone().into_iter(),
                 LocationParameters {
                     attacker: CoreLocParameters {
                         socket: true,
@@ -282,7 +327,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             _node, _attacker, _victim
         );
 
-        set_affinity(&old_mask).unwrap();
+        set_affinity(&old).unwrap();
 
         let results_tu_st_fr = run_benchmark(
             &tu_st_fr_name,
@@ -296,7 +341,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         results.results.push((tu_st_fr_name, results_tu_st_fr));
@@ -305,9 +350,12 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
         // TU-ST-FRO
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_fro_name = String::from("TU-ST-FRO");
-        let (mut topology_unaware_fro_channel, old_mask, _node, _attacker, _victim) =
-            FlushAndReloadCovertOpt::new_any_location(
-                false,
+
+
+
+        let (mut topology_unaware_fro_channel, ( _node, _attacker, _victim)) =
+            FlushAndReloadCovertOpt::new_with_locations(
+                locations.clone().into_iter(),
                 LocationParameters {
                     attacker: CoreLocParameters {
                         socket: true,
@@ -348,7 +396,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             _node, _attacker, _victim
         );
 
-        set_affinity(&old_mask).unwrap();
+        set_affinity(&old).unwrap();
 
         let results_tu_st_fro = run_benchmark(
             &tu_st_fro_name,
@@ -362,7 +410,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         results.results.push((tu_st_fro_name, results_tu_st_fro));
@@ -372,9 +420,9 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_ff_name = String::from("TU-ST-FF");
 
-        let (mut topology_unaware_ff_channel, old_mask, _node, _attacker, _victim) =
-            FlushAndFlush::new_any_location(
-                false,
+        let (mut topology_unaware_ff_channel, ( _node, _attacker, _victim)) =
+            FlushAndReloadCovertOpt::new_with_locations(
+                locations.clone().into_iter(),
                 LocationParameters {
                     attacker: CoreLocParameters {
                         socket: true,
@@ -415,7 +463,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             _node, _attacker, _victim
         );
 
-        set_affinity(&old_mask).unwrap();
+        set_affinity(&old).unwrap();
 
         let results_tu_st_ff = run_benchmark(
             &tu_st_ff_name,
@@ -429,7 +477,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         results.results.push((tu_st_ff_name, results_tu_st_ff));
@@ -484,7 +532,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         let best_numa_m_core_av_addr_st_fr_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FR");
@@ -666,7 +714,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         let best_numa_m_core_av_addr_st_fro_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FRO");
@@ -847,7 +895,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             old,
             true,
             optimize_numa,
-            optimize_hyperthread,
+            optimize_hyperthreads,
         );
 
         let best_numa_m_core_av_addr_st_ff_name = String::from("Best-Numa-M-Core-AV-Addr-ST-FF");
