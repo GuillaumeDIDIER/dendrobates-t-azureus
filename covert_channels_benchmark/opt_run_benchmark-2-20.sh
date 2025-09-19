@@ -1,0 +1,61 @@
+#!/bin/bash
+
+SUDO=sudo-g5k
+
+echo "$0"
+abs_self=`realpath "$0"`
+echo $abs_self
+benchmark=`dirname "$abs_self"`
+echo $benchmark
+
+#pushd $cache_utils
+#cargo build --release --bin numa_calibration
+#popd
+
+$SUDO apt install msr-tools
+$SUDO modprobe msr
+
+lstopo --of xml > topo.xml
+lscpu > cpu.txt
+
+mkdir -p /tmp/numa_cal_variable
+pushd /tmp/numa_cal_variable
+
+$SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark_opt > log.txt 2> err.txt
+
+$SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+
+xz *.txt
+
+popd
+
+mkdir ./variable_freq_opt
+cp /tmp/numa_cal_variable/*.xz /tmp/numa_cal_variable/*.zst ./variable_freq_opt/
+
+rm -Rf /tmp/numa_cal_variable
+
+mkdir -p /tmp/numa_cal_fixed
+pushd /tmp/numa_cal_fixed
+
+$SUDO wrmsr -a 420 0xf
+
+$SUDO cpupower frequency-set -g performance
+$SUDO sh -c "echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+$SUDO sh -c "echo 0 > /proc/sys/kernel/numa_balancing"
+
+$benchmark/../target/x86_64-unknown-linux-gnu/release/covert_channels_benchmark_opt > log.txt 2> err.txt
+
+$SUDO sh -c "echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
+$SUDO sh -c "echo 1 > /proc/sys/kernel/numa_balancing"
+$SUDO wrmsr -a 420 0
+
+xz *.txt
+
+popd
+
+
+mkdir ./fixed_freq_opt
+cp /tmp/numa_cal_fixed/*.xz /tmp/numa_cal_fixed/*.zst ./fixed_freq_opt/
+rm -Rf /tmp/numa_cal_fixed
