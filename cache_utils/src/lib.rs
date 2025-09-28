@@ -48,13 +48,15 @@ pub unsafe fn rdtsc_fence() -> u64 {
 pub unsafe fn rdpru_fenced() -> u64 {
     let [hi, lo]: [u32; 2];
     unsafe { arch_x86::_mm_mfence() };
-    core::arch::asm!(
-    "rdpru",
-    out("edx") hi,
-    out("eax") lo,
-    in("ecx") 1u32,
-    options(nostack, nomem, preserves_flags),
-    );
+    unsafe {
+        core::arch::asm!(
+        "rdpru",
+        out("edx") hi,
+        out("eax") lo,
+        in("ecx") 1u32,
+        options(nostack, nomem, preserves_flags),
+        )
+    };
     let ret = (u64::from(hi) << 32) | u64::from(lo);
     unsafe { arch_x86::_mm_mfence() };
     ret
