@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 SUDO=sudo-g5k
 

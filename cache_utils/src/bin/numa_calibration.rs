@@ -7,12 +7,12 @@
 // SPDX-License-Identifier: MIT
 
 use cache_utils::calibration::{
-    calibrate_fixed_freq_2_thread_numa, flush_and_reload, load_and_flush, only_flush, only_reload,
-    reload_and_flush, CalibrateOperation2T, CalibrationOptions, Verbosity, CALIBRATION_WARMUP_ITER,
-    CLFLUSH_NUM_ITER,
+    calibrate_fixed_freq_2_thread_numa, flush_and_reload, load_and_flush, only_flush,
+    only_flush_rdpru, only_reload, only_reload_rdpru, reload_and_flush, CalibrateOperation2T,
+    CalibrationOptions, Verbosity, CALIBRATION_WARMUP_ITER, CLFLUSH_NUM_ITER,
 };
 use cache_utils::mmap::MMappedMemory;
-use cache_utils::{flush, maccess, noop};
+use cache_utils::{flush, has_rdpru, maccess, noop};
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use nix::sched::{sched_getaffinity, CpuSet};
 use nix::unistd::Pid;
@@ -118,8 +118,22 @@ impl Dummy {
 
     fn reload_flush(&self, addr: *const u8) -> u64 {
         let r = unsafe { only_reload(addr) };
-        unsafe{ multiple_access(addr) };
-        unsafe { only_flush(addr) };
+        unsafe { multiple_access(addr) };
+        unsafe { flush(addr) };
+        r
+    }
+
+    fn only_flush_rdpru(&self, addr: *const u8) -> u64 {
+        unsafe { only_flush_rdpru(addr) }
+    }
+    fn only_reload_rdpru(&self, addr: *const u8) -> u64 {
+        unsafe { only_reload_rdpru(addr) }
+    }
+
+    fn reload_flush_rdpru(&self, addr: *const u8) -> u64 {
+        let r = unsafe { only_reload_rdpru(addr) };
+        unsafe { multiple_access(addr) };
+        unsafe { flush(addr) };
         r
     }
 }
@@ -181,40 +195,62 @@ fn main() {
         panic!("not aligned nicely");
     }
 
-    let dummy = Dummy{};
+    let dummy = Dummy {};
+
+    let use_rdpru = has_rdpru();
 
     let operations = [
         CalibrateOperation2T {
             prepare: maccess::<u8>, //maccess::<u8>, //maccess_fenced::<u8>,
-            op: Dummy::only_reload,
+            op: if use_rdpru {
+                Dummy::only_reload_rdpru
+            } else {
+                Dummy::only_reload
+            },
             name: "shared_hit",
             display_name: "shared hit",
             t: &dummy,
         },
         CalibrateOperation2T {
             prepare: maccess::<u8>, //multiple_access, maccess::<u8>, //maccess_fenced::<u8>,
-            op: Dummy::reload_flush,
+            op: if use_rdpru {
+                Dummy::reload_flush_rdpru
+            } else {
+                Dummy::reload_flush
+            },
             name: "reload_remote_hit",
             display_name: "reload remote hit",
             t: &dummy,
         },
         CalibrateOperation2T {
             prepare: noop::<u8>, //flush, //noop::<u8>,             //noop::<u8>,
-            op: Dummy::reload_flush, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
+            op: if use_rdpru {
+                Dummy::reload_flush_rdpru
+            } else {
+                Dummy::reload_flush
+            }, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
             name: "reload_miss_n",
             display_name: "reload miss - n",
             t: &dummy,
         },
         CalibrateOperation2T {
             prepare: flush, //flush, //noop::<u8>,             //noop::<u8>,
-            op: Dummy::only_reload, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
+            op: if use_rdpru {
+                Dummy::only_reload_rdpru
+            } else {
+                Dummy::only_reload
+            }, //reload_and_flush_wrap, //only_reload_wrap, reload_and_flush_wrap, flush_and_reload_wrap,
             name: "reload_miss_f",
             display_name: "reload miss - f",
             t: &dummy,
         },
         CalibrateOperation2T {
             prepare: maccess::<u8>, //maccess_fenced::<u8>,
-            op: Dummy::only_flush,
+            op: if use_rdpru {
+                Dummy::only_flush_rdpru
+            } else {
+                Dummy::only_flush
+            },
             name: "clflush_remote_hit",
             display_name: "clflush remote hit",
             t: &dummy,
@@ -228,7 +264,11 @@ fn main() {
         },*/
         CalibrateOperation2T {
             prepare: flush,
-            op: Dummy::only_flush,
+            op: if use_rdpru {
+                Dummy::only_flush_rdpru
+            } else {
+                Dummy::only_flush
+            },
             name: "clflush_miss_f",
             display_name: "clflush miss - f",
             t: &dummy,
@@ -242,7 +282,11 @@ fn main() {
         },*/
         CalibrateOperation2T {
             prepare: noop::<u8>,
-            op: Dummy::only_flush,
+            op: if use_rdpru {
+                Dummy::only_flush_rdpru
+            } else {
+                Dummy::only_flush
+            },
             name: "clflush_miss_n",
             display_name: "clflush miss - n",
             t: &dummy,

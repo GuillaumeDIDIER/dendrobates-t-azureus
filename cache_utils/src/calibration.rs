@@ -5,7 +5,7 @@ extern crate alloc; //#[cfg(feature = "serde_support")]
                     //use serde::{Deserialize, Serialize};
 #[cfg(feature = "use_std")]
 extern crate std;
-use crate::{flush, maccess, rdtsc_fence};
+use crate::{flush, maccess, rdpru_fenced, rdtsc_fence};
 use cpuid::complex_addressing::{cache_slicing, CacheAttackSlicing, CacheSlicing};
 
 use core::cmp::min;
@@ -68,6 +68,13 @@ pub unsafe fn only_reload(p: *const u8) -> u64 {
     r
 }
 
+pub unsafe fn only_reload_rdpru(p: *const u8) -> u64 {
+    let t = unsafe { rdpru_fenced() };
+    unsafe { maccess(p) };
+    let r = unsafe { rdpru_fenced() } - t;
+    r
+}
+
 pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
     unsafe {
         flush(p);
@@ -75,8 +82,23 @@ pub unsafe fn flush_and_reload(p: *const u8) -> u64 {
     }
 }
 
+pub unsafe fn flush_and_reload_rdpru(p: *const u8) -> u64 {
+    unsafe {
+        flush(p);
+        only_reload_rdpru(p)
+    }
+}
+
 pub unsafe fn reload_and_flush(p: *const u8) -> u64 {
     let r = unsafe { only_reload(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    unsafe { flush(p) };
+    unsafe { arch_x86::_mm_mfence() };
+    r
+}
+
+pub unsafe fn reload_and_flush_rdpru(p: *const u8) -> u64 {
+    let r = unsafe { only_reload_rdpru(p) };
     unsafe { arch_x86::_mm_mfence() };
     unsafe { flush(p) };
     unsafe { arch_x86::_mm_mfence() };
@@ -90,6 +112,13 @@ pub unsafe fn only_flush(p: *const u8) -> u64 {
     r
 }
 
+pub unsafe fn only_flush_rdpru(p: *const u8) -> u64 {
+    let t = unsafe { rdpru_fenced() };
+    unsafe { flush(p) };
+    let r = unsafe { rdpru_fenced() } - t;
+    r
+}
+
 pub unsafe fn load_and_flush(p: *const u8) -> u64 {
     unsafe {
         maccess(p);
@@ -97,10 +126,24 @@ pub unsafe fn load_and_flush(p: *const u8) -> u64 {
     }
 }
 
+pub unsafe fn load_and_flush_rdpru(p: *const u8) -> u64 {
+    unsafe {
+        maccess(p);
+        only_flush_rdpru(p)
+    }
+}
+
 pub unsafe fn flush_and_flush(p: *const u8) -> u64 {
     unsafe {
         flush(p);
         only_flush(p)
+    }
+}
+
+pub unsafe fn flush_and_flush_rdpru(p: *const u8) -> u64 {
+    unsafe {
+        flush(p);
+        only_flush_rdpru(p)
     }
 }
 

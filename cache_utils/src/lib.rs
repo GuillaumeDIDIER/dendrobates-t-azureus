@@ -7,6 +7,7 @@ extern crate alloc;
 use core::arch::x86_64 as arch_x86;
 use core::ptr;
 
+use cpuid::CPUVendor;
 use static_assertions::assert_cfg;
 
 assert_cfg!(
@@ -42,6 +43,32 @@ pub unsafe fn rdtsc_fence() -> u64 {
     let tsc: u64 = unsafe { arch_x86::_rdtsc() };
     unsafe { arch_x86::_mm_mfence() };
     tsc
+}
+
+pub unsafe fn rdpru_fenced() -> u64 {
+    let [hi, lo]: [u32; 2];
+    arch_x86::_mm_mfence();
+    core::arch::asm!(
+    "rdpru",
+    out("edx") hi,
+    out("eax") lo,
+    in("ecx") 1u32,
+    options(nostack, nomem, preserves_flags),
+    );
+    let ret = (u64::from(hi) << 32) | u64::from(lo);
+    arch_x86::_mm_mfence();
+    ret
+}
+
+pub fn has_rdpru() -> bool {
+    if CPUVendor::get_cpu_vendor() == CPUVendor::AMD {
+        // The RDPRU instruction is supported if the feature flag CPUID Fn8000_0008 EBX[4]=1. The 16-bit
+        // field in CPUID Fn8000_0008-EDX[31:16] returns the largest ECX value that returns a valid register.
+        let cpuid = unsafe { arch_x86::__cpuid(0x8000_0008) };
+        cpuid.ebx & (0x1 << 4) != 0
+    } else {
+        false
+    }
 }
 
 pub unsafe fn maccess<T>(p: *const T) {
