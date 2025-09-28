@@ -95,7 +95,7 @@ fn calibrate_fixed_freq_2_thread_numa_impl<
         );
     }
 
-    let cache_line_length = 64; // FIXME MAGIC
+    let cache_line_length = increment; //64; // FIXME MAGIC
 
     let slicing = match get_cache_attack_slicing(core_per_socket, cache_line_length) {
         Some(v) => v,
