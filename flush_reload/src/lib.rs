@@ -39,7 +39,7 @@ impl TimingChannelPrimitives for FRPrimitives {
     }
 
     unsafe fn attack_reset(&self, addr: *const u8) -> u64 {
-        let r = unsafe { self.only_reload(addr) };
+        let r = unsafe { (self.reload)(addr) };
         unsafe { (self.flush)(addr) };
         r
     }
