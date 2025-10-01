@@ -7,25 +7,45 @@ use basic_timing_cache_channel::{
 };
 
 use cache_side_channel::MultipleAddrCacheSideChannel;
-use cache_utils::calibration::{only_flush, only_reload};
+use cache_utils::calibration::{only_flush, only_flush_rdpru, only_reload, only_reload_rdpru};
+use cache_utils::has_rdpru;
 use num_rational::Rational64;
 
-#[derive(Debug, Default, Clone)]
-pub struct FRPrimitives {}
+#[derive(Debug, Clone)]
+pub struct FRPrimitives {
+    reload: unsafe fn(*const u8) -> u64,
+    flush: unsafe fn(*const u8) -> u64,
+}
+
+impl Default for FRPrimitives {
+    fn default() -> Self {
+        if has_rdpru() {
+            Self {
+                reload: only_reload_rdpru,
+                flush: only_flush_rdpru,
+            }
+        } else {
+            Self {
+                reload: only_reload,
+                flush: only_flush,
+            }
+        }
+    }
+}
 
 impl TimingChannelPrimitives for FRPrimitives {
     unsafe fn attack(&self, addr: *const u8) -> u64 {
-        unsafe { only_reload(addr) }
+        unsafe { (self.reload)(addr) }
     }
 
     unsafe fn attack_reset(&self, addr: *const u8) -> u64 {
-        let r = unsafe { only_reload(addr) };
-        unsafe { only_flush(addr) };
+        let r = unsafe { self.only_reload(addr) };
+        unsafe { (self.flush)(addr) };
         r
     }
 
     unsafe fn reset(&self, addr: *const u8) {
-        unsafe { only_flush(addr) };
+        unsafe { (self.flush)(addr) };
     }
     //const NEED_RESET: bool = true;
 }

@@ -262,7 +262,10 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
             }
         }
     }
-    println!("CPU Count: {}, First hyperthread: {}", cpu_count, first_hyperthread_index);
+    println!(
+        "CPU Count: {}, First hyperthread: {}",
+        cpu_count, first_hyperthread_index
+    );
     for i in numa_nodes {
         for j in 0..CpuSet::count() {
             for k in 0..CpuSet::count() {
@@ -270,22 +273,25 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
                     && old.is_set(k).unwrap()
                     && j != k
                     && (!optimize_hyperthreads
-                    || (j < first_hyperthread_index && k < first_hyperthread_index)
-                    || (k == j + first_hyperthread_index))
+                        || (j < first_hyperthread_index && k < first_hyperthread_index)
+                        || (k == j + first_hyperthread_index))
                 {
                     locations.push((i, j, k));
                 }
             }
         }
     }
-    println!("Optimized_Hyperthreads: {}, Locations: {:?}", optimize_hyperthreads, locations);
+    println!(
+        "Optimized_Hyperthreads: {}, Locations: {:?}",
+        optimize_hyperthreads, locations
+    );
     let mut results = BenchmarkResults::default();
     {
         // TU-ST-FR
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_fr_name = String::from("TU-ST-FR");
-        let (mut topology_unaware_fr_channel, ( _node, _attacker, _victim)) =
-            FlushAndReloadCovertOpt::new_with_locations(
+        let (mut topology_unaware_fr_channel, (_node, _attacker, _victim)) =
+            FlushAndReload::new_with_locations(
                 locations.clone().into_iter(),
                 LocationParameters {
                     attacker: CoreLocParameters {
@@ -351,9 +357,7 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_fro_name = String::from("TU-ST-FRO");
 
-
-
-        let (mut topology_unaware_fro_channel, ( _node, _attacker, _victim)) =
+        let (mut topology_unaware_fro_channel, (_node, _attacker, _victim)) =
             FlushAndReloadCovertOpt::new_with_locations(
                 locations.clone().into_iter(),
                 LocationParameters {
@@ -420,8 +424,8 @@ pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthr
         // FIXME, build the channel outside, and then clone it when needed !
         let tu_st_ff_name = String::from("TU-ST-FF");
 
-        let (mut topology_unaware_ff_channel, ( _node, _attacker, _victim)) =
-            FlushAndReloadCovertOpt::new_with_locations(
+        let (mut topology_unaware_ff_channel, (_node, _attacker, _victim)) =
+            FlushAndFlush::new_with_locations(
                 locations.clone().into_iter(),
                 LocationParameters {
                     attacker: CoreLocParameters {
