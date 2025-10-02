@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::io::{stdout, Write};
 
 //const NUM_BYTES: usize = 1 << 12;
-const NUM_BYTES: usize = 1 << 10;
+const NUM_BYTES: usize = 1 << 8;
 
 const NUM_PAGES: usize = 1;
 
