@@ -393,6 +393,22 @@ impl ErrorPrediction {
             self.total() as i64,
         )
     }
+    pub fn error_percentage_str(&self) -> String {
+        if self.error_rate() <= 0.0001 {
+            String::from("<0.01")
+        } else {
+            format!("{:5.2}", self.error_rate() * 100.)
+        }
+    }
+
+    pub fn error_rate_clamped(&self) -> f64 {
+        let N = self.total();
+        let p = 1. - f64::exp(f64::ln(1. - 0.95) / (N + 1) as f64);
+
+        let error_rate = self.error_rate();
+
+        if error_rate <= p { p } else { error_rate }
+    }
 }
 
 impl Add for &ErrorPrediction {

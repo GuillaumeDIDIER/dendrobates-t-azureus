@@ -202,33 +202,77 @@ struct MultiErrors<T> {
 }
 
 pub trait Output {
-    fn write(&self, output_file: &mut File, name: impl AsRef<str>);
+    fn write(&self, output_file: &mut impl Write, name: impl AsRef<str>);
+    fn latex_table(&self, output: &mut String, name: impl AsRef<str>);
+    fn boxplot(&self, output: &mut String, name: impl AsRef<str>);
 }
 
 pub trait JsonOutput {
     fn to_json(&self, base: &Object) -> Vec<Object>;
 }
 
-impl<T: Output> MultiErrors<T> {
-    pub fn write(&self, output_file: &mut File, name: &str) {
+impl<T: Output> Output for MultiErrors<T> {
+    fn write(&self, output_file: &mut impl Write, name: impl AsRef<str>) {
         self.flush_single_error
-            .write(output_file, format!("{}-FF-S", name));
+            .write(output_file, format!("{}-FF-S", name.as_ref()));
         self.flush_dual_error
-            .write(output_file, format!("{}-FF-D", name));
+            .write(output_file, format!("{}-FF-D", name.as_ref()));
         self.flush_th_error
-            .write(output_file, format!("{}-FF-Th", name));
+            .write(output_file, format!("{}-FF-Th", name.as_ref()));
         self.reload_single_error
-            .write(output_file, format!("{}-FR-S", name));
+            .write(output_file, format!("{}-FR-S", name.as_ref()));
         self.reload_dual_error
-            .write(output_file, format!("{}-FR-D", name));
+            .write(output_file, format!("{}-FR-D", name.as_ref()));
         self.reload_th_error
-            .write(output_file, format!("{}-FR-Th", name));
+            .write(output_file, format!("{}-FR-Th", name.as_ref()));
         self.reload_opt_single_error
-            .write(output_file, format!("{}-FRO-S", name));
+            .write(output_file, format!("{}-FRO-S", name.as_ref()));
         self.reload_opt_dual_error
-            .write(output_file, format!("{}-FRO-D", name));
+            .write(output_file, format!("{}-FRO-D", name.as_ref()));
         self.reload_opt_th_error
-            .write(output_file, format!("{}-FRO-Th", name));
+            .write(output_file, format!("{}-FRO-Th", name.as_ref()));
+    }
+
+    fn latex_table(&self, output_file: &mut String, name: impl AsRef<str>) {
+        self.flush_single_error
+            .latex_table(output_file, format!("{}-FF-S", name.as_ref()));
+        self.flush_dual_error
+            .latex_table(output_file, format!("{}-FF-D", name.as_ref()));
+        //self.flush_th_error
+        //    .latex_table(output_file, format!("{}-FF-Th", name.as_ref()));
+        self.reload_single_error
+            .latex_table(output_file, format!("{}-FR-S", name.as_ref()));
+        self.reload_dual_error
+            .latex_table(output_file, format!("{}-FR-D", name.as_ref()));
+        //self.reload_th_error
+        //    .latex_table(output_file, format!("{}-FR-Th", name.as_ref()));
+        self.reload_opt_single_error
+            .latex_table(output_file, format!("{}-FRO-S", name.as_ref()));
+        self.reload_opt_dual_error
+            .latex_table(output_file, format!("{}-FRO-D", name.as_ref()));
+        //self.reload_opt_th_error
+        //    .latex_table(output_file, format!("{}-FRO-Th", name.as_ref()));
+    }
+
+    fn boxplot(&self, output: &mut String, name: impl AsRef<str>) {
+        self.flush_single_error
+            .boxplot(output, format!("{}-FF-S", name.as_ref()));
+        self.flush_dual_error
+            .boxplot(output, format!("{}-FF-D", name.as_ref()));
+        //self.flush_th_error
+        //    .boxplot(output, format!("{}-FF-Th", name.as_ref()));
+        self.reload_single_error
+            .boxplot(output, format!("{}-FR-S", name.as_ref()));
+        self.reload_dual_error
+            .boxplot(output, format!("{}-FR-D", name.as_ref()));
+        //self.reload_th_error
+        //    .boxplot(output, format!("{}-FR-Th", name.as_ref()));
+        self.reload_opt_single_error
+            .boxplot(output, format!("{}-FRO-S", name.as_ref()));
+        self.reload_opt_dual_error
+            .boxplot(output, format!("{}-FRO-D", name.as_ref()));
+        //self.reload_opt_th_error
+        //    .boxplot(output, format!("{}-FRO-Th", name.as_ref()));
     }
 }
 
@@ -1220,6 +1264,9 @@ where
         .join(format!("{}.Errors.txt", basename.as_ref()));
     let mut output_file = std::fs::File::create(path).unwrap();
 
+    let mut latex_table = String::new();
+    let mut boxplots = String::new();
+
     // Note, the micro-architecture P5 corresponds to unknown architectures. Eventually we need to migrate all the data files.
     writeln!(
         output_file,
@@ -1336,6 +1383,8 @@ where
             error_statistics::compute_statistics(&location_map, projection_full, vec![], &errors);
         writeln!(output_file);
         stat.write(&mut output_file, "Full-AVM-Errors");
+        stat.latex_table(&mut latex_table, "TU");
+        stat.boxplot(&mut boxplots, "TU");
         let mut base = Object::new();
         base.insert("projection", location_parameters_json(projection_full));
         json.extend(stat.to_json(&base))
@@ -1364,6 +1413,8 @@ where
             );
             writeln!(output_file);
             stat.write(&mut output_file, "Numa-AVM-Errors");
+            stat.latex_table(&mut latex_table, "Numa-AVM");
+            stat.boxplot(&mut boxplots, "Numa-AVM");
         }
 
         // Compute the min, max, median and average error.
@@ -1479,6 +1530,24 @@ where
 
     if numa_node_count * victim_core_count * attacker_core_count > 1 {
         {
+            let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
+            let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
+
+            let stat = error_statistics::compute_statistics(
+                &location_map,
+                projection_numa_avm_addr,
+                vec![
+                    (String::from("Best-AVM-Addr"), projection_numa_avm_addr),
+                    (String::from("Best-AVM"), projection_socket),
+                ],
+                &numa_avm_addr_threshold_errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
+            stat.latex_table(&mut latex_table, "Numa-AVM-Addr");
+            stat.boxplot(&mut boxplots, "Numa-AVM-Addr");
+        }
+        {
             let projected_numa_m_core_av =
                 make_projection(&location_map, projection_numa_m_core_av);
             let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
@@ -1491,6 +1560,8 @@ where
             );
             writeln!(output_file);
             stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
+            stat.latex_table(&mut latex_table, "Numa-M-Core-AV");
+            stat.boxplot(&mut boxplots, "Numa-M-Core-AV");
         }
         // This is way too slow, and that treatment should be simpler, as we aren't doing any projection.
         {
@@ -1506,24 +1577,13 @@ where
             );
             writeln!(output_file);
             stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
-        }
-        {
-            let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
-            let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
-
-            let stat = error_statistics::compute_statistics(
-                &location_map,
-                projection_numa_avm_addr,
-                vec![
-                    (String::from("Best-MAV-Addr"), projection_numa_avm_addr),
-                    (String::from("Best-MAV"), projection_socket),
-                ],
-                &numa_avm_addr_threshold_errors,
-            );
-            writeln!(output_file);
-            stat.write(&mut output_file, "Numa-MAV-Addr-Errors");
+            stat.latex_table(&mut latex_table, "Numa-M-Core-AV-Addr");
+            stat.boxplot(&mut boxplots, "Numa-M-Core-AV-Addr");
         }
     }
+    writeln!(output_file, "{}", latex_table);
+    writeln!(output_file);
+    writeln!(output_file, "{}", boxplots);
 }
 
 pub fn run_analysis_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()>

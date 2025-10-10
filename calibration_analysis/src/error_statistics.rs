@@ -8,8 +8,8 @@ use json::object::Object;
 use json::{JsonValue, object};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
+use std::fmt::Write;
+use std::io;
 use std::sync::{Mutex, RwLock};
 
 #[derive(Debug, Clone, Copy)]
@@ -125,7 +125,7 @@ impl JsonOutput for ErrorStatisticsResults {
 }
 
 impl Output for ErrorStatisticsResults {
-    fn write(&self, output_file: &mut File, name: impl AsRef<str>) {
+    fn write(&self, output_file: &mut impl io::Write, name: impl AsRef<str>) {
         writeln!(
             output_file,
             "{}-Average: {}",
@@ -133,8 +133,13 @@ impl Output for ErrorStatisticsResults {
             self.average.average
         )
         .expect("Failed to output");
-        writeln!(output_file, "{}-Min: {}", name.as_ref(), self.average.min.0)
-            .expect("Failed to output");
+        writeln!(
+            output_file,
+            "{}-Min: {}",
+            name.as_ref(),
+            self.average.min.0.error_rate()
+        )
+        .expect("Failed to output");
         writeln!(output_file, "{}-Q1: {}", name.as_ref(), self.average.q1.0)
             .expect("Failed to output");
         writeln!(output_file, "{}-Med: {}", name.as_ref(), self.average.med.0)
@@ -200,6 +205,60 @@ impl Output for ErrorStatisticsResults {
                 choice.2.max.0
             )
             .expect("Failed to output");
+        }
+    }
+
+    fn latex_table(&self, output: &mut String, name: impl AsRef<str>) {
+        writeln!(
+            output,
+            "{:40} & ${}$ & ${}$ & ${}$ & ${}$ & ${}$ & ${}$",
+            name.as_ref(),
+            self.average.average.error_percentage_str(),
+            self.average.min.0.error_percentage_str(),
+            self.average.q1.0.error_percentage_str(),
+            self.average.med.0.error_percentage_str(),
+            self.average.q3.0.error_percentage_str(),
+            self.average.max.0.error_percentage_str(),
+        )
+        .expect("Failed to output");
+        for choice in &self.choice {
+            let name = format!("{}-{}", name.as_ref(), choice.0);
+            writeln!(
+                output,
+                "{:40} & ${}$ & ${}$ & ${}$ & ${}$ & ${}$ & ${}$",
+                name,
+                choice.2.average.error_percentage_str(),
+                choice.2.min.0.error_percentage_str(),
+                choice.2.q1.0.error_percentage_str(),
+                choice.2.med.0.error_percentage_str(),
+                choice.2.q3.0.error_percentage_str(),
+                choice.2.max.0.error_percentage_str(),
+            )
+            .expect("Failed to output");
+        }
+    }
+
+    fn boxplot(&self, output: &mut String, name: impl AsRef<str>) {
+        writeln!(output, "% {}:", name.as_ref()).expect("Failed to output");
+        writeln!(output,
+                 "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                 self.average.min.0.error_rate_clamped(),
+                 self.average.q1.0.error_rate_clamped(),
+                 self.average.med.0.error_rate_clamped(),
+                 self.average.average.error_rate_clamped(),
+                 self.average.q3.0.error_rate_clamped(),
+                 self.average.max.0.error_rate_clamped()).expect("Failed to output");
+
+        for choice in &self.choice {
+            writeln!(output, "% {}-{}", name.as_ref(), choice.0).expect("Failed to output");
+            writeln!(output,
+                     "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
+                     choice.2.min.0.error_rate_clamped(),
+                     choice.2.q1.0.error_rate_clamped(),
+                     choice.2.med.0.error_rate_clamped(),
+                     choice.2.average.error_rate_clamped(),
+                     choice.2.q3.0.error_rate_clamped(),
+                     choice.2.max.0.error_rate_clamped()).expect("Failed to output");
         }
     }
 }
