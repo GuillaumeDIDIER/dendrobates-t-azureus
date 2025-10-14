@@ -9,10 +9,10 @@ use calibration_results::calibration::{
     PartialLocation, PartialLocationOwned,
 };
 use calibration_results::calibration_2t::calibration_result_to_location_map_parallel;
-use calibration_results::histograms::group2_histogram_cum_sum;
 use calibration_results::histograms::{
     Bucket, SimpleBucketU64, StaticHistogram, StaticHistogramCumSum,
 };
+use calibration_results::histograms::{group2_histogram, group2_histogram_cum_sum};
 use calibration_results::numa_results::NumaCalibrationResult;
 use calibration_results::reduce;
 use pgfplots::axis::plot::Type2D::ConstLeft;
@@ -121,10 +121,7 @@ impl<const WIDTH: u64, const N: usize> Histogram for StaticHistogramCumSum<WIDTH
     }
 }
 
-fn make_plot<const WIDTH: u64, const N: usize>(
-    hit: &StaticHistogramCumSum<WIDTH, N>,
-    miss: &StaticHistogramCumSum<WIDTH, N>,
-) -> (Vec<Plot2D>, f64) {
+fn make_plot(hit: &impl Histogram, miss: &impl Histogram) -> (Vec<Plot2D>, f64) {
     let mut hit_hist = Plot2D::new();
     let mut ymax = 0.0;
     hit_hist.add_key(PlotKey::Type2D(ConstLeft));
@@ -156,6 +153,18 @@ fn make_plot<const WIDTH: u64, const N: usize>(
 }
 
 pub fn make_plot_by2<const WIDTH: u64, const N: usize>(
+    hit: &StaticHistogram<WIDTH, { N + N }>,
+    miss: &StaticHistogram<WIDTH, { N + N }>,
+) -> (Vec<Plot2D>, f64)
+where
+    [(); { WIDTH + WIDTH } as usize]:,
+{
+    let hit_by2: StaticHistogram<{ WIDTH + WIDTH }, N> = group2_histogram(hit.clone());
+    let miss_by2: StaticHistogram<{ WIDTH + WIDTH }, N> = group2_histogram(miss.clone());
+    make_plot/*::<{ WIDTH + WIDTH }, N>*/(&hit_by2, &miss_by2)
+}
+
+pub fn make_plot_by2_cum_sum<const WIDTH: u64, const N: usize>(
     hit: &StaticHistogramCumSum<WIDTH, { N + N }>,
     miss: &StaticHistogramCumSum<WIDTH, { N + N }>,
 ) -> (Vec<Plot2D>, f64)
@@ -164,13 +173,13 @@ where
 {
     let hit_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(hit);
     let miss_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(miss);
-    make_plot::<{ WIDTH + WIDTH }, N>(&hit_by2, &miss_by2)
+    make_plot/*::<{ WIDTH + WIDTH }, N>*/(&hit_by2, &miss_by2)
 }
 
 pub fn make_projection<const WIDTH: u64, const N: usize>(
     location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>, // FIXME
     projection: LocationParameters,
-) -> HashMap<PartialLocationOwned, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>
+) -> HashMap<PartialLocationOwned, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>
 //where
 //    [(); { WIDTH + WIDTH } as usize]:,
 {
@@ -189,12 +198,12 @@ pub fn make_projection<const WIDTH: u64, const N: usize>(
             acc.reload_opt_miss += &v.reload_opt_miss;
         },
         |acc, rk| CacheOps {
-            flush_hit: StaticHistogramCumSum::from(acc.flush_hit),
-            flush_miss: StaticHistogramCumSum::from(acc.flush_miss),
-            reload_hit: StaticHistogramCumSum::from(acc.reload_hit),
-            reload_miss: StaticHistogramCumSum::from(acc.reload_miss),
-            reload_opt_hit: StaticHistogramCumSum::from(acc.reload_opt_hit),
-            reload_opt_miss: StaticHistogramCumSum::from(acc.reload_opt_miss),
+            flush_hit: acc.flush_hit,
+            flush_miss: acc.flush_miss,
+            reload_hit: acc.reload_hit,
+            reload_miss: acc.reload_miss,
+            reload_opt_hit: acc.reload_opt_hit,
+            reload_opt_miss: acc.reload_opt_miss,
         }, /* Figure out if we should build the HistCumSums here*/
     );
 
@@ -599,10 +608,7 @@ impl Location for AVMLocation {}
 impl Location for PartialLocationOwned {}
 
 fn compute_errors<const WIDTH: u64, const N: usize>(
-    projected: &HashMap<
-        PartialLocationOwned,
-        CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>,
-    >,
+    projected: &HashMap<PartialLocationOwned, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
 ) -> HashMap<
     PartialLocationOwned,
     //(
@@ -617,24 +623,31 @@ fn compute_errors<const WIDTH: u64, const N: usize>(
     projected
         .par_iter()
         .map(|(k, histograms)| {
+            let flush_hit = StaticHistogramCumSum::from(&histograms.flush_hit);
+            let flush_miss = StaticHistogramCumSum::from(&histograms.flush_miss);
+            let reload_hit = StaticHistogramCumSum::from(&histograms.reload_hit);
+            let reload_miss = StaticHistogramCumSum::from(&histograms.reload_miss);
+            let reload_opt_hit = StaticHistogramCumSum::from(&histograms.reload_opt_hit);
+            let reload_opt_miss = StaticHistogramCumSum::from(&histograms.reload_opt_miss);
+
             let flush_single_threshold = simple_threshold_builder
-                .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
+                .find_best_classifier(&flush_hit, &flush_miss)
                 .expect("Failed to compute single threshold");
             let flush_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&histograms.flush_hit, &histograms.flush_miss)
+                .find_best_classifier(&flush_hit, &flush_miss)
                 .expect("Failed to compute dual threshold");
 
             let reload_single_threshold = simple_threshold_builder
-                .find_best_classifier(&histograms.reload_hit, &histograms.reload_miss)
+                .find_best_classifier(&reload_hit, &reload_miss)
                 .expect("Failed to compute single threshold");
             let reload_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&histograms.reload_hit, &histograms.reload_miss)
+                .find_best_classifier(&reload_hit, &reload_miss)
                 .expect("Failed to compute dual threshold");
             let reload_opt_single_threshold = simple_threshold_builder
-                .find_best_classifier(&histograms.reload_opt_hit, &histograms.reload_opt_miss)
+                .find_best_classifier(&reload_opt_hit, &reload_opt_miss)
                 .expect("Failed to compute single threshold");
             let reload_opt_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&histograms.reload_opt_hit, &histograms.reload_opt_miss)
+                .find_best_classifier(&reload_opt_hit, &reload_opt_miss)
                 .expect("Failed to compute dual threshold");
             /*
             let flush_flush_optimal =
@@ -672,7 +685,7 @@ fn compute_cum_sums<const WIDTH: u64, const N: usize>(
         .collect()
 }
 fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
-    histogram_map: &HashMap<AVMLocation, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
+    histogram_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
 ) -> HashMap<
     AVMLocation,
     //(
@@ -687,31 +700,31 @@ fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
     histogram_map
         .par_iter()
         .map(|(k, histograms)| {
-            let flush_hits = &histograms.flush_hit;
-            let flush_miss = &histograms.flush_miss;
+            let flush_hits = StaticHistogramCumSum::from(&histograms.flush_hit);
+            let flush_miss = StaticHistogramCumSum::from(&histograms.flush_miss);
 
-            let reload_hits = &histograms.reload_hit;
-            let reload_miss = &histograms.reload_miss;
-            let reload_opt_hits = &histograms.reload_opt_hit;
-            let reload_opt_miss = &histograms.reload_opt_miss;
+            let reload_hits = StaticHistogramCumSum::from(&histograms.reload_hit);
+            let reload_miss = StaticHistogramCumSum::from(&histograms.reload_miss);
+            let reload_opt_hits = StaticHistogramCumSum::from(&histograms.reload_opt_hit);
+            let reload_opt_miss = StaticHistogramCumSum::from(&histograms.reload_opt_miss);
             let flush_single_threshold = simple_threshold_builder
-                .find_best_classifier(flush_hits, flush_miss)
+                .find_best_classifier(&flush_hits, &flush_miss)
                 .expect("Failed to compute single threshold");
             let flush_dual_threshold = dual_threshold_builder
-                .find_best_classifier(flush_hits, flush_miss)
+                .find_best_classifier(&flush_hits, &flush_miss)
                 .expect("Failed to compute dual threshold");
 
             let reload_single_threshold = simple_threshold_builder
-                .find_best_classifier(reload_hits, reload_miss)
+                .find_best_classifier(&reload_hits, &reload_miss)
                 .expect("Failed to compute single threshold");
             let reload_dual_threshold = dual_threshold_builder
-                .find_best_classifier(reload_hits, reload_miss)
+                .find_best_classifier(&reload_hits, &reload_miss)
                 .expect("Failed to compute dual threshold");
             let reload_opt_single_threshold = simple_threshold_builder
-                .find_best_classifier(reload_opt_hits, reload_opt_miss)
+                .find_best_classifier(&reload_opt_hits, &reload_opt_miss)
                 .expect("Failed to compute single threshold");
             let reload_opt_dual_threshold = dual_threshold_builder
-                .find_best_classifier(reload_opt_hits, reload_opt_miss)
+                .find_best_classifier(&reload_opt_hits, &reload_opt_miss)
                 .expect("Failed to compute dual threshold");
             /*
             let flush_flush_optimal =
@@ -741,8 +754,8 @@ fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
 }
 
 fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
-    projected: &HashMap<T, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
-    computed_errors: &HashMap<T, MultiThresholdErrors<SimpleBucketU64<{ WIDTH }, { N + N }>>>,
+    projected: &HashMap<T, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
+    computed_errors: HashMap<T, MultiThresholdErrors<SimpleBucketU64<{ WIDTH }, { N + N }>>>,
     folder: impl AsRef<Path>,
     base_name: impl AsRef<str>,
     flush_flush: bool,
@@ -751,40 +764,45 @@ fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
 ) where
     [(); { WIDTH + WIDTH } as usize]:,
 {
+    let count = computed_errors.len();
+
+    println!("Finding locations...");
     let mut error_vec: MultiErrors<Vec<(T, ErrorPrediction)>> = MultiErrors {
-        flush_single_error: Vec::new(),
-        flush_dual_error: Vec::new(),
+        flush_single_error: Vec::with_capacity(count),
+        flush_dual_error: Vec::with_capacity(count),
         flush_th_error: Vec::new(),
-        reload_single_error: Vec::new(),
-        reload_dual_error: Vec::new(),
+        reload_single_error: Vec::with_capacity(count),
+        reload_dual_error: Vec::with_capacity(count),
         reload_th_error: Vec::new(),
-        reload_opt_single_error: Vec::new(),
-        reload_opt_dual_error: Vec::new(),
+        reload_opt_single_error: Vec::with_capacity(count),
+        reload_opt_dual_error: Vec::with_capacity(count),
         reload_opt_th_error: Vec::new(),
     };
-    for (k, multi_t_e) in computed_errors {
-        error_vec
-            .flush_single_error
-            .push((*k, multi_t_e.flush_single_threshold.1));
-        error_vec
-            .flush_dual_error
-            .push((*k, multi_t_e.flush_dual_threshold.1));
-        error_vec
-            .reload_single_error
-            .push((*k, multi_t_e.reload_single_threshold.1));
-        error_vec
-            .reload_dual_error
-            .push((*k, multi_t_e.reload_dual_threshold.1));
-        error_vec
-            .reload_opt_single_error
-            .push((*k, multi_t_e.reload_opt_single_threshold.1));
-        error_vec
-            .reload_opt_dual_error
-            .push((*k, multi_t_e.reload_opt_dual_threshold.1));
+    {
+        for (k, multi_t_e) in computed_errors {
+            error_vec
+                .flush_single_error
+                .push((k, multi_t_e.flush_single_threshold.1));
+            error_vec
+                .flush_dual_error
+                .push((k, multi_t_e.flush_dual_threshold.1));
+            error_vec
+                .reload_single_error
+                .push((k, multi_t_e.reload_single_threshold.1));
+            error_vec
+                .reload_dual_error
+                .push((k, multi_t_e.reload_dual_threshold.1));
+            error_vec
+                .reload_opt_single_error
+                .push((k, multi_t_e.reload_opt_single_threshold.1));
+            error_vec
+                .reload_opt_dual_error
+                .push((k, multi_t_e.reload_opt_dual_threshold.1));
+        }
     }
-
+    println!("    Sorting...");
     error_vec.apply_mut(|v, _, _| v.par_sort_by_key(|(_l, e)| e.error_ratio()));
-
+    println!("    Sorted.");
     let all_mins = error_vec.apply(|v, _, _| {
         let len = v.len();
         if len > 0 { Some(v[0]) } else { None }
@@ -817,6 +835,8 @@ fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
         let len = v.len();
         if len > 0 { Some(v[len - 1]) } else { None }
     });
+    println!("Locations found");
+    drop(error_vec);
     let base_name_ff = format!("{}-FF", base_name.as_ref());
     let base_name_fr = format!("{}-FR", base_name.as_ref());
     let base_name_fro = format!("{}-FRO", base_name.as_ref());
@@ -835,6 +855,7 @@ fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
         ("Max", all_maxs),
     ];
 
+    println!("Plotting...");
     for (name, multi_locations) in all {
         multi_locations.apply(|v, a, s| {
             if let Some((l, e)) = v {
@@ -912,10 +933,11 @@ fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
             }
         });
     }
+    println!("Plotted.");
 }
 
 fn make_projection_plots<const WIDTH: u64, const N: usize>(
-    projected: HashMap<PartialLocationOwned, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
+    projected: HashMap<PartialLocationOwned, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
     folder: impl AsRef<Path>,
     base_name: impl AsRef<str>,
     flush_flush: bool,
@@ -1145,11 +1167,11 @@ where
         sorted_histograms.sort_by(
             |arg0: &(
                 PartialLocationOwned,
-                CacheOps<StaticHistogramCumSum<WIDTH, { N + N }>>,
+                CacheOps<StaticHistogram<WIDTH, { N + N }>>,
             ),
              arg1: &(
                 PartialLocationOwned,
-                CacheOps<StaticHistogramCumSum<WIDTH, { N + N }>>,
+                CacheOps<StaticHistogram<WIDTH, { N + N }>>,
             )| sort_criteria(arg0.0, arg1.0),
         );
         // TODO figure out how to handle the multiple plots.
@@ -1386,107 +1408,110 @@ where
 {
     // First, let's extract the data we want.
 
-    println!(
-        "Running analysis with folder: {} and basename: {}",
-        folder.as_ref().display(),
-        basename.as_ref()
-    );
-    /* We need dual and single threshold analysis */
-    let results = data.results;
-    let topology_info = data.topology_info;
-    let slicings = data.slicing;
-    let operations = data.operations;
+    let location_map = {
+        println!(
+            "Running analysis with folder: {} and basename: {}",
+            folder.as_ref().display(),
+            basename.as_ref()
+        );
+        /* We need dual and single threshold analysis */
+        let results = data.results;
+        let topology_info = data.topology_info;
+        let slicings = data.slicing;
+        let operations = data.operations;
 
-    let names = CacheOps {
-        flush_hit: HashSet::from([String::from("clflush_remote_hit")]),
-        flush_miss: HashSet::from([
-            String::from("clflush_miss_f"),
-            //String::from("clflush_miss_n"),
-        ]),
-        reload_hit: HashSet::from([String::from("reload_remote_hit")]),
-        reload_miss: HashSet::from([String::from("reload_miss_n")]),
-        reload_opt_hit: HashSet::from([String::from("shared_hit")]),
-        reload_opt_miss: HashSet::from([String::from("reload_miss_f")]),
-    };
+        let names = CacheOps {
+            flush_hit: HashSet::from([String::from("clflush_remote_hit")]),
+            flush_miss: HashSet::from([
+                String::from("clflush_miss_f"),
+                //String::from("clflush_miss_n"),
+            ]),
+            reload_hit: HashSet::from([String::from("reload_remote_hit")]),
+            reload_miss: HashSet::from([String::from("reload_miss_n")]),
+            reload_opt_hit: HashSet::from([String::from("shared_hit")]),
+            reload_opt_miss: HashSet::from([String::from("reload_miss_f")]),
+        };
 
-    let mut indexes = CacheOps {
-        flush_hit: HashSet::new(),
-        flush_miss: HashSet::new(),
-        reload_hit: HashSet::new(),
-        reload_miss: HashSet::new(),
-        reload_opt_hit: HashSet::new(),
-        reload_opt_miss: HashSet::new(),
-    };
+        let mut indexes = CacheOps {
+            flush_hit: HashSet::new(),
+            flush_miss: HashSet::new(),
+            reload_hit: HashSet::new(),
+            reload_miss: HashSet::new(),
+            reload_opt_hit: HashSet::new(),
+            reload_opt_miss: HashSet::new(),
+        };
 
-    for (i, name) in operations.iter().enumerate() {
-        if names.flush_hit.contains(&name.name) {
-            indexes.flush_hit.insert(i);
-        }
-        if names.flush_miss.contains(&name.name) {
-            indexes.flush_miss.insert(i);
-        }
-        if names.reload_hit.contains(&name.name) {
-            indexes.reload_hit.insert(i);
-        }
-        if names.reload_miss.contains(&name.name) {
-            indexes.reload_miss.insert(i);
-        }
-        if names.reload_opt_hit.contains(&name.name) {
-            indexes.reload_opt_hit.insert(i);
-        }
-        if names.reload_opt_miss.contains(&name.name) {
-            indexes.reload_opt_miss.insert(i);
-        }
-    }
-
-    let uarch = data.micro_architecture;
-
-    let core_location = |core: usize| {
-        // Eventually we need to integrate https://docs.rs/raw-cpuid/latest/raw_cpuid/struct.ExtendedTopologyIter.html
-        let node = topology_info[&core].into();
-        CoreLocation {
-            socket: node,
-            core: core as u16,
-        }
-    };
-
-    // Build the Location Map from the raw structures
-
-    let location_map = calibration_result_to_location_map_parallel(
-        results,
-        &|static_hist_result| {
-            let mut result = CacheOps::<StaticHistogram<WIDTH, { N + N }>>::default();
-            for (i, hist) in static_hist_result.histogram.into_iter().enumerate() {
-                if indexes.flush_hit.contains(&i) {
-                    result.flush_hit += &hist;
-                }
-                if indexes.flush_miss.contains(&i) {
-                    result.flush_miss += &hist;
-                }
-                if indexes.reload_hit.contains(&i) {
-                    result.reload_hit += &hist;
-                }
-                if indexes.reload_miss.contains(&i) {
-                    result.reload_miss += &hist;
-                }
-                if indexes.reload_opt_hit.contains(&i) {
-                    result.reload_opt_hit += &hist;
-                }
-                if indexes.reload_opt_miss.contains(&i) {
-                    result.reload_opt_miss += &hist;
-                }
+        for (i, name) in operations.iter().enumerate() {
+            if names.flush_hit.contains(&name.name) {
+                indexes.flush_hit.insert(i);
             }
-            result
-        },
-        &|addr| {
-            slicings
-                .1
-                .hash(addr)
-                .try_into()
-                .expect("Slice index doesn't fit u8")
-        },
-        &core_location,
-    );
+            if names.flush_miss.contains(&name.name) {
+                indexes.flush_miss.insert(i);
+            }
+            if names.reload_hit.contains(&name.name) {
+                indexes.reload_hit.insert(i);
+            }
+            if names.reload_miss.contains(&name.name) {
+                indexes.reload_miss.insert(i);
+            }
+            if names.reload_opt_hit.contains(&name.name) {
+                indexes.reload_opt_hit.insert(i);
+            }
+            if names.reload_opt_miss.contains(&name.name) {
+                indexes.reload_opt_miss.insert(i);
+            }
+        }
+
+        let uarch = data.micro_architecture;
+
+        let core_location = |core: usize| {
+            // Eventually we need to integrate https://docs.rs/raw-cpuid/latest/raw_cpuid/struct.ExtendedTopologyIter.html
+            let node = topology_info[&core].into();
+            CoreLocation {
+                socket: node,
+                core: core as u16,
+            }
+        };
+
+        // Build the Location Map from the raw structures
+
+        let location_map = calibration_result_to_location_map_parallel(
+            results,
+            &|static_hist_result| {
+                let mut result = CacheOps::<StaticHistogram<WIDTH, { N + N }>>::default();
+                for (i, hist) in static_hist_result.histogram.into_iter().enumerate() {
+                    if indexes.flush_hit.contains(&i) {
+                        result.flush_hit += &hist;
+                    }
+                    if indexes.flush_miss.contains(&i) {
+                        result.flush_miss += &hist;
+                    }
+                    if indexes.reload_hit.contains(&i) {
+                        result.reload_hit += &hist;
+                    }
+                    if indexes.reload_miss.contains(&i) {
+                        result.reload_miss += &hist;
+                    }
+                    if indexes.reload_opt_hit.contains(&i) {
+                        result.reload_opt_hit += &hist;
+                    }
+                    if indexes.reload_opt_miss.contains(&i) {
+                        result.reload_opt_miss += &hist;
+                    }
+                }
+                result
+            },
+            &|addr| {
+                slicings
+                    .1
+                    .hash(addr)
+                    .try_into()
+                    .expect("Slice index doesn't fit u8")
+            },
+            &core_location,
+        );
+        location_map
+    };
 
     // Print some metadata
     let num_entries = location_map.iter().count();
@@ -1614,45 +1639,49 @@ where
     };
 
     let basename_all = format!("{}-all", basename.as_ref());
+    {
+        let projected_full = make_projection(&location_map, projection_full);
 
-    let projected_full = make_projection(&location_map, projection_full);
+        let errors = compute_errors(&projected_full);
 
-    let errors = compute_errors(&projected_full);
+        let count = errors.par_iter().count();
+        assert_eq!(count, 1);
+        let full_threshold_errors = errors.iter().next().unwrap().1;
 
-    let count = errors.par_iter().count();
-    assert_eq!(count, 1);
-    let full_threshold_errors = errors.iter().next().unwrap().1;
+        write_out_threshold_info(&mut output_file, "Full", full_threshold_errors)
+            .map_err(|e| eprintln!("Failed to write to file"))
+            .unwrap_or_default();
 
-    write_out_threshold_info(&mut output_file, "Full", full_threshold_errors)
-        .map_err(|e| eprintln!("Failed to write to file"))
-        .unwrap_or_default();
+        make_projection_plots(
+            projected_full,
+            &folder,
+            basename_all,
+            true,
+            true,
+            true,
+            GroupDimension::Horizontal(1),
+            &(ordering_all as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
+        )
+        .expect("Failed to make Full projection plot.");
 
-    make_projection_plots(
-        projected_full,
-        &folder,
-        basename_all,
-        true,
-        true,
-        true,
-        GroupDimension::Horizontal(1),
-        &(ordering_all as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
-    )
-    .expect("Failed to make Full projection plot.");
+        let mut json = Vec::new();
 
-    let mut json = Vec::new();
-
-    if num_entries > 1 {
-        let stat =
-            error_statistics::compute_statistics(&location_map, projection_full, vec![], &errors);
-        writeln!(output_file);
-        stat.write(&mut output_file, "Full-AVM-Errors");
-        stat.latex_table(&mut latex_table, "TU");
-        stat.boxplot(&mut boxplots, "TU");
-        let mut base = Object::new();
-        base.insert("projection", location_parameters_json(projection_full));
-        json.extend(stat.to_json(&base))
+        if num_entries > 1 {
+            let stat = error_statistics::compute_statistics(
+                &location_map,
+                projection_full,
+                vec![],
+                &errors,
+            );
+            writeln!(output_file);
+            stat.write(&mut output_file, "Full-AVM-Errors");
+            stat.latex_table(&mut latex_table, "TU");
+            stat.boxplot(&mut boxplots, "TU");
+            let mut base = Object::new();
+            base.insert("projection", location_parameters_json(projection_full));
+            json.extend(stat.to_json(&base))
+        }
     }
-
     /*
     List of models:
     Numa(MAV), Numa(MA), Numa(AV), Numa(A) x (No Addr / Addr)
@@ -1663,138 +1692,68 @@ where
      */
 
     if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
-        let basename_numa = format!("{}-node-aware", basename.as_ref());
-        let basename_numa_avm = format!("{}-Numa-AVM", basename.as_ref());
+        {
+            let basename_numa = format!("{}-node-aware", basename.as_ref());
+            let basename_numa_avm = format!("{}-Numa-AVM", basename.as_ref());
 
-        let projected_numa = make_projection(&location_map, projection_socket);
-        let numa_threshold_errors = compute_errors(&projected_numa);
-        if num_entries > victim_socket_count * attacker_socket_count * numa_node_count {
-            let stat = error_statistics::compute_statistics(
-                &location_map,
-                projection_socket,
-                vec![(String::from("Best"), projection_socket)],
-                &numa_threshold_errors,
-            );
-            writeln!(output_file);
-            stat.write(&mut output_file, "Numa-AVM-Errors");
-            stat.latex_table(&mut latex_table, "Numa-AVM");
-            stat.boxplot(&mut boxplots, "Numa-AVM");
+            let projected_numa = make_projection(&location_map, projection_socket);
+            let numa_threshold_errors = compute_errors(&projected_numa);
+            if num_entries > victim_socket_count * attacker_socket_count * numa_node_count {
+                let stat = error_statistics::compute_statistics(
+                    &location_map,
+                    projection_socket,
+                    vec![(String::from("Best"), projection_socket)],
+                    &numa_threshold_errors,
+                );
+                writeln!(output_file);
+                stat.write(&mut output_file, "Numa-AVM-Errors");
+                stat.latex_table(&mut latex_table, "Numa-AVM");
+                stat.boxplot(&mut boxplots, "Numa-AVM");
 
-            make_model_stats_plots(
-                &projected_numa,
-                &numa_threshold_errors,
+                make_model_stats_plots(
+                    &projected_numa,
+                    numa_threshold_errors,
+                    &folder,
+                    basename_numa_avm,
+                    true,
+                    true,
+                    true,
+                );
+            }
+
+            // Compute the min, max, median and average error.
+
+            make_projection_plots(
+                projected_numa,
                 &folder,
-                basename_numa_avm,
+                basename_numa,
                 true,
                 true,
                 true,
-            );
+                GroupDimension::Rectangle(
+                    victim_socket_count * attacker_socket_count,
+                    numa_node_count,
+                ),
+                &(ordering_numa
+                    as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
+            )
+            .expect("Failed to make Full projection plot.");
+            /*
+            writeln!(output_file).unwrap_or_default();
+            writeln!(output_file, "Flush-Reload-Data:").unwrap_or_default();
+            writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
+                full_stats.avg.reload_single_error.error_rate() * 100., full_stats.min.reload_single_error.error_rate() * 100., full_stats.q1.reload_single_error.error_rate() * 100., full_stats.med.reload_single_error.error_rate() * 100., full_stats.q3.reload_single_error.error_rate() * 100., full_stats.max.reload_single_error.error_rate() * 100.,
+                full_stats.avg.reload_dual_error.error_rate() * 100., full_stats.min.reload_dual_error.error_rate() * 100., full_stats.q1.reload_dual_error.error_rate() * 100., full_stats.med.reload_dual_error.error_rate() * 100., full_stats.q3.reload_dual_error.error_rate() * 100., full_stats.max.reload_dual_error.error_rate() * 100.,
+                numa_stats.avg.reload_single_error.error_rate() * 100., numa_stats.min.reload_single_error.error_rate() * 100., numa_stats.q1.reload_single_error.error_rate() * 100., numa_stats.med.reload_single_error.error_rate() * 100., numa_stats.q3.reload_single_error.error_rate() * 100., numa_stats.max.reload_single_error.error_rate() * 100.,
+            ).unwrap_or_default();
+            writeln!(output_file, "Flush-Flush-Data:").unwrap_or_default();
+            writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
+                     full_stats.avg.flush_single_error.error_rate() * 100., full_stats.min.flush_single_error.error_rate() * 100., full_stats.q1.flush_single_error.error_rate() * 100., full_stats.med.flush_single_error.error_rate() * 100., full_stats.q3.flush_single_error.error_rate() * 100., full_stats.max.flush_single_error.error_rate() * 100.,
+                     full_stats.avg.flush_dual_error.error_rate() * 100., full_stats.min.flush_dual_error.error_rate() * 100., full_stats.q1.flush_dual_error.error_rate() * 100., full_stats.med.flush_dual_error.error_rate() * 100., full_stats.q3.flush_dual_error.error_rate() * 100., full_stats.max.flush_dual_error.error_rate() * 100.,
+                     numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
+            ).unwrap_or_default();
+            */
         }
-
-        // Compute the min, max, median and average error.
-
-        /*
-        writeln!(output_file, "% Numa-FF-Dual-Boxplot:  ").unwrap_or_default();
-        writeln!(output_file,
-                 "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.flush_dual_error.error_rate() * 1.,
-                 numa_stats.q1.flush_dual_error.error_rate() * 1.,
-                 numa_stats.med.flush_dual_error.error_rate() * 1.,
-                 numa_stats.avg.flush_dual_error.error_rate() * 1.,
-                 numa_stats.q3.flush_dual_error.error_rate() * 1.,
-                 numa_stats.max.flush_dual_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Numa-FF-Single-Boxplot:").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.flush_single_error.error_rate() * 1.,
-                 numa_stats.q1.flush_single_error.error_rate() * 1.,
-                 numa_stats.med.flush_single_error.error_rate() * 1.,
-                 numa_stats.avg.flush_single_error.error_rate() * 1.,
-                 numa_stats.q3.flush_single_error.error_rate() * 1.,
-                 numa_stats.max.flush_single_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Numa-FR-Dual-Boxplot:  ").unwrap_or_default();
-        writeln!(output_file,
-                 "%\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.reload_dual_error.error_rate() * 1.,
-                 numa_stats.q1.reload_dual_error.error_rate() * 1.,
-                 numa_stats.med.reload_dual_error.error_rate() * 1.,
-                 numa_stats.avg.reload_dual_error.error_rate() * 1.,
-                 numa_stats.q3.reload_dual_error.error_rate() * 1.,
-                 numa_stats.max.reload_dual_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Numa-FR-Single-Boxplot:").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 numa_stats.min.reload_single_error.error_rate() * 1.,
-                 numa_stats.q1.reload_single_error.error_rate() * 1.,
-                 numa_stats.med.reload_single_error.error_rate() * 1.,
-                 numa_stats.avg.reload_single_error.error_rate() * 1.,
-                 numa_stats.q3.reload_single_error.error_rate() * 1.,
-                 numa_stats.max.reload_single_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Full-FF-Dual-Boxplot:  ").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.flush_dual_error.error_rate() * 1.,
-                 full_stats.q1.flush_dual_error.error_rate() * 1.,
-                 full_stats.med.flush_dual_error.error_rate() * 1.,
-                 full_stats.avg.flush_dual_error.error_rate() * 1.,
-                 full_stats.q3.flush_dual_error.error_rate() * 1.,
-                 full_stats.max.flush_dual_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Full-FF-Single-Boxplot:").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.flush_single_error.error_rate() * 1.,
-                 full_stats.q1.flush_single_error.error_rate() * 1.,
-                 full_stats.med.flush_single_error.error_rate() * 1.,
-                 full_stats.avg.flush_single_error.error_rate() * 1.,
-                 full_stats.q3.flush_single_error.error_rate() * 1.,
-                 full_stats.max.flush_single_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Full-FR-Dual-Boxplot:  ").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.reload_dual_error.error_rate() * 1.,
-                 full_stats.q1.reload_dual_error.error_rate() * 1.,
-                 full_stats.med.reload_dual_error.error_rate() * 1.,
-                 full_stats.avg.reload_dual_error.error_rate() * 1.,
-                 full_stats.q3.reload_dual_error.error_rate() * 1.,
-                 full_stats.max.reload_dual_error.error_rate() * 1.).unwrap_or_default();
-        writeln!(output_file, "% Full-FR-Single-Boxplot:").unwrap_or_default();
-        writeln!(output_file,
-                 "\\addplot[boxplot prepared={{lower whisker={}, lower quartile={}, median={}, average={}, upper quartile={}, upper whisker={},}},] coordinates {{}};",
-                 full_stats.min.reload_single_error.error_rate() * 1.,
-                 full_stats.q1.reload_single_error.error_rate() * 1.,
-                 full_stats.med.reload_single_error.error_rate() * 1.,
-                 full_stats.avg.reload_single_error.error_rate() * 1.,
-                 full_stats.q3.reload_single_error.error_rate() * 1.,
-                 full_stats.max.reload_single_error.error_rate() * 1.).unwrap_or_default();
-        */
-        make_projection_plots(
-            projected_numa,
-            &folder,
-            basename_numa,
-            true,
-            true,
-            true,
-            GroupDimension::Rectangle(victim_socket_count * attacker_socket_count, numa_node_count),
-            &(ordering_numa
-                as fn(PartialLocationOwned, PartialLocationOwned) -> std::cmp::Ordering),
-        )
-        .expect("Failed to make Full projection plot.");
-        /*
-        writeln!(output_file).unwrap_or_default();
-        writeln!(output_file, "Flush-Reload-Data:").unwrap_or_default();
-        writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
-            full_stats.avg.reload_single_error.error_rate() * 100., full_stats.min.reload_single_error.error_rate() * 100., full_stats.q1.reload_single_error.error_rate() * 100., full_stats.med.reload_single_error.error_rate() * 100., full_stats.q3.reload_single_error.error_rate() * 100., full_stats.max.reload_single_error.error_rate() * 100.,
-            full_stats.avg.reload_dual_error.error_rate() * 100., full_stats.min.reload_dual_error.error_rate() * 100., full_stats.q1.reload_dual_error.error_rate() * 100., full_stats.med.reload_dual_error.error_rate() * 100., full_stats.q3.reload_dual_error.error_rate() * 100., full_stats.max.reload_dual_error.error_rate() * 100.,
-            numa_stats.avg.reload_single_error.error_rate() * 100., numa_stats.min.reload_single_error.error_rate() * 100., numa_stats.q1.reload_single_error.error_rate() * 100., numa_stats.med.reload_single_error.error_rate() * 100., numa_stats.q3.reload_single_error.error_rate() * 100., numa_stats.max.reload_single_error.error_rate() * 100.,
-        ).unwrap_or_default();
-        writeln!(output_file, "Flush-Flush-Data:").unwrap_or_default();
-        writeln!(output_file, "\\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} & \\stats{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}} \\\\",
-                 full_stats.avg.flush_single_error.error_rate() * 100., full_stats.min.flush_single_error.error_rate() * 100., full_stats.q1.flush_single_error.error_rate() * 100., full_stats.med.flush_single_error.error_rate() * 100., full_stats.q3.flush_single_error.error_rate() * 100., full_stats.max.flush_single_error.error_rate() * 100.,
-                 full_stats.avg.flush_dual_error.error_rate() * 100., full_stats.min.flush_dual_error.error_rate() * 100., full_stats.q1.flush_dual_error.error_rate() * 100., full_stats.med.flush_dual_error.error_rate() * 100., full_stats.q3.flush_dual_error.error_rate() * 100., full_stats.max.flush_dual_error.error_rate() * 100.,
-                 numa_stats.avg.flush_single_error.error_rate() * 100., numa_stats.min.flush_single_error.error_rate() * 100., numa_stats.q1.flush_single_error.error_rate() * 100., numa_stats.med.flush_single_error.error_rate() * 100., numa_stats.q3.flush_single_error.error_rate() * 100., numa_stats.max.flush_single_error.error_rate() * 100.,
-        ).unwrap_or_default();
-        */
-
         // ---------------------------------------------------------------------------------
     } else { // hence victim_socket_count * attacker_socket_count * numa_node_count <= 1
         // Here we have extra single socket analysis.
@@ -1808,29 +1767,32 @@ where
 
             let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
             let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
-
-            let stat = error_statistics::compute_statistics(
-                &location_map,
-                projection_numa_avm_addr,
-                vec![
-                    (String::from("Best-AVM-Addr"), projection_numa_avm_addr),
-                    (String::from("Best-AVM"), projection_socket),
-                ],
-                &numa_avm_addr_threshold_errors,
-            );
-            writeln!(output_file);
-            stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
-            stat.latex_table(&mut latex_table, "Numa-AVM-Addr");
-            stat.boxplot(&mut boxplots, "Numa-AVM-Addr");
-            make_model_stats_plots(
-                &projected_numa_avm_addr,
-                &numa_avm_addr_threshold_errors,
-                &folder,
-                basename_numa_avm_addr,
-                true,
-                true,
-                true,
-            );
+            {
+                let stat = error_statistics::compute_statistics(
+                    &location_map,
+                    projection_numa_avm_addr,
+                    vec![
+                        (String::from("Best-AVM-Addr"), projection_numa_avm_addr),
+                        (String::from("Best-AVM"), projection_socket),
+                    ],
+                    &numa_avm_addr_threshold_errors,
+                );
+                writeln!(output_file);
+                stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
+                stat.latex_table(&mut latex_table, "Numa-AVM-Addr");
+                stat.boxplot(&mut boxplots, "Numa-AVM-Addr");
+            }
+            {
+                make_model_stats_plots(
+                    &projected_numa_avm_addr,
+                    numa_avm_addr_threshold_errors,
+                    &folder,
+                    basename_numa_avm_addr,
+                    true,
+                    true,
+                    true,
+                );
+            }
         }
         {
             let basename_numa_m_core_av = format!("{}-Numa-M-Core-AV", basename.as_ref());
@@ -1838,56 +1800,63 @@ where
             let projected_numa_m_core_av =
                 make_projection(&location_map, projection_numa_m_core_av);
             let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
-
-            let stat = error_statistics::compute_statistics(
-                &location_map,
-                projection_numa_m_core_av,
-                vec![(String::from("Best"), projection_numa_m_core_av)],
-                &numa_m_core_av_threshold_errors,
-            );
-            writeln!(output_file);
-            stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
-            stat.latex_table(&mut latex_table, "Numa-M-Core-AV");
-            stat.boxplot(&mut boxplots, "Numa-M-Core-AV");
-            make_model_stats_plots(
-                &projected_numa_m_core_av,
-                &numa_m_core_av_threshold_errors,
-                &folder,
-                basename_numa_m_core_av,
-                true,
-                true,
-                true,
-            );
+            {
+                let stat = error_statistics::compute_statistics(
+                    &location_map,
+                    projection_numa_m_core_av,
+                    vec![(String::from("Best"), projection_numa_m_core_av)],
+                    &numa_m_core_av_threshold_errors,
+                );
+                writeln!(output_file);
+                stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
+                stat.latex_table(&mut latex_table, "Numa-M-Core-AV");
+                stat.boxplot(&mut boxplots, "Numa-M-Core-AV");
+            }
+            {
+                make_model_stats_plots(
+                    &projected_numa_m_core_av,
+                    numa_m_core_av_threshold_errors,
+                    &folder,
+                    basename_numa_m_core_av,
+                    true,
+                    true,
+                    true,
+                );
+            }
         }
         // This is way too slow, and that treatment should be simpler, as we aren't doing any projection.
         {
             let basename_numa_m_core_av_addr = format!("{}-Numa-M-Core-AV-Addr", basename.as_ref());
-            let location_map_cum_sum = compute_cum_sums(location_map);
-            let numa_m_core_av_addr_threshold_errors =
-                compute_errors_no_projection(&location_map_cum_sum);
+            //println!("Computing Cumulative Sums...");
+            //let location_map_cum_sum = compute_cum_sums(location_map);
+            //println!("Computed Cumulative Sums: [OK]");
+            let numa_m_core_av_addr_threshold_errors = compute_errors_no_projection(&location_map);
 
-            let stat = error_statistics::compute_statistics_no_projection(
-                &location_map_cum_sum,
-                vec![
-                    (String::from("Best-Addr"), projection_numa_m_core_av_addr),
-                    (String::from("Best-No-Addr"), projection_numa_m_core_av),
-                ],
-                &numa_m_core_av_addr_threshold_errors,
-            );
-            writeln!(output_file);
-            stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
-            stat.latex_table(&mut latex_table, "Numa-M-Core-AV-Addr");
-            stat.boxplot(&mut boxplots, "Numa-M-Core-AV-Addr");
-
-            make_model_stats_plots(
-                &location_map_cum_sum,
-                &numa_m_core_av_addr_threshold_errors,
-                &folder,
-                basename_numa_m_core_av_addr,
-                true,
-                true,
-                true,
-            );
+            {
+                let stat = error_statistics::compute_statistics_no_projection(
+                    &location_map,
+                    vec![
+                        (String::from("Best-Addr"), projection_numa_m_core_av_addr),
+                        (String::from("Best-No-Addr"), projection_numa_m_core_av),
+                    ],
+                    &numa_m_core_av_addr_threshold_errors,
+                );
+                writeln!(output_file);
+                stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
+                stat.latex_table(&mut latex_table, "Numa-M-Core-AV-Addr");
+                stat.boxplot(&mut boxplots, "Numa-M-Core-AV-Addr");
+            }
+            {
+                make_model_stats_plots(
+                    &location_map,
+                    numa_m_core_av_addr_threshold_errors,
+                    &folder,
+                    basename_numa_m_core_av_addr,
+                    true,
+                    true,
+                    true,
+                );
+            }
         }
     }
     writeln!(output_file, "{}", latex_table);
@@ -1938,42 +1907,44 @@ where
         basename,
         NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION
     );
-
-    let (results, format) = /*if std::fs::exists(&candidate_zstd).unwrap()
+    let (results, format) = {
+        let (results, format) = /*if std::fs::exists(&candidate_zstd).unwrap()
         && std::fs::exists(&candidate_raw).unwrap()
-    {
-        let r1 =
-            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&candidate_zstd);
-        let r2 = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&candidate_raw);
-        if r1 != r2 {
-            eprintln!("Data mismatch");
+        {
+            let r1 =
+                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&candidate_zstd);
+            let r2 = NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&candidate_raw);
+            if r1 != r2 {
+                eprintln!("Data mismatch");
+                return Err(());
+            }
+            println!("{} and {} match", candidate_zstd, candidate_raw);
+            (
+                r1,
+                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
+            )
+        } else */ if std::fs::exists(&candidate_zstd).unwrap() {
+            (
+                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack_zstd(&candidate_zstd),
+                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD,
+            )
+        } else if std::fs::exists(&candidate_raw).unwrap() {
+            (
+                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack(&candidate_raw),
+                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION,
+            )
+        } else {
             return Err(());
-        }
-        println!("{} and {} match", candidate_zstd, candidate_raw);
-        (
-            r1,
-            NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD,
-        )
-    } else */ if std::fs::exists(&candidate_zstd).unwrap() {
-        (
-            NumaCalibrationResult::<WIDTH, {N+N}>::read_msgpack_zstd(&candidate_zstd),
-            NumaCalibrationResult::<WIDTH, {N+N}>::EXTENSION_ZSTD,
-        )
-    } else if std::fs::exists(&candidate_raw).unwrap() {
-        (
-            NumaCalibrationResult::<WIDTH, {N+N}>::read_msgpack(&candidate_raw),
-            NumaCalibrationResult::<WIDTH, {N+N}>::EXTENSION,
-        )
-    } else {
-        return Err(());
-    };
+        };
 
-    let results = match results {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("{:?}", e);
-            panic!();
-        }
+        let results = match results {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("{:?}", e);
+                panic!();
+            }
+        };
+        (results, format)
     };
 
     eprintln!("Read and deserialized {}.{}", name, format);

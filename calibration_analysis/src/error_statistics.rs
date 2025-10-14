@@ -264,7 +264,7 @@ impl Output for ErrorStatisticsResults {
 }
 
 pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
-    full_location_map: &HashMap<AVMLocation, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
+    full_location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
     choices: Vec<(String, LocationParameters)>,
     thresholds_map: &HashMap<AVMLocation, MultiThresholdErrors<SimpleBucketU64<WIDTH, { N + N }>>>,
 ) -> MultiErrors<ErrorStatisticsResults> {
@@ -273,16 +273,16 @@ pub fn compute_statistics_no_projection<const WIDTH: u64, const N: usize>(
 
     let all_error_predictions: Vec<(AVMLocation, MultiErrors<ErrorPrediction>)> = full_location_map
         .par_iter()
-        .map(|(k, hist_cum_sums)| {
+        .map(|(k, hists)| {
             let thresholds = &thresholds_map[k];
-            /*let hist_cum_sums = CacheOps {
+            let hist_cum_sums = CacheOps {
                 flush_hit: StaticHistogramCumSum::from(&hists.flush_hit),
                 flush_miss: StaticHistogramCumSum::from(&hists.flush_miss),
                 reload_opt_hit: StaticHistogramCumSum::from(&hists.reload_opt_hit),
                 reload_opt_miss: StaticHistogramCumSum::from(&hists.reload_opt_miss),
                 reload_hit: StaticHistogramCumSum::from(&hists.reload_hit),
                 reload_miss: StaticHistogramCumSum::from(&hists.reload_miss),
-            };*/
+            };
             let flush_single_error = thresholds
                 .flush_single_threshold
                 .0
