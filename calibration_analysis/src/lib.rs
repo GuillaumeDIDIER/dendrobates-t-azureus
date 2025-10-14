@@ -36,8 +36,11 @@ use json::object::Object;
 use num::integer::gcd;
 use std::fmt::Display;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::Write;
 use std::path::Path;
+
+use std::default::Default;
 
 #[derive(Default)]
 pub struct CacheOps<T> {
@@ -47,6 +50,31 @@ pub struct CacheOps<T> {
     pub reload_opt_miss: T, // same as flush_miss
     pub reload_hit: T,
     pub reload_miss: T,
+}
+
+impl<T: Sized + Send + Sync> CacheOps<T> {
+    pub fn map<U: Send>(self, f: impl Sync + Fn(T) -> U) -> CacheOps<U> {
+        let mut r = vec![
+            self.flush_hit,
+            self.flush_miss,
+            self.reload_opt_hit,
+            self.reload_opt_miss,
+            self.reload_hit,
+            self.reload_miss,
+        ]
+        .into_par_iter()
+        .map(|hist| (f(hist)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        CacheOps {
+            flush_hit: r.next().unwrap(),
+            flush_miss: r.next().unwrap(),
+            reload_opt_hit: r.next().unwrap(),
+            reload_opt_miss: r.next().unwrap(),
+            reload_hit: r.next().unwrap(),
+            reload_miss: r.next().unwrap(),
+        }
+    }
 }
 
 pub trait Histogram {
@@ -94,8 +122,8 @@ impl<const WIDTH: u64, const N: usize> Histogram for StaticHistogramCumSum<WIDTH
 }
 
 fn make_plot<const WIDTH: u64, const N: usize>(
-    hit: StaticHistogramCumSum<WIDTH, N>,
-    miss: StaticHistogramCumSum<WIDTH, N>,
+    hit: &StaticHistogramCumSum<WIDTH, N>,
+    miss: &StaticHistogramCumSum<WIDTH, N>,
 ) -> (Vec<Plot2D>, f64) {
     let mut hit_hist = Plot2D::new();
     let mut ymax = 0.0;
@@ -128,15 +156,15 @@ fn make_plot<const WIDTH: u64, const N: usize>(
 }
 
 pub fn make_plot_by2<const WIDTH: u64, const N: usize>(
-    hit: StaticHistogramCumSum<WIDTH, { N + N }>,
-    miss: StaticHistogramCumSum<WIDTH, { N + N }>,
+    hit: &StaticHistogramCumSum<WIDTH, { N + N }>,
+    miss: &StaticHistogramCumSum<WIDTH, { N + N }>,
 ) -> (Vec<Plot2D>, f64)
 where
     [(); { WIDTH + WIDTH } as usize]:,
 {
     let hit_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(hit);
     let miss_by2: StaticHistogramCumSum<{ WIDTH + WIDTH }, N> = group2_histogram_cum_sum(miss);
-    make_plot::<{ WIDTH + WIDTH }, N>(hit_by2, miss_by2)
+    make_plot::<{ WIDTH + WIDTH }, N>(&hit_by2, &miss_by2)
 }
 
 pub fn make_projection<const WIDTH: u64, const N: usize>(
@@ -276,21 +304,35 @@ impl<T: Output> Output for MultiErrors<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Attack {
+    FF,
+    FR,
+    FRO,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Strategy {
+    Single,
+    Dual,
+    Theo,
+}
+
 impl<T: Sized + Send + Sync> MultiErrors<T> {
-    pub fn apply<U: Send>(&self, f: impl Sync + Fn(&T) -> U) -> MultiErrors<U> {
+    pub fn apply<U: Send>(&self, f: impl Sync + Fn(&T, Attack, Strategy) -> U) -> MultiErrors<U> {
         let mut r = vec![
-            &self.flush_single_error,
-            &self.flush_dual_error,
-            &self.flush_th_error,
-            &self.reload_single_error,
-            &self.reload_dual_error,
-            &self.reload_th_error,
-            &self.reload_opt_single_error,
-            &self.reload_opt_dual_error,
-            &self.reload_opt_th_error,
+            (&self.flush_single_error, Attack::FF, Strategy::Single),
+            (&self.flush_dual_error, Attack::FF, Strategy::Dual),
+            (&self.flush_th_error, Attack::FF, Strategy::Theo),
+            (&self.reload_single_error, Attack::FR, Strategy::Single),
+            (&self.reload_dual_error, Attack::FR, Strategy::Dual),
+            (&self.reload_th_error, Attack::FR, Strategy::Theo),
+            (&self.reload_opt_single_error, Attack::FRO, Strategy::Single),
+            (&self.reload_opt_dual_error, Attack::FRO, Strategy::Dual),
+            (&self.reload_opt_th_error, Attack::FRO, Strategy::Theo),
         ]
         .into_par_iter()
-        .map(|e| (f(e)))
+        .map(|e| (f(e.0, e.1, e.2)))
         .collect::<Vec<U>>()
         .into_iter();
         MultiErrors {
@@ -306,9 +348,74 @@ impl<T: Sized + Send + Sync> MultiErrors<T> {
         }
     }
 
-    pub fn apply_mut<U: Send>(&mut self, f: impl Sync + Fn(&mut T) -> U) -> MultiErrors<U> {
+    pub fn apply_mut<U: Send>(
+        &mut self,
+        f: impl Sync + Fn(&mut T, Attack, Strategy) -> U,
+    ) -> MultiErrors<U> {
         let mut r = vec![
-            &mut self.flush_single_error,
+            (&mut self.flush_single_error, Attack::FF, Strategy::Single),
+            (&mut self.flush_dual_error, Attack::FF, Strategy::Dual),
+            (&mut self.flush_th_error, Attack::FF, Strategy::Theo),
+            (&mut self.reload_single_error, Attack::FR, Strategy::Single),
+            (&mut self.reload_dual_error, Attack::FR, Strategy::Dual),
+            (&mut self.reload_th_error, Attack::FR, Strategy::Theo),
+            (
+                &mut self.reload_opt_single_error,
+                Attack::FRO,
+                Strategy::Single,
+            ),
+            (&mut self.reload_opt_dual_error, Attack::FRO, Strategy::Dual),
+            (&mut self.reload_opt_th_error, Attack::FRO, Strategy::Theo),
+        ]
+        .into_par_iter()
+        .map(|e| (f(e.0, e.1, e.2)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        MultiErrors {
+            flush_single_error: r.next().unwrap(),
+            flush_dual_error: r.next().unwrap(),
+            flush_th_error: r.next().unwrap(),
+            reload_single_error: r.next().unwrap(),
+            reload_dual_error: r.next().unwrap(),
+            reload_th_error: r.next().unwrap(),
+            reload_opt_single_error: r.next().unwrap(),
+            reload_opt_dual_error: r.next().unwrap(),
+            reload_opt_th_error: r.next().unwrap(),
+        }
+    }
+
+    pub fn map<U: Send>(self, f: impl Sync + Fn(T, Attack, Strategy) -> U) -> MultiErrors<U> {
+        let mut r = vec![
+            (self.flush_single_error, Attack::FF, Strategy::Single),
+            (self.flush_dual_error, Attack::FF, Strategy::Dual),
+            (self.flush_th_error, Attack::FF, Strategy::Theo),
+            (self.reload_single_error, Attack::FR, Strategy::Single),
+            (self.reload_dual_error, Attack::FR, Strategy::Dual),
+            (self.reload_th_error, Attack::FR, Strategy::Theo),
+            (self.reload_opt_single_error, Attack::FRO, Strategy::Single),
+            (self.reload_opt_dual_error, Attack::FRO, Strategy::Dual),
+            (self.reload_opt_th_error, Attack::FRO, Strategy::Theo),
+        ]
+        .into_par_iter()
+        .map(|e| (f(e.0, e.1, e.2)))
+        .collect::<Vec<U>>()
+        .into_iter();
+        MultiErrors {
+            flush_single_error: r.next().unwrap(),
+            flush_dual_error: r.next().unwrap(),
+            flush_th_error: r.next().unwrap(),
+            reload_single_error: r.next().unwrap(),
+            reload_dual_error: r.next().unwrap(),
+            reload_th_error: r.next().unwrap(),
+            reload_opt_single_error: r.next().unwrap(),
+            reload_opt_dual_error: r.next().unwrap(),
+            reload_opt_th_error: r.next().unwrap(),
+        }
+    }
+
+    /*pub fn combine_with<U>(&mut self, argument: MultiErrors<U>, f: impl Sync + Fn(&mut T, U)) -> MultiErrors<U> {
+        let mut r = vec![
+            (&mut self.flush_single_error, argument.flush_single_error),
             &mut self.flush_dual_error,
             &mut self.flush_th_error,
             &mut self.reload_single_error,
@@ -318,10 +425,10 @@ impl<T: Sized + Send + Sync> MultiErrors<T> {
             &mut self.reload_opt_dual_error,
             &mut self.reload_opt_th_error,
         ]
-        .into_par_iter()
-        .map(|e| (f(e)))
-        .collect::<Vec<U>>()
-        .into_iter();
+            .into_par_iter()
+            .map(|e| (f(e)))
+            .collect::<Vec<U>>()
+            .into_iter();
         MultiErrors {
             flush_single_error: r.next().unwrap(),
             flush_dual_error: r.next().unwrap(),
@@ -333,36 +440,7 @@ impl<T: Sized + Send + Sync> MultiErrors<T> {
             reload_opt_dual_error: r.next().unwrap(),
             reload_opt_th_error: r.next().unwrap(),
         }
-    }
-
-    pub fn map<U: Send>(self, f: impl Sync + Fn(T) -> U) -> MultiErrors<U> {
-        let mut r = vec![
-            self.flush_single_error,
-            self.flush_dual_error,
-            self.flush_th_error,
-            self.reload_single_error,
-            self.reload_dual_error,
-            self.reload_th_error,
-            self.reload_opt_single_error,
-            self.reload_opt_dual_error,
-            self.reload_opt_th_error,
-        ]
-        .into_par_iter()
-        .map(|e| (f(e)))
-        .collect::<Vec<U>>()
-        .into_iter();
-        MultiErrors {
-            flush_single_error: r.next().unwrap(),
-            flush_dual_error: r.next().unwrap(),
-            flush_th_error: r.next().unwrap(),
-            reload_single_error: r.next().unwrap(),
-            reload_dual_error: r.next().unwrap(),
-            reload_th_error: r.next().unwrap(),
-            reload_opt_single_error: r.next().unwrap(),
-            reload_opt_dual_error: r.next().unwrap(),
-            reload_opt_th_error: r.next().unwrap(),
-        }
-    }
+    }*/
 }
 
 impl<T: JsonOutput> JsonOutput for MultiErrors<T> {
@@ -515,6 +593,11 @@ where
     )
 }
 
+pub trait Location: Copy + Eq + PartialLocation + Hash + Display + Send + Sync {}
+
+impl Location for AVMLocation {}
+impl Location for PartialLocationOwned {}
+
 fn compute_errors<const WIDTH: u64, const N: usize>(
     projected: &HashMap<
         PartialLocationOwned,
@@ -580,8 +663,16 @@ fn compute_errors<const WIDTH: u64, const N: usize>(
         .collect()
 }
 
+fn compute_cum_sums<const WIDTH: u64, const N: usize>(
+    histogram_map: HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
+) -> HashMap<AVMLocation, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>> {
+    histogram_map
+        .into_par_iter()
+        .map(|(k, histograms)| (k, histograms.map(|v| StaticHistogramCumSum::from(v))))
+        .collect()
+}
 fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
-    histogram_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>,
+    histogram_map: &HashMap<AVMLocation, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
 ) -> HashMap<
     AVMLocation,
     //(
@@ -596,31 +687,31 @@ fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
     histogram_map
         .par_iter()
         .map(|(k, histograms)| {
-            let flush_hits = StaticHistogramCumSum::from(&histograms.flush_hit);
-            let flush_miss = StaticHistogramCumSum::from(&histograms.flush_miss);
+            let flush_hits = &histograms.flush_hit;
+            let flush_miss = &histograms.flush_miss;
 
-            let reload_hits = StaticHistogramCumSum::from(&histograms.reload_hit);
-            let reload_miss = StaticHistogramCumSum::from(&histograms.reload_miss);
-            let reload_opt_hits = StaticHistogramCumSum::from(&histograms.reload_opt_hit);
-            let reload_opt_miss = StaticHistogramCumSum::from(&histograms.reload_opt_miss);
+            let reload_hits = &histograms.reload_hit;
+            let reload_miss = &histograms.reload_miss;
+            let reload_opt_hits = &histograms.reload_opt_hit;
+            let reload_opt_miss = &histograms.reload_opt_miss;
             let flush_single_threshold = simple_threshold_builder
-                .find_best_classifier(&flush_hits, &flush_miss)
+                .find_best_classifier(flush_hits, flush_miss)
                 .expect("Failed to compute single threshold");
             let flush_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&flush_hits, &flush_miss)
+                .find_best_classifier(flush_hits, flush_miss)
                 .expect("Failed to compute dual threshold");
 
             let reload_single_threshold = simple_threshold_builder
-                .find_best_classifier(&reload_hits, &reload_miss)
+                .find_best_classifier(reload_hits, reload_miss)
                 .expect("Failed to compute single threshold");
             let reload_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&reload_hits, &reload_miss)
+                .find_best_classifier(reload_hits, reload_miss)
                 .expect("Failed to compute dual threshold");
             let reload_opt_single_threshold = simple_threshold_builder
-                .find_best_classifier(&reload_opt_hits, &reload_opt_miss)
+                .find_best_classifier(reload_opt_hits, reload_opt_miss)
                 .expect("Failed to compute single threshold");
             let reload_opt_dual_threshold = dual_threshold_builder
-                .find_best_classifier(&reload_opt_hits, &reload_opt_miss)
+                .find_best_classifier(reload_opt_hits, reload_opt_miss)
                 .expect("Failed to compute dual threshold");
             /*
             let flush_flush_optimal =
@@ -647,6 +738,180 @@ fn compute_errors_no_projection<const WIDTH: u64, const N: usize>(
             )
         })
         .collect()
+}
+
+fn make_model_stats_plots<T: Location, const WIDTH: u64, const N: usize>(
+    projected: &HashMap<T, CacheOps<StaticHistogramCumSum<{ WIDTH }, { N + N }>>>,
+    computed_errors: &HashMap<T, MultiThresholdErrors<SimpleBucketU64<{ WIDTH }, { N + N }>>>,
+    folder: impl AsRef<Path>,
+    base_name: impl AsRef<str>,
+    flush_flush: bool,
+    flush_reload: bool,
+    flush_reload_opt: bool,
+) where
+    [(); { WIDTH + WIDTH } as usize]:,
+{
+    let mut error_vec: MultiErrors<Vec<(T, ErrorPrediction)>> = MultiErrors {
+        flush_single_error: Vec::new(),
+        flush_dual_error: Vec::new(),
+        flush_th_error: Vec::new(),
+        reload_single_error: Vec::new(),
+        reload_dual_error: Vec::new(),
+        reload_th_error: Vec::new(),
+        reload_opt_single_error: Vec::new(),
+        reload_opt_dual_error: Vec::new(),
+        reload_opt_th_error: Vec::new(),
+    };
+    for (k, multi_t_e) in computed_errors {
+        error_vec
+            .flush_single_error
+            .push((*k, multi_t_e.flush_single_threshold.1));
+        error_vec
+            .flush_dual_error
+            .push((*k, multi_t_e.flush_dual_threshold.1));
+        error_vec
+            .reload_single_error
+            .push((*k, multi_t_e.reload_single_threshold.1));
+        error_vec
+            .reload_dual_error
+            .push((*k, multi_t_e.reload_dual_threshold.1));
+        error_vec
+            .reload_opt_single_error
+            .push((*k, multi_t_e.reload_opt_single_threshold.1));
+        error_vec
+            .reload_opt_dual_error
+            .push((*k, multi_t_e.reload_opt_dual_threshold.1));
+    }
+
+    error_vec.apply_mut(|v, _, _| v.par_sort_by_key(|(_l, e)| e.error_ratio()));
+
+    let all_mins = error_vec.apply(|v, _, _| {
+        let len = v.len();
+        if len > 0 { Some(v[0]) } else { None }
+    });
+    let all_q1s = error_vec.apply(|v, _, _| {
+        let len = v.len();
+        if len > 0 {
+            Some(v[(len - 1) >> 2])
+        } else {
+            None
+        }
+    });
+    let all_meds = error_vec.apply(|v, _, _| {
+        let len = v.len();
+        if len > 0 {
+            Some(v[(len - 1) >> 1])
+        } else {
+            None
+        }
+    });
+    let all_q3s = error_vec.apply(|v, _, _| {
+        let len = v.len();
+        if len > 0 {
+            Some(v[(3 * len - 1) >> 2])
+        } else {
+            None
+        }
+    });
+    let all_maxs = error_vec.apply(|v, _, _| {
+        let len = v.len();
+        if len > 0 { Some(v[len - 1]) } else { None }
+    });
+    let base_name_ff = format!("{}-FF", base_name.as_ref());
+    let base_name_fr = format!("{}-FR", base_name.as_ref());
+    let base_name_fro = format!("{}-FRO", base_name.as_ref());
+    let folder_ff = folder.as_ref().join(base_name_ff);
+    let folder_fr = folder.as_ref().join(base_name_fr);
+    let folder_fro = folder.as_ref().join(base_name_fro);
+    std::fs::create_dir_all(&folder_ff).unwrap();
+    std::fs::create_dir_all(&folder_fr).unwrap();
+    std::fs::create_dir_all(&folder_fro).unwrap();
+
+    let all = [
+        ("Min", all_mins),
+        ("Q1", all_q1s),
+        ("Med", all_meds),
+        ("Q3", all_q3s),
+        ("Max", all_maxs),
+    ];
+
+    for (name, multi_locations) in all {
+        multi_locations.apply(|v, a, s| {
+            if let Some((l, e)) = v {
+                let base_name = format!(
+                    "{}-{}-{}",
+                    match a {
+                        Attack::FF => "FF",
+                        Attack::FR => "FR",
+                        Attack::FRO => "FRO",
+                    },
+                    match s {
+                        Strategy::Single => "S",
+                        Strategy::Dual => "D",
+                        Strategy::Theo => unreachable!(),
+                    },
+                    name
+                );
+                let mut picture = Picture::new();
+                let cache_op = &projected[&l];
+                let (hit, miss) = match a {
+                    Attack::FF => (&cache_op.flush_hit, &cache_op.flush_miss),
+                    Attack::FR => (&cache_op.reload_hit, &cache_op.reload_miss),
+                    Attack::FRO => (&cache_op.reload_opt_hit, &cache_op.reload_opt_miss),
+                };
+
+                let (mut plots, ymax) = make_plot_by2(hit, miss);
+                let mut hist = Axis::new();
+                hist.plots.append(&mut plots);
+
+                hist.set_title(format!(
+                    "{}-{} Location: {}",
+                    match a {
+                        Attack::FF => "FF",
+                        Attack::FR => "FR",
+                        Attack::FRO => "FRO",
+                    },
+                    match s {
+                        Strategy::Single => "S",
+                        Strategy::Dual => "D",
+                        Strategy::Theo => unreachable!(),
+                    },
+                    l
+                ));
+                hist.add_key(AxisKey::Custom(format!(
+                    "height=10cm, width=20cm, xmin=0,xmax={}, ymin=0, tick align=outside, tick pos=left, axis on top,", N+N//
+                )));
+
+                picture.axes.push(Box::new(hist));
+                picture.add_to_preamble(vec![String::from(
+                    r#"\definecolor{HistRed}{HTML}{E41A1C}
+\definecolor{HistRedLight}{HTML}{FAB4AE}
+\definecolor{HistBlue}{HTML}{377EB8}
+\definecolor{HistBlueLight}{HTML}{B3CDE3}
+"#,
+                )]);
+                let picture_jobname = format!("{}", &base_name);
+                let picture_jobname_tex = format!("{}.tex", &base_name);
+
+                let real_folder = match a {
+                    Attack::FF => &folder_ff,
+                    Attack::FR => &folder_fr,
+                    Attack::FRO => &folder_fro,
+                };
+
+                std::fs::write(
+                    real_folder.join(picture_jobname_tex),
+                    picture.standalone_string(),
+                )
+                .expect("Failed to write plot");
+                picture
+                    .to_pdf(real_folder, &picture_jobname, Engine::LuaLatex)
+                    .inspect_err(|e| {
+                        eprintln!("Failed to create {}: {}", picture_jobname, e);
+                    });
+            }
+        });
+    }
 }
 
 fn make_projection_plots<const WIDTH: u64, const N: usize>(
@@ -693,7 +958,7 @@ where
         let histograms = projected.into_iter().next().unwrap().1;
 
         let (mut flush_plots, flush_ymax) =
-            make_plot_by2(histograms.flush_hit, histograms.flush_miss);
+            make_plot_by2(&histograms.flush_hit, &histograms.flush_miss);
         let mut flush_hist = Axis::new();
         flush_hist.plots.append(&mut flush_plots);
 
@@ -778,7 +1043,7 @@ where
         );
         */
         let (mut reload_plots, reload_ymax) =
-            make_plot_by2(histograms.reload_hit, histograms.reload_miss);
+            make_plot_by2(&histograms.reload_hit, &histograms.reload_miss);
         let mut reload_hist = Axis::new();
         reload_hist.plots.append(&mut reload_plots);
 
@@ -841,7 +1106,7 @@ where
         // ------ Reload Opt -------------
 
         let (mut reload_opt_plots, reload_opt_ymax) =
-            make_plot_by2(histograms.reload_opt_hit, histograms.reload_opt_miss);
+            make_plot_by2(&histograms.reload_opt_hit, &histograms.reload_opt_miss);
         let mut reload_opt_hist = Axis::new();
         reload_opt_hist.plots.append(&mut reload_opt_plots);
 
@@ -906,17 +1171,17 @@ where
             let mut reload_opt_axis = Axis::new();
 
             let (mut plots_flush, ymax_local) =
-                make_plot_by2(item.1.1.flush_hit, item.1.1.flush_miss);
+                make_plot_by2(&item.1.1.flush_hit, &item.1.1.flush_miss);
             if ymax_flush < ymax_local {
                 ymax_flush = ymax_local
             }
             let (mut plots_reload, ymax_local) =
-                make_plot_by2(item.1.1.reload_hit, item.1.1.reload_miss);
+                make_plot_by2(&item.1.1.reload_hit, &item.1.1.reload_miss);
             if ymax_reload < ymax_local {
                 ymax_reload = ymax_local
             }
             let (mut plots_reload_opt, ymax_local) =
-                make_plot_by2(item.1.1.reload_opt_hit, item.1.1.reload_opt_miss);
+                make_plot_by2(&item.1.1.reload_opt_hit, &item.1.1.reload_opt_miss);
             if ymax_reload_opt < ymax_local {
                 ymax_reload_opt = ymax_local
             }
@@ -1079,29 +1344,27 @@ struct Statistics<T> {
 fn build_statistics(
     mut multi_series: MultiErrors<Vec<(ErrorPrediction, PartialLocationOwned)>>,
 ) -> Statistics<MultiErrors<ErrorPrediction>> {
-    multi_series.apply_mut(|series| series.sort_by_key(|(e, _l)| e.error_ratio()));
+    multi_series.apply_mut(|series, _, _| series.sort_by_key(|(e, _l)| e.error_ratio()));
 
-    let count = multi_series.flush_single_error.len();
-
-    let min = multi_series.apply(|series| series[0].0);
-    let max = multi_series.apply(|series| {
+    let min = multi_series.apply(|series, _, _| series[0].0);
+    let max = multi_series.apply(|series, _, _| {
         let len = series.len();
         series[len - 1].0
     });
-    let med = multi_series.apply(|series| {
+    let med = multi_series.apply(|series, _, _| {
         let len = series.len();
         series[(len - 1) >> 1].0
     });
-    let q1 = multi_series.apply(|series| {
+    let q1 = multi_series.apply(|series, _, _| {
         let len = series.len();
         series[(len - 1) >> 2].0
     });
-    let q3 = multi_series.apply(|series| {
+    let q3 = multi_series.apply(|series, _, _| {
         let len = series.len();
         series[(3 * len - 1) >> 2].0
     });
 
-    let avg = multi_series.map(|series| series.into_par_iter().map(|(e, _p)| e).sum());
+    let avg = multi_series.map(|series, _, _| series.into_par_iter().map(|(e, _p)| e).sum());
 
     Statistics {
         min,
@@ -1401,6 +1664,7 @@ where
 
     if victim_socket_count * attacker_socket_count * numa_node_count > 1 {
         let basename_numa = format!("{}-node-aware", basename.as_ref());
+        let basename_numa_avm = format!("{}-Numa-AVM", basename.as_ref());
 
         let projected_numa = make_projection(&location_map, projection_socket);
         let numa_threshold_errors = compute_errors(&projected_numa);
@@ -1415,6 +1679,16 @@ where
             stat.write(&mut output_file, "Numa-AVM-Errors");
             stat.latex_table(&mut latex_table, "Numa-AVM");
             stat.boxplot(&mut boxplots, "Numa-AVM");
+
+            make_model_stats_plots(
+                &projected_numa,
+                &numa_threshold_errors,
+                &folder,
+                basename_numa_avm,
+                true,
+                true,
+                true,
+            );
         }
 
         // Compute the min, max, median and average error.
@@ -1530,6 +1804,8 @@ where
 
     if numa_node_count * victim_core_count * attacker_core_count > 1 {
         {
+            let basename_numa_avm_addr = format!("{}-Numa-AVM-Addr", basename.as_ref());
+
             let projected_numa_avm_addr = make_projection(&location_map, projection_numa_avm_addr);
             let numa_avm_addr_threshold_errors = compute_errors(&projected_numa_avm_addr);
 
@@ -1546,8 +1822,19 @@ where
             stat.write(&mut output_file, "Numa-AVM-Addr-Errors");
             stat.latex_table(&mut latex_table, "Numa-AVM-Addr");
             stat.boxplot(&mut boxplots, "Numa-AVM-Addr");
+            make_model_stats_plots(
+                &projected_numa_avm_addr,
+                &numa_avm_addr_threshold_errors,
+                &folder,
+                basename_numa_avm_addr,
+                true,
+                true,
+                true,
+            );
         }
         {
+            let basename_numa_m_core_av = format!("{}-Numa-M-Core-AV", basename.as_ref());
+
             let projected_numa_m_core_av =
                 make_projection(&location_map, projection_numa_m_core_av);
             let numa_m_core_av_threshold_errors = compute_errors(&projected_numa_m_core_av);
@@ -1562,13 +1849,25 @@ where
             stat.write(&mut output_file, "Numa-M-Core-AV-Errors");
             stat.latex_table(&mut latex_table, "Numa-M-Core-AV");
             stat.boxplot(&mut boxplots, "Numa-M-Core-AV");
+            make_model_stats_plots(
+                &projected_numa_m_core_av,
+                &numa_m_core_av_threshold_errors,
+                &folder,
+                basename_numa_m_core_av,
+                true,
+                true,
+                true,
+            );
         }
         // This is way too slow, and that treatment should be simpler, as we aren't doing any projection.
         {
-            let numa_m_core_av_addr_threshold_errors = compute_errors_no_projection(&location_map);
+            let basename_numa_m_core_av_addr = format!("{}-Numa-M-Core-AV-Addr", basename.as_ref());
+            let location_map_cum_sum = compute_cum_sums(location_map);
+            let numa_m_core_av_addr_threshold_errors =
+                compute_errors_no_projection(&location_map_cum_sum);
 
             let stat = error_statistics::compute_statistics_no_projection(
-                &location_map,
+                &location_map_cum_sum,
                 vec![
                     (String::from("Best-Addr"), projection_numa_m_core_av_addr),
                     (String::from("Best-No-Addr"), projection_numa_m_core_av),
@@ -1579,6 +1878,16 @@ where
             stat.write(&mut output_file, "Numa-M-Core-AV-Addr-Errors");
             stat.latex_table(&mut latex_table, "Numa-M-Core-AV-Addr");
             stat.boxplot(&mut boxplots, "Numa-M-Core-AV-Addr");
+
+            make_model_stats_plots(
+                &location_map_cum_sum,
+                &numa_m_core_av_addr_threshold_errors,
+                &folder,
+                basename_numa_m_core_av_addr,
+                true,
+                true,
+                true,
+            );
         }
     }
     writeln!(output_file, "{}", latex_table);

@@ -149,6 +149,30 @@ pub trait PartialLocation {
     }
 }
 
+const FULL_LOCATION_PARAMS: LocationParameters = LocationParameters {
+    attacker: CoreLocParameters {
+        socket: true,
+        core: true,
+    },
+    victim: CoreLocParameters {
+        socket: true,
+        core: true,
+    },
+    memory_numa_node: true,
+    memory_slice: true,
+    memory_vpn: true,
+    memory_offset: true,
+};
+impl PartialLocation for AVMLocation {
+    fn get_params(&self) -> &LocationParameters {
+        &FULL_LOCATION_PARAMS
+    }
+
+    fn get_location(&self) -> &AVMLocation {
+        &self
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Eq)]
 pub struct PartialLocationOwned {
     params: LocationParameters,
@@ -343,18 +367,37 @@ impl Display for PartialLocationOwned {
             write!(f, "Numa Node: {}, ", self.location.memory_numa_node)?
         }
         if self.params.memory_vpn {
-            write!(f, "VPN: {}, ", self.location.memory_vpn)?
+            write!(f, "VPN: {:x}, ", self.location.memory_vpn)?
         }
         if self.params.memory_offset {
-            write!(f, "Offset: {}, ", self.location.memory_offset)?
+            write!(f, "Offset: {:x}, ", self.location.memory_offset)?
         }
         if self.params.memory_slice {
-            write!(f, "Slice: {}, ", self.location.memory_slice)?
+            write!(f, "Slice: {:x}, ", self.location.memory_slice)?
         }
         Ok(())
     }
 }
 
+impl Display for AVMLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "Attacker core {}, socket {}, ",
+            self.attacker.core, self.attacker.socket
+        )?;
+        write!(
+            f,
+            "Victim core {}, socket {}, ",
+            self.victim.core, self.victim.socket
+        )?;
+        write!(f, "Numa Node: {}, ", self.memory_numa_node)?;
+        write!(f, "VPN: {:x}, ", self.memory_vpn)?;
+        write!(f, "Offset: {:x}, ", self.memory_offset)?;
+        write!(f, "Slice: {:x}, ", self.memory_slice)?;
+        Ok(())
+    }
+}
 pub type Slice = usize;
 
 pub fn cum_sum(vector: &[u32]) -> Vec<u32> {

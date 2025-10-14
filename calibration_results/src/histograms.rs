@@ -279,7 +279,7 @@ pub fn group2_histogram<const WIDTH: u64, const N: usize>(
 }
 
 pub fn group2_histogram_cum_sum<const WIDTH: u64, const N: usize>(
-    input: StaticHistogramCumSum<WIDTH, { N + N }>,
+    input: &StaticHistogramCumSum<WIDTH, { N + N }>,
 ) -> StaticHistogramCumSum<{ WIDTH + WIDTH }, N> {
     let mut res: StaticHistogram<{ WIDTH + WIDTH }, N> = StaticHistogram::empty();
     for i in 0..N {
