@@ -1122,7 +1122,7 @@ where
         picture_fr
             .to_pdf(folder.as_ref(), picture_fr_jobname, Engine::LuaLatex)
             .inspect_err(|e| {
-                eprintln!("Failed to create {}: {}", picture_ff_jobname, e);
+                eprintln!("Failed to create {}: {}", picture_fr_jobname, e);
             });
 
         // ------ Reload Opt -------------
@@ -1156,7 +1156,7 @@ where
         picture_fro
             .to_pdf(folder.as_ref(), picture_fro_jobname, Engine::LuaLatex)
             .inspect_err(|e| {
-                eprintln!("Failed to create {}: {}", picture_ff_jobname, e);
+                eprintln!("Failed to create {}: {}", picture_fro_jobname, e);
             });
 
         // -----------------------------------------------------------------------------------------
