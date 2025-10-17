@@ -271,24 +271,30 @@ impl<T: Output> Output for MultiErrors<T> {
     }
 
     fn latex_table(&self, output_file: &mut String, name: impl AsRef<str>) {
-        self.flush_single_error
-            .latex_table(output_file, format!("{}-FF-S", name.as_ref()));
-        self.flush_dual_error
-            .latex_table(output_file, format!("{}-FF-D", name.as_ref()));
         //self.flush_th_error
         //    .latex_table(output_file, format!("{}-FF-Th", name.as_ref()));
-        self.reload_single_error
-            .latex_table(output_file, format!("{}-FR-S", name.as_ref()));
-        self.reload_dual_error
-            .latex_table(output_file, format!("{}-FR-D", name.as_ref()));
+
         //self.reload_th_error
         //    .latex_table(output_file, format!("{}-FR-Th", name.as_ref()));
-        self.reload_opt_single_error
-            .latex_table(output_file, format!("{}-FRO-S", name.as_ref()));
-        self.reload_opt_dual_error
-            .latex_table(output_file, format!("{}-FRO-D", name.as_ref()));
+
         //self.reload_opt_th_error
         //    .latex_table(output_file, format!("{}-FRO-Th", name.as_ref()));
+
+        // Single-Threshold
+        self.flush_single_error
+            .latex_table(output_file, format!("{}-FF-S", name.as_ref()));
+        self.reload_single_error
+            .latex_table(output_file, format!("{}-FR-S", name.as_ref()));
+        self.reload_opt_single_error
+            .latex_table(output_file, format!("{}-FRO-S", name.as_ref()));
+
+        // Dual-Threshold
+        self.flush_dual_error
+            .latex_table(output_file, format!("{}-FF-D", name.as_ref()));
+        self.reload_dual_error
+            .latex_table(output_file, format!("{}-FR-D", name.as_ref()));
+        self.reload_opt_dual_error
+            .latex_table(output_file, format!("{}-FRO-D", name.as_ref()));
     }
 
     fn boxplot(&self, output: &mut String, name: impl AsRef<str>) {
