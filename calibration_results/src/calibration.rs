@@ -438,9 +438,9 @@ impl ErrorPrediction {
     }
     pub fn error_percentage_str(&self) -> String {
         if self.error_rate() <= 0.0001 {
-            String::from("<0.01")
+            String::from(" <0.01")
         } else {
-            format!("{:5.2}", self.error_rate() * 100.)
+            format!("{:6.2}", self.error_rate() * 100.)
         }
     }
 
