@@ -2,6 +2,7 @@
 
 use cache_side_channel::set_affinity;
 use cache_utils::calibration::CLFLUSH_NUM_ITER;
+use cache_utils::has_rdpru;
 use calibration_results::calibration::{CoreLocParameters, ErrorPrediction, LocationParameters};
 use calibration_results::{accumulate, reduce};
 use covert_channels_evaluation::{
@@ -216,8 +217,9 @@ fn norm_location(v: &Vec<(Rational64, Vec<ErrorPrediction>)>) -> Rational64 {
     result / count
 }
 
-pub fn convert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthreads: bool) {
+pub fn covert_channel_benchmark<const W: u64, const N: usize>(optimize_hyperthreads: bool) {
     let old = sched_getaffinity(Pid::from_raw(0)).unwrap();
+    eprintln!("Using RDPRU: {}", has_rdpru());
     println!(
         "Detailed:Benchmark,Pages,numa_node,main_core,helper_core,{},C,T",
         CovertChannelBenchmarkResult::csv_header()
