@@ -198,6 +198,7 @@ fn main() {
     let dummy = Dummy {};
 
     let use_rdpru = has_rdpru();
+    eprintln!("Using RDPRU: {}", use_rdpru);
 
     let operations = [
         CalibrateOperation2T {
