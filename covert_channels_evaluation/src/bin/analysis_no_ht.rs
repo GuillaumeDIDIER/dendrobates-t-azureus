@@ -26,7 +26,7 @@ fn analyze_result(name: String, r: BenchmarkResults) {
             max_core = Some(local_max_core);
         }
         let num_logical_core = max_core.unwrap() + 1;
-        let num_phy_core = num_logical_core / 2;
+        let num_phy_core = num_logical_core;
 
         let mut heatmap = HashMap::<(NumaNode, usize, usize), _>::new();
         for raw_res in results.raw_res {

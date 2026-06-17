@@ -20,6 +20,8 @@ use cache_side_channel::{restore_affinity, set_affinity, BitIterator};
 use cache_utils::mmap::MMappedMemory;
 use cache_utils::rdtsc_fence;
 use num_rational::Rational64;
+use numa_utils::NumaNode;
+use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt::Debug;
@@ -27,8 +29,6 @@ use std::iter::Sum;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::thread;
-use numa_utils::NumaNode;
-use rmp_serde::{Deserializer, Serializer};
 
 /*  TODO : replace page with a handle type,
     require exclusive handle access,
@@ -201,7 +201,7 @@ fn transmit_thread<T: CovertChannel>(
 
     let mut result = Vec::new();
     result.reserve(num_bytes);
-    
+
     for _ in 0..num_bytes {
         let byte = rand::random();
         result.push(byte);
@@ -326,7 +326,10 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
         num_false_zeros += (sent_byte & n_received_byte).count_ones() as usize;
     }
 
-    assert_eq!(num_true_zeros + num_true_ones + num_false_zeros + num_false_ones, num_bytes * u8::BIT_LENGTH);
+    assert_eq!(
+        num_true_zeros + num_true_ones + num_false_zeros + num_false_ones,
+        num_bytes * u8::BIT_LENGTH
+    );
 
     //let error_rate = (num_bit_error as f64) / ((num_bytes * u8::BIT_LENGTH) as f64);
 
@@ -334,20 +337,23 @@ pub fn benchmark_channel<T: 'static + Send + CovertChannel>(
 
     for mut handle in receiver_turn_handles {
         let guard = handle.into_inner().unwrap();
-        unsafe {channel.unready_page(guard).unwrap()};
+        unsafe { channel.unready_page(guard).unwrap() };
     }
 
-    (CovertChannelBenchmarkResult {
-        num_bytes_transmitted: num_bytes,
-        time_rdtsc: stop - start,
-        time_seconds: stop_time - start_time,
-        error: ChannelError{
-            true_zero: num_true_zeros,
-            true_one: num_true_ones,
-            false_one: num_false_ones,
-            false_zero: num_false_zeros,
+    (
+        CovertChannelBenchmarkResult {
+            num_bytes_transmitted: num_bytes,
+            time_rdtsc: stop - start,
+            time_seconds: stop_time - start_time,
+            error: ChannelError {
+                true_zero: num_true_zeros,
+                true_one: num_true_ones,
+                false_one: num_false_ones,
+                false_zero: num_false_zeros,
+            },
         },
-    }, channel)
+        channel,
+    )
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -356,8 +362,8 @@ pub struct BenchmarkStats {
         CovertChannelBenchmarkResult,
         usize, // page number
         NumaNode,
-        usize, // core 1
-        usize, // core 2
+        usize, // core 1 (attacker)
+        usize, // core 2 (victim)
         usize, // page_number_index
     )>,
     pub average_p: Vec<f64>,
@@ -370,7 +376,7 @@ pub struct BenchmarkStats {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BenchmarkResults {
-    pub results: Vec<(String, BenchmarkStats)>
+    pub results: Vec<(String, BenchmarkStats)>,
 }
 
 impl BenchmarkResults {
@@ -403,8 +409,7 @@ impl BenchmarkResults {
         };
         let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
         let mut deserializer = Deserializer::new(&mut decoder);
-        BenchmarkResults::deserialize(&mut deserializer)
-            .map_err(|e| format!("{:?}", e))
+        BenchmarkResults::deserialize(&mut deserializer).map_err(|e| format!("{:?}", e))
     }
 
     pub fn write_msgpack(&self, path: impl AsRef<std::path::Path>) -> Result<(), ()> {
