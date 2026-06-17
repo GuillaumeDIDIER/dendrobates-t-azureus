@@ -73,6 +73,8 @@ impl CPUVendor {
     }
 }
 
+// We could add aliases https://stackoverflow.com/questions/41791969/is-there-a-way-to-create-an-alias-of-an-enum-value
+
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub enum MicroArchitecture {
