@@ -2,7 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod error_statistics;
-//mod utils;
+pub mod result_migration;
 
 use calibration_results::calibration::{
     AVMLocation, CoreLocParameters, CoreLocation, ErrorPrediction, LocationParameters,
@@ -180,8 +180,8 @@ pub fn make_projection<const WIDTH: u64, const N: usize>(
     location_map: &HashMap<AVMLocation, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>, // FIXME
     projection: LocationParameters,
 ) -> HashMap<PartialLocationOwned, CacheOps<StaticHistogram<{ WIDTH }, { N + N }>>>
-//where
-//    [(); { WIDTH + WIDTH } as usize]:,
+where
+    [(); { N + N } as usize]:,
 {
     let shallow_copy = location_map.par_iter().collect();
     let mapped = reduce(
@@ -1410,6 +1410,7 @@ pub fn run_analysis<const WIDTH: u64, const N: usize>(
     basename: impl AsRef<str>,
 ) -> ()
 where
+    [(); { N + N } as usize]:,
     [(); { WIDTH + WIDTH } as usize]:,
 {
     // First, let's extract the data we want.
@@ -1872,7 +1873,7 @@ where
 
 pub fn run_analysis_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()>
 where
-    [(); { N + N }]:,
+    [(); { N + N } as usize]:,
     [(); { WIDTH + WIDTH } as usize]:,
 {
     let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION);
