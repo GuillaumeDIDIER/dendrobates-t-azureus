@@ -19,7 +19,6 @@ use nix::Error;
 use numa_utils::NumaNode;
 
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use calibration_results::numa_results::NumaCalibrationResult;
 use rmp_serde::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::ptr::null_mut;

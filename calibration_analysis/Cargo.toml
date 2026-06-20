@@ -15,6 +15,7 @@ pgfplots = { git = "https://github.com/GuillaumeDIDIER/pgfplots", branch = "prea
 zstd = "0.13.3"
 num = "0.4.3"
 json = "0.12.4"
+cpuid = { path = "../cpuid" }
 
 [features]
 serde_support = ["serde", "rmp-serde", "serde-big-array", "calibration_results/serde_support"]

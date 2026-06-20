@@ -232,6 +232,7 @@ name = "calibration_analysis"
 version = "0.1.0"
 dependencies = [
  "calibration_results",
+ "cpuid",
  "json",
  "num",
  "pgfplots",

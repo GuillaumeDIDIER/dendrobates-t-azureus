@@ -13,7 +13,7 @@ use calibration_results::histograms::{
     Bucket, SimpleBucketU64, StaticHistogram, StaticHistogramCumSum,
 };
 use calibration_results::histograms::{group2_histogram, group2_histogram_cum_sum};
-use calibration_results::numa_results::NumaCalibrationResult;
+use calibration_results::numa_results::NumaCalibrationResultV2;
 use calibration_results::reduce;
 use pgfplots::axis::plot::Type2D::ConstLeft;
 use pgfplots::axis::plot::coordinate::Coordinate2D;
@@ -1405,7 +1405,7 @@ fn build_statistics(
 }
 
 pub fn run_analysis<const WIDTH: u64, const N: usize>(
-    data: NumaCalibrationResult<WIDTH, { N + N }>,
+    data: NumaCalibrationResultV2<WIDTH, { N + N }>,
     folder: impl AsRef<Path>,
     basename: impl AsRef<str>,
 ) -> ()
@@ -1414,6 +1414,14 @@ where
     [(); { WIDTH + WIDTH } as usize]:,
 {
     // First, let's extract the data we want.
+
+    let vendor_family_stepping = data.vendor_family_model_stepping;
+
+    let uarch = cpuid::MicroArchitecture::from_family_model(
+        vendor_family_stepping.0,
+        vendor_family_stepping.1,
+        vendor_family_stepping.2,
+    );
 
     let location_map = {
         println!(
@@ -1468,8 +1476,6 @@ where
                 indexes.reload_opt_miss.insert(i);
             }
         }
-
-        let uarch = data.micro_architecture;
 
         let core_location = |core: usize| {
             // Eventually we need to integrate https://docs.rs/raw-cpuid/latest/raw_cpuid/struct.ExtendedTopologyIter.html
@@ -1566,7 +1572,7 @@ where
     writeln!(
         output_file,
         "MicroArchitecture: {:?} - {:?}",
-        data.micro_architecture.0.0, data.micro_architecture.1
+        vendor_family_stepping, uarch
     )
     .unwrap_or_default();
 
@@ -1876,10 +1882,13 @@ where
     [(); { N + N } as usize]:,
     [(); { WIDTH + WIDTH } as usize]:,
 {
-    let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION);
+    let suffix = format!(
+        ".{}",
+        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION
+    );
     let suffix_zstd = format!(
         ".{}",
-        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD
+        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD
     );
 
     let folder = <str as AsRef<Path>>::as_ref(&name)
@@ -1907,12 +1916,12 @@ where
     let candidate_zstd = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD
+        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD
     );
     let candidate_raw = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION
+        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION
     );
     let (results, format) = {
         let (results, format) = /*if std::fs::exists(&candidate_zstd).unwrap()
@@ -1932,13 +1941,13 @@ where
             )
         } else */ if std::fs::exists(&candidate_zstd).unwrap() {
             (
-                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack_zstd(&candidate_zstd),
-                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD,
+                NumaCalibrationResultV2::<WIDTH, { N + N }>::read_msgpack_zstd(&candidate_zstd),
+                NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD,
             )
         } else if std::fs::exists(&candidate_raw).unwrap() {
             (
-                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack(&candidate_raw),
-                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION,
+                NumaCalibrationResultV2::<WIDTH, { N + N }>::read_msgpack(&candidate_raw),
+                NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION,
             )
         } else {
             return Err(());
@@ -1960,14 +1969,19 @@ where
         println!("{}: {}", op.name, op.display_name);
     }
     println!("Number of Calibration Results: {}", results.results.len());
-    println!("Micro-architecture: {:?}", results.micro_architecture);
+    let uarch = cpuid::MicroArchitecture::from_family_model(
+        results.vendor_family_model_stepping.0,
+        results.vendor_family_model_stepping.1,
+        results.vendor_family_model_stepping.2,
+    );
+    println!("Micro-architecture: {:?}", uarch);
     run_analysis::<WIDTH, N>(results, folder, name);
     Ok(())
 }
 
 pub fn run_tsc_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()> {
-    let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION);
-    let suffix_zstd = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD);
+    let suffix = format!(".{}", NumaCalibrationResultV2::<WIDTH, N>::EXTENSION);
+    let suffix_zstd = format!(".{}", NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD);
 
     let folder = <str as AsRef<Path>>::as_ref(&name)
         .canonicalize()
@@ -1994,23 +2008,23 @@ pub fn run_tsc_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result
     let candidate_zstd = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD
+        NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD
     );
     let candidate_raw = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResult::<WIDTH, N>::EXTENSION
+        NumaCalibrationResultV2::<WIDTH, N>::EXTENSION
     );
 
     let (results, format) = if std::fs::exists(&candidate_zstd).unwrap() {
         (
-            NumaCalibrationResult::<WIDTH, N>::read_msgpack_zstd(&candidate_zstd),
-            NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD,
+            NumaCalibrationResultV2::<WIDTH, N>::read_msgpack_zstd(&candidate_zstd),
+            NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD,
         )
     } else if std::fs::exists(&candidate_raw).unwrap() {
         (
-            NumaCalibrationResult::<WIDTH, N>::read_msgpack(&candidate_raw),
-            NumaCalibrationResult::<WIDTH, N>::EXTENSION,
+            NumaCalibrationResultV2::<WIDTH, N>::read_msgpack(&candidate_raw),
+            NumaCalibrationResultV2::<WIDTH, N>::EXTENSION,
         )
     } else {
         return Err(());
