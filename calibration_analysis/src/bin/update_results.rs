@@ -1,5 +1,5 @@
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
-use calibration_results::numa_results::{BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResultV2};
+use calibration_results::numa_results::{BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResult};
 use rmp_serde::Deserializer;
 use serde::Deserialize;
 use std::env::args;
@@ -41,9 +41,9 @@ fn main() -> Result<(), ()> {
 
     // Open the template file
     let mut numa_results = if numa_src.ends_with(".zst") {
-        NumaCalibrationResultV2::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&numa_src)
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack_zstd(&numa_src)
     } else {
-        NumaCalibrationResultV2::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&numa_src)
+        NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::read_msgpack(&numa_src)
     }
     .map_err(|e| eprintln!("Failed to deserialize: {:?}", e))?;
 

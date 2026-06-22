@@ -20,7 +20,7 @@ use nix::unistd::Pid;
 use core::arch::x86_64 as arch_x86;
 
 use calibration_results::numa_results::{
-    NumaCalibrationResultV2, OperationNames, BUCKET_NUMBER, BUCKET_SIZE,
+    NumaCalibrationResult, OperationNames, BUCKET_NUMBER, BUCKET_SIZE,
 };
 use chrono::Local;
 use cpuid::complex_addressing::{cache_slicing, CacheAttackSlicing};
@@ -359,7 +359,7 @@ fn main() {
             }
         }
 
-        let full_result = NumaCalibrationResultV2 {
+        let full_result = NumaCalibrationResult {
             operations: names,
             results: result,
             topology_info,
@@ -373,7 +373,7 @@ fn main() {
             .write_msgpack_zstd(format!(
                 "{}.{}",
                 time.format("%Y-%m-%dT%H-%M-%S%z"),
-                NumaCalibrationResultV2::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD
+                NumaCalibrationResult::<BUCKET_SIZE, BUCKET_NUMBER>::EXTENSION_ZSTD
             ))
             .expect("Failed to write out results");
         //std::fs::remove_file("./tmp.msgpack").expect("Failed to remove tmp file");

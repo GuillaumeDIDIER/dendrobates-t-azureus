@@ -1,7 +1,7 @@
 use crate::result_migration::Format::{MsgPack, Zstd};
 use calibration_results::calibration_2t::CalibrateResult2TNuma;
 use calibration_results::numa_results::{
-    BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResultV2, NumaNode, OperationNames,
+    BUCKET_NUMBER, BUCKET_SIZE, NumaCalibrationResult, NumaNode, OperationNames,
 };
 use cpuid::complex_addressing::{CacheAttackSlicing, CacheSlicing};
 use cpuid::{CPUVendor, MicroArchitecture};
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct NumaCalibrationResult<const WIDTH: u64, const N: usize> {
+pub struct OldNumaCalibrationResult<const WIDTH: u64, const N: usize> {
     pub operations: Vec<OperationNames>,
     pub results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
     pub topology_info: HashMap<usize, NumaNode>,
@@ -25,7 +25,7 @@ pub struct NumaCalibrationResult<const WIDTH: u64, const N: usize> {
     any(feature = "use_std", not(feature = "no_std")),
     feature = "serde_support"
 ))]
-impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
+impl<const WIDTH: u64, const N: usize> OldNumaCalibrationResult<WIDTH, N> {
     pub const EXTENSION: &'static str = "NumaResults.msgpack";
     pub const EXTENSION_ZSTD: &'static str = "NumaResults.msgpack.zst";
     pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
@@ -36,7 +36,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
             }
         };
         let mut deserializer = Deserializer::new(&buf[..]);
-        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
+        OldNumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
             .map_err(|e| format!("{:?}", e))
     }
 
@@ -55,7 +55,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
         };
         let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
         let mut deserializer = Deserializer::new(&mut decoder);
-        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
+        OldNumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
             .map_err(|e| format!("{:?}", e))
     }
 
@@ -77,13 +77,13 @@ fn find_src_msgpack<const WIDTH: u64, const N: usize>(
 ) -> Result<(String, Format), String> {
     if name
         .as_ref()
-        .ends_with(NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD)
+        .ends_with(OldNumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD)
     {
         if std::fs::exists(name.as_ref()).unwrap_or(false) {
             Ok((
                 name.as_ref()
                     .strip_suffix(
-                        &(String::from(".") + NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD),
+                        &(String::from(".") + OldNumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD),
                     )
                     .unwrap()
                     .to_owned(),
@@ -94,13 +94,13 @@ fn find_src_msgpack<const WIDTH: u64, const N: usize>(
         }
     } else if name
         .as_ref()
-        .ends_with(NumaCalibrationResult::<WIDTH, N>::EXTENSION)
+        .ends_with(OldNumaCalibrationResult::<WIDTH, N>::EXTENSION)
     {
         if std::fs::exists(name.as_ref()).unwrap_or(false) {
             Ok((
                 name.as_ref()
                     .strip_suffix(
-                        &(String::from(".") + NumaCalibrationResult::<WIDTH, N>::EXTENSION),
+                        &(String::from(".") + OldNumaCalibrationResult::<WIDTH, N>::EXTENSION),
                     )
                     .unwrap()
                     .to_owned(),
@@ -111,9 +111,9 @@ fn find_src_msgpack<const WIDTH: u64, const N: usize>(
         }
     } else {
         let zst_candidate =
-            name.as_ref().to_owned() + "." + NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD;
+            name.as_ref().to_owned() + "." + OldNumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD;
         let msgpack_candidate =
-            name.as_ref().to_owned() + "." + NumaCalibrationResult::<WIDTH, N>::EXTENSION;
+            name.as_ref().to_owned() + "." + OldNumaCalibrationResult::<WIDTH, N>::EXTENSION;
         if std::fs::exists(&zst_candidate).unwrap_or(false) {
             Ok((name.as_ref().to_owned(), Zstd))
         } else if std::fs::exists(&msgpack_candidate).unwrap_or(false) {
@@ -134,19 +134,19 @@ fn migrate_result<const WIDTH: u64, const N: usize>(name: impl AsRef<str>) -> Re
     println!("Base name: {}, Format: {:?}", base_name, format);
 
     let old_data = match format {
-        Zstd => NumaCalibrationResult::<WIDTH, N>::read_msgpack_zstd(
+        Zstd => OldNumaCalibrationResult::<WIDTH, N>::read_msgpack_zstd(
             PathBuf::from(&base_name)
-                .with_added_extension(NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD),
+                .with_added_extension(OldNumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD),
         ),
-        MsgPack => NumaCalibrationResult::<WIDTH, N>::read_msgpack(
+        MsgPack => OldNumaCalibrationResult::<WIDTH, N>::read_msgpack(
             PathBuf::from(&base_name)
-                .with_added_extension(NumaCalibrationResult::<WIDTH, N>::EXTENSION),
+                .with_added_extension(OldNumaCalibrationResult::<WIDTH, N>::EXTENSION),
         ),
     }?;
 
     println!("Successfully deserialized");
 
-    let new_data = NumaCalibrationResultV2 {
+    let new_data = NumaCalibrationResult {
         operations: old_data.operations,
         results: old_data.results,
         topology_info: old_data.topology_info,
@@ -157,7 +157,7 @@ fn migrate_result<const WIDTH: u64, const N: usize>(name: impl AsRef<str>) -> Re
     println!("Successfully converted");
 
     let path = PathBuf::from(&base_name)
-        .with_added_extension(NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD);
+        .with_added_extension(NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD);
     println!("Destination Path: {}", path.display());
 
     new_data

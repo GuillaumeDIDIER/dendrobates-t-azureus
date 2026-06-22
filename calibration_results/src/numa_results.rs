@@ -31,7 +31,7 @@ pub struct OperationNames {
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct NumaCalibrationResultV2<const WIDTH: u64, const N: usize> {
+pub struct NumaCalibrationResult<const WIDTH: u64, const N: usize> {
     pub operations: Vec<OperationNames>,
     pub results: Vec<CalibrateResult2TNuma<WIDTH, N>>,
     pub topology_info: HashMap<usize, NumaNode>,
@@ -46,7 +46,7 @@ pub const BUCKET_SIZE: u64 = 1;
     any(feature = "use_std", not(feature = "no_std")),
     feature = "serde_support"
 ))]
-impl<const WIDTH: u64, const N: usize> NumaCalibrationResultV2<WIDTH, N> {
+impl<const WIDTH: u64, const N: usize> NumaCalibrationResult<WIDTH, N> {
     pub const EXTENSION: &'static str = "Numa.msgpack";
     pub const EXTENSION_ZSTD: &'static str = "Numa.msgpack.zst";
     pub fn read_msgpack(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
@@ -57,7 +57,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResultV2<WIDTH, N> {
             }
         };
         let mut deserializer = Deserializer::new(&buf[..]);
-        NumaCalibrationResultV2::<WIDTH, N>::deserialize(&mut deserializer)
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
             .map_err(|e| format!("{:?}", e))
     }
 
@@ -76,7 +76,7 @@ impl<const WIDTH: u64, const N: usize> NumaCalibrationResultV2<WIDTH, N> {
         };
         let mut decoder = zstd::Decoder::new(&buf[..]).map_err(|e| format!("{:?}", e))?;
         let mut deserializer = Deserializer::new(&mut decoder);
-        NumaCalibrationResultV2::<WIDTH, N>::deserialize(&mut deserializer)
+        NumaCalibrationResult::<WIDTH, N>::deserialize(&mut deserializer)
             .map_err(|e| format!("{:?}", e))
     }
 

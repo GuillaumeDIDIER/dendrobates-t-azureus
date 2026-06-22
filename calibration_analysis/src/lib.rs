@@ -13,7 +13,7 @@ use calibration_results::histograms::{
     Bucket, SimpleBucketU64, StaticHistogram, StaticHistogramCumSum,
 };
 use calibration_results::histograms::{group2_histogram, group2_histogram_cum_sum};
-use calibration_results::numa_results::NumaCalibrationResultV2;
+use calibration_results::numa_results::NumaCalibrationResult;
 use calibration_results::reduce;
 use pgfplots::axis::plot::Type2D::ConstLeft;
 use pgfplots::axis::plot::coordinate::Coordinate2D;
@@ -1405,7 +1405,7 @@ fn build_statistics(
 }
 
 pub fn run_analysis<const WIDTH: u64, const N: usize>(
-    data: NumaCalibrationResultV2<WIDTH, { N + N }>,
+    data: NumaCalibrationResult<WIDTH, { N + N }>,
     folder: impl AsRef<Path>,
     basename: impl AsRef<str>,
 ) -> ()
@@ -1882,13 +1882,10 @@ where
     [(); { N + N } as usize]:,
     [(); { WIDTH + WIDTH } as usize]:,
 {
-    let suffix = format!(
-        ".{}",
-        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION
-    );
+    let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION);
     let suffix_zstd = format!(
         ".{}",
-        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD
+        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD
     );
 
     let folder = <str as AsRef<Path>>::as_ref(&name)
@@ -1916,12 +1913,12 @@ where
     let candidate_zstd = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD
+        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD
     );
     let candidate_raw = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION
+        NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION
     );
     let (results, format) = {
         let (results, format) = /*if std::fs::exists(&candidate_zstd).unwrap()
@@ -1941,13 +1938,13 @@ where
             )
         } else */ if std::fs::exists(&candidate_zstd).unwrap() {
             (
-                NumaCalibrationResultV2::<WIDTH, { N + N }>::read_msgpack_zstd(&candidate_zstd),
-                NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION_ZSTD,
+                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack_zstd(&candidate_zstd),
+                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION_ZSTD,
             )
         } else if std::fs::exists(&candidate_raw).unwrap() {
             (
-                NumaCalibrationResultV2::<WIDTH, { N + N }>::read_msgpack(&candidate_raw),
-                NumaCalibrationResultV2::<WIDTH, { N + N }>::EXTENSION,
+                NumaCalibrationResult::<WIDTH, { N + N }>::read_msgpack(&candidate_raw),
+                NumaCalibrationResult::<WIDTH, { N + N }>::EXTENSION,
             )
         } else {
             return Err(());
@@ -1980,8 +1977,8 @@ where
 }
 
 pub fn run_tsc_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result<(), ()> {
-    let suffix = format!(".{}", NumaCalibrationResultV2::<WIDTH, N>::EXTENSION);
-    let suffix_zstd = format!(".{}", NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD);
+    let suffix = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION);
+    let suffix_zstd = format!(".{}", NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD);
 
     let folder = <str as AsRef<Path>>::as_ref(&name)
         .canonicalize()
@@ -2008,23 +2005,23 @@ pub fn run_tsc_from_file<const WIDTH: u64, const N: usize>(name: &str) -> Result
     let candidate_zstd = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD
+        NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD
     );
     let candidate_raw = format!(
         "{}.{}",
         basename,
-        NumaCalibrationResultV2::<WIDTH, N>::EXTENSION
+        NumaCalibrationResult::<WIDTH, N>::EXTENSION
     );
 
     let (results, format) = if std::fs::exists(&candidate_zstd).unwrap() {
         (
-            NumaCalibrationResultV2::<WIDTH, N>::read_msgpack_zstd(&candidate_zstd),
-            NumaCalibrationResultV2::<WIDTH, N>::EXTENSION_ZSTD,
+            NumaCalibrationResult::<WIDTH, N>::read_msgpack_zstd(&candidate_zstd),
+            NumaCalibrationResult::<WIDTH, N>::EXTENSION_ZSTD,
         )
     } else if std::fs::exists(&candidate_raw).unwrap() {
         (
-            NumaCalibrationResultV2::<WIDTH, N>::read_msgpack(&candidate_raw),
-            NumaCalibrationResultV2::<WIDTH, N>::EXTENSION,
+            NumaCalibrationResult::<WIDTH, N>::read_msgpack(&candidate_raw),
+            NumaCalibrationResult::<WIDTH, N>::EXTENSION,
         )
     } else {
         return Err(());
